@@ -1176,8 +1176,9 @@ async function expectCampaigns() {
   // to their Flash overview. The agent sees none of them, the supervisor not Quality monitoring (quality.manage). --provoke
   // writes a zero into the first page's content
   {
+    // Subscriptions left this list with addition 0009zh (21 November 2026): a page of its own (below)
     const PLACEHOLDERS = [
-      ["/reports/subscriptions", "/reports/flash?o=subscriptions"], ["/reports/payments", "/reports/flash?o=payments"],
+      ["/reports/payments", "/reports/flash?o=payments"],
       ["/reports/compliance", null], ["/team/quality-monitoring", null], ["/reports/purchase-orders", null],
       ["/reports/fulfillment", null], ["/reports/storage", null],
     ];
@@ -1226,6 +1227,43 @@ async function expectCampaigns() {
         if (d.flash !== flash) problems.push(`${where}: the Flash link is ${d.flash}, expected ${flash}`);
         if (d.scrollX) problems.push(`${where}: page scrolls horizontally at 1280`);
         await p.screenshot({ path: `${outDir}/${subject}-${path.split("/").pop()}.png`, fullPage: true });
+      }
+      await ctx.close();
+    }
+  }
+  // Customers → Subscriptions (addition 0009zh): the manager sees the six tiles, the movements, the rates, survival, the
+  // mix, the two parts the takes cannot answer yet as Pending ("Not connected yet", dashed, no figure), and the list;
+  // nothing scrolls sideways at 1280 or 1920; the agent gets the reports' refusal. --provoke expects a seventh tile
+  {
+    for (const [subject, width, height] of [["manager", 1280, 800], ["manager", 1920, 1080], ["agent-one", 1280, 800]]) {
+      const ctx = await b.newContext({ viewport: { width, height }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+      const p = await ctx.newPage();
+      await p.goto(BASE + "/reports/subscriptions");
+      await settle(p);
+      await p.waitForLoadState("networkidle");
+      const d = await p.evaluate(() => {
+        const main = document.querySelector("main");
+        const pending = [...document.querySelectorAll('[data-testid="subscriptions-changes"], [data-testid="subscriptions-who-ended"]')];
+        return {
+          tiles: main?.querySelectorAll('[data-testid="subscriptions-tiles"] [data-tile]').length ?? 0,
+          parts: ["subscriptions-movements", "subscriptions-rates-chart", "subscriptions-mix-paymentState", "subscriptions-rows"]
+            .filter((id) => document.querySelector(`[data-testid="${id}"]`)).length,
+          pending: pending.map((e) => ({ dashed: getComputedStyle(e).borderTopStyle === "dashed", text: /Not connected yet/.test(e.textContent ?? "") && /Pending/.test(e.textContent ?? ""),
+            tables: e.querySelectorAll("table, [data-tile]").length })),
+          refusal: main?.querySelector("section h2")?.textContent?.trim() ?? null,
+          scrollX: document.documentElement.scrollWidth > window.innerWidth,
+        };
+      });
+      const where = `${subject} /reports/subscriptions at ${width}x${height}`;
+      if (subject !== "manager") {
+        if (d.tiles > 0) problems.push(`${where}: the page is shown without its permission`);
+        if (d.refusal !== "Reports are for supervisors, managers and analysts") problems.push(`${where}: the refusal is not shown (${d.refusal})`);
+      } else {
+        if (d.tiles !== (provoke ? 7 : 6)) problems.push(`${where}: ${d.tiles} tiles, expected 6`);
+        if (d.parts !== 4) problems.push(`${where}: ${d.parts} of the movements, rates, mix and list parts shown, expected 4`);
+        if (d.pending.length !== 2 || d.pending.some((x) => !x.dashed || !x.text || x.tables > 0)) problems.push(`${where}: the two Pending parts are not as placeholders (${JSON.stringify(d.pending)})`);
+        if (d.scrollX) problems.push(`${where}: page scrolls horizontally`);
+        await p.screenshot({ path: `${outDir}/${subject}-subscriptions-${width}.png`, fullPage: true });
       }
       await ctx.close();
     }

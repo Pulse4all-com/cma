@@ -678,3 +678,21 @@ begin
   on conflict (tenant_id, key) do nothing;
 end
 $$;
+
+-- The rates' start month (after addition 0009zl; Martin, 23 November 2026): Customers → Subscriptions' Churn rate, Failed
+-- rate and movements, and Customers → Active's Churn rate card start at June 2026 for every store (a store's own later
+-- start still applies); renewal survival is not floored. A rerun keeps a value set since (on conflict do nothing). A
+-- database without the setting yet says so; rerun this seed after 224_subscription_rates_start.sql.
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  if to_regclass('cma.setting') is null or not exists (select 1 from cma.setting where key = 'subscriptions.rates_start_month') then
+    raise notice 'The rates'' start month does not exist yet (addition 0009zl): rerun this seed after 224_subscription_rates_start.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value) values
+    (v_subs, 'subscriptions.rates_start_month', '2026-06')
+  on conflict (tenant_id, key) do nothing;
+end
+$$;

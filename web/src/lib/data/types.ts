@@ -2496,6 +2496,12 @@ export interface ActiveReport {
   presentSource?: "live" | "take";
   /** churned30d is the stored take's: null while there is no take yet (never a zero) */
   unitEconomics: { churned30d: number | null; slots: { key: ActiveSlotKey; status: "pending" }[] } | null;
+  /**
+   * The Churn rate card (addition 0009zh, D.4): the last complete month's Churn rate and Failed rate parts of the market
+   * filter (or every market), from the subscription facts' month take (cma.subscriptions_churn_card), read in the same
+   * transaction as the stored answer above the fold; null without a complete month; absent below the fold
+   */
+  churnCard?: SubscriptionsChurnCard;
   months: ActiveMonth[];
   markets: ActiveMarketRow[];
   marketsTotal: (ActiveGroupStat & { share: number | null }) | null;
@@ -2538,6 +2544,125 @@ export interface ActiveRowsRequest {
   /** A band of Devices per active customer (a key of the tenant's customers.device_bands, such as 0, 1 or 3-5): the customers of that band alone */
   band?: string | null;
 }
+
+/**
+ * Customers → Subscriptions (addition 0009zh, brief B39 continued, Part B39d; docs/definitions.md, Subscription terms):
+ * how the subscription base moves over months, read from the subscription facts' stored takes (cma.subscriptions_page,
+ * cma.subscription_rows). Ids, codes, counts, months, amounts and links only: no field of these types holds what
+ * identifies a customer in words. The billing interval group of a subscription
+ */
+export type SubscriptionsInterval = "monthly" | "quarterly" | "yearly" | "other" | "unknown";
+/** The list's count measures (a tile's population): total (the Total subscriptions), active, failed, paused, unmapped (device units unknown) or all */
+export type SubscriptionsMeasure = "total" | "active" | "failed" | "paused" | "unmapped" | "all";
+/** The list's sort keys (cma.subscription_rows_of's fixed list) */
+export type SubscriptionsSort = "monthly_amount" | "subscription" | "market" | "status" | "payment_state" | "interval" | "device_units";
+/** A Recurring amount movement's kind, and the month's start and end (the Total subscriptions at the previous and this month end) */
+export type SubscriptionMoveKind = "start" | "end" | "new" | "migrated" | "reactivated" | "resumed" | "expansion" | "contraction" | "paused" | "churned"
+  | "moved_to_failed";
+/** The page's filters: a market (or unknown), a store (its subscriptions connection), a proposition (or none), an interval group */
+export interface SubscriptionsFilter { market: string | null; store: string | null; proposition: string | null; interval: SubscriptionsInterval | null }
+export interface SubscriptionsPageQuery extends SubscriptionsFilter {
+  /** The month range, first days of months: from at most to, to at most the current month */
+  from: DateKey; to: DateKey;
+  measure: SubscriptionsMeasure; sort: SubscriptionsSort; descending: boolean;
+  /** The list's page in the same read (from 1; the first when left out) */
+  page?: number;
+}
+export interface SubscriptionsRowsQuery extends SubscriptionsFilter {
+  measure: SubscriptionsMeasure; sort: SubscriptionsSort; descending: boolean;
+  /** From 1, 50 a page; a file reads every row up to the tenant's flash.file_max_rows */
+  page: number; file?: boolean;
+}
+/** A month's base (the Total subscriptions at the previous month end) and its churned and moved-to-failed subscriptions */
+export interface SubscriptionsRateParts { base: number | null; churned: number; movedToFailed: number }
+/**
+ * The subscription app's own counts beside the tiles (cma.subscriptions_source_counts_of, addition 0009zh over 0009zg's
+ * source figures): each store's latest figures of today or yesterday, summed over the stores in scope (stores of inScope
+ * have one, read on from to to), each beside the CMA's value it was compared with when read (null where one figure has
+ * none) and the number of those figures that are a Source figure gap one by one (214's rule on each figure: figures
+ * among those Data quality lists; null where none is compared). total and paused are null unless every store counted has a figure
+ * for each of their statuses; an amount names the stores it covers
+ */
+export interface SubscriptionsSourceCounts {
+  stores: number; inScope: number; from: DateKey; to: DateKey; fetchedAt: Instant | null;
+  total: number | null; totalCma: number | null; totalGaps: number | null;
+  paused: number | null; pausedCma: number | null; pausedGaps: number | null;
+  amounts: { currency: string; amount: number; cma: number | null; stores: number; gaps: number | null }[];
+  tolerancePct: number; toleranceMin: number;
+}
+export interface SubscriptionsTiles {
+  /** The Total subscriptions (a device-holding status) with the split per holding status of flash.device_holding_statuses */
+  total: { value: number; byStatus: Record<string, number> };
+  paused: number;
+  /** The Monthly recurring amount per currency over the active statuses, never added across currencies */
+  amounts: { currency: string; amount: number; subscriptions: number }[];
+  /** The indicative euros, only while reports.fx_eur_rates holds a rate for every currency shown */
+  eur: { amount: number; asOf: string | null } | null;
+  /** The last complete month's Churn rate and Failed rate parts under the market and store filters; null without a complete month */
+  rates: (SubscriptionsRateParts & { month: DateKey }) | null;
+  /** Device units over the Total subscriptions, and those among them with device units unknown (a line whose variant is not mapped) */
+  devices: { units: number; unmapped: number };
+  /** The subscription app's own counts beside the tiles (Source figures, addition 0009zg): null while no store in scope has one, and under a proposition or interval filter; never a zero */
+  sourceCounts: SubscriptionsSourceCounts | null;
+}
+export interface SubscriptionsMonth {
+  month: DateKey;
+  /** The counts per kind; null for a month before the stores' first events */
+  counts: Partial<Record<SubscriptionMoveKind, number>> | null;
+  /** The monthly amounts per currency and kind, known from the first load on (the take's amountsFrom); null without any */
+  amounts: Record<string, Partial<Record<SubscriptionMoveKind, number>>> | null;
+  /** The complete stores' parts of the month (the rates); null where no store's month counts */
+  complete: SubscriptionsRateParts | null;
+}
+export interface SubscriptionsRateRow extends SubscriptionsRateParts { market: string; month: DateKey }
+export interface SubscriptionsStoreStart { connectionId: string; handle: string | null; market: string; firstEventMonth: DateKey; rateStartMonth: DateKey; stragglers: number }
+export interface SubscriptionsSurvivalCohort { cohort: DateKey; started: number; cells: { renewal: number; eligible: number; survived: number }[] }
+export interface SubscriptionsSurvivalGroup { interval: SubscriptionsInterval; cohorts: SubscriptionsSurvivalCohort[] }
+export interface SubscriptionsMixRow { key: string; label?: string | null; subscriptions: number }
+export interface SubscriptionsMix {
+  proposition: SubscriptionsMixRow[]; model: SubscriptionsMixRow[]; interval: SubscriptionsMixRow[]; deviceBand: SubscriptionsMixRow[];
+  ageBand: SubscriptionsMixRow[]; instrument: SubscriptionsMixRow[]; paymentState: SubscriptionsMixRow[];
+}
+/** One subscription of the list: the app's id and number, codes, amounts, its age and the CRM contact's id with its record link */
+export interface SubscriptionRow {
+  subscriptionId: string; sourceId: string; number: string | null; store: string | null; market: string; status: string; paymentState: string | null;
+  interval: SubscriptionsInterval; currency: string | null; monthlyAmount: number | null; deviceUnits: number | null;
+  /** Subscription age: whole months since the app created it (the original start (estimated) waits for the hand check, Decision log 20 Nov 2026) */
+  ageMonths: number | null; propositions: string[];
+  instrument: string | null; contactId: string | null; contactUrl: string | null;
+}
+export interface SubscriptionRowsPage {
+  page: number; pageSize: number; total: number; measure: SubscriptionsMeasure; sort: SubscriptionsSort; descending: boolean; rows: SubscriptionRow[];
+}
+/** The list's read: setUp false (and nothing more) while no subscriptions connection is set up; history false while no take is stored */
+export interface SubscriptionRowsList extends SubscriptionRowsPage { setUp: boolean; history: boolean; timeZone: string; computedAt: Instant | null }
+export interface SubscriptionsTake { computedAt: Instant; businessDate: DateKey; amountsFrom: Instant | null }
+export interface SubscriptionsPage {
+  /** False while the tenant has no subscriptions connection set up: every part below is then empty ("Not set up", never zeros) */
+  setUp: boolean;
+  /** False while no take is stored yet ("being prepared", never zeros) */
+  history: boolean;
+  take: SubscriptionsTake | null;
+  timeZone: string; today: DateKey; month: DateKey; from: DateKey; to: DateKey; filter: SubscriptionsFilter;
+  settings: {
+    holding: string[]; active: string[]; ended: string[]; deviceBands: string[]; ageBands: string[];
+    fx: Record<string, unknown> | null; propositions: string[];
+    /** customers.history_months: a range holds at most this many complete months and the current one */
+    historyMonths: number;
+  };
+  filters: { markets: string[]; stores: { connectionId: string; handle: string; market: string }[]; propositions: string[]; intervals: SubscriptionsInterval[] };
+  tiles: SubscriptionsTiles | null;
+  months: SubscriptionsMonth[];
+  rates: SubscriptionsRateRow[];
+  storeStarts: SubscriptionsStoreStart[];
+  /** subscriptions.rates_start_month as its first day: the rates and the movements start there for every store; null: no floor */
+  ratesStartMonth: DateKey | null;
+  survival: { groups: SubscriptionsSurvivalGroup[]; migratedLeftOut: number } | null;
+  mix: SubscriptionsMix | null;
+  list: SubscriptionRowsPage | null;
+}
+/** Customers → Active's Churn rate card (cma.subscriptions_churn_card): the last complete month's parts of a market or of every market */
+export type SubscriptionsChurnCard = (SubscriptionsRateParts & { month: DateKey }) | null;
 
 /** Reports → Maintenance (addition 0008zi): the scope of the tracked devices, field or stock (null: every tracked device) */
 export type MaintenanceScope = "field" | "stock";
@@ -4545,6 +4670,14 @@ export interface CmaData {
   getActiveRows(me: Principal, request: ActiveRowsRequest): Promise<ActiveList>;
   /** A file read of the customer list in the audit log (cma.active_file_record): who, which filters, how many rows */
   recordActiveFile(me: Principal, filter: ActiveFilter, rows: number, band?: string | null): Promise<void>;
+  // ---- Customers → Subscriptions (addition 0009zh): the database checks the permission on every call (CMA06)
+  /** The page in one read from the stored takes (cma.subscriptions_page): tiles, months, rates, stores' starts, survival, mix, the list's first page */
+  getSubscriptionsPage(me: Principal, query: SubscriptionsPageQuery): Promise<SubscriptionsPage>;
+  /** A page of the list, or the file's rows (cma.subscription_rows) */
+  getSubscriptionRows(me: Principal, query: SubscriptionsRowsQuery): Promise<SubscriptionRowsList>;
+  /** A file or an API read of the list in the audit log (cma.subscription_file_record): who, which part, filters, range and measure, how many rows */
+  recordSubscriptionFile(me: Principal, part: "records" | "months" | "rows", filter: SubscriptionsFilter, measure: SubscriptionsMeasure, rows: number,
+    range?: { from: DateKey; to: DateKey }): Promise<void>;
   // ---- Lead cohorts (addition 0008zm): the database checks the permission on every call (CMA06); at most 92 days of creation dates
   /** Reports → Lead cohorts in one read (cma.lead_cohorts_report): reports.view or performance.team, as the funnel */
   getLeadCohorts(me: Principal, range: HoursRange, period: CohortPeriod, split: CohortSplit, filter: FunnelFilter): Promise<LeadCohortsReport>;

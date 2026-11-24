@@ -296,6 +296,42 @@
     "firstRt": 9
   },
   {
+    "path": "/reports/subscriptions",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9,
+    "firstTx": 2,
+    "firstRt": 9
+  },
+  {
+    "path": "/reports/subscriptions?market=GB&interval=monthly&view=amounts",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9,
+    "firstTx": 2,
+    "firstRt": 9
+  },
+  {
+    "path": "/reports/subscriptions?page=2",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9,
+    "firstTx": 2,
+    "firstRt": 9
+  },
+  {
+    "path": "/api/v1/reports/subscriptions",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 13
+  },
+  {
+    "path": "/api/v1/reports/subscriptions/rows?page=2",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 13
+  },
+  {
     "path": "/reports/fleet-management",
     "subject": "manager",
     "tx": 2,

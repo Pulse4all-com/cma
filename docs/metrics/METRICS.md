@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-651 figures. Statuses: verified 455 · discrepancy 18 · ambiguous 35 · prerequisite_missing 150 · cadence_unconfirmed 74.
+662 figures. Statuses: verified 461 · discrepancy 18 · ambiguous 35 · prerequisite_missing 155 · cadence_unconfirmed 74.
 
 ## Welcome
 
@@ -39556,12 +39556,12 @@ Ids, codes, dates and amounts only. Every read through the API and every file is
 
 **Churn rate** on /reports/active · Churn rate (Uitvalpercentage)
 
-The subscriptions churned in a month over the Total subscriptions at the previous month's end. Not computed yet: the page reserves the slot and shows "Not connected yet", never a number.
+The subscriptions churned in the last complete month over the Total subscriptions at the end of the month before, for the market filter or every market, counted from each store's start month; the Failed rate under it.
 
 **Formula as computed**
 
 ```
-Pending: no code computes it. As intended: churn_rate(month) = subscriptions churned in the month / Total subscriptions at the previous month end
+churned / start over subscription_month_take rows with currency '' and complete of the latest complete month (cma.subscriptions_churn_card(market)); per market only: under a segment or channel filter the card shows no figure and says so
 ```
 
 **Unit** share · **Grain** per_month · **Status** prerequisite_missing
@@ -39570,8 +39570,8 @@ Pending: no code computes it. As intended: churn_rate(month) = subscriptions chu
 
 | Table | Columns | Owner | Fed by | Cadence |
 |---|---|---|---|---|
-| `cma.subscription_event` | subscription_source_id, event_type, occurred_at, status_to, cycle_index | Juo | Juo Admin API events → ingest-poll-subscriptions → cma.ingest_upsert_subscription_events (addition 0008zl) | every 5 minutes |
-| `cma.subscription` | source_id, connection_id, customer_source_id, status, billing_interval, billing_interval_count, amount_per_cycle, currency, source_created_at, paused_at, canceled_at, source_deleted_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (addition 0008zl) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+| `cma.subscription_month_take` | connection_id, market, month, kind, currency, subscriptions, amount, complete | CMA | the subscription facts refresh (cma.subscription_facts_refresh_of): the status moves reconstructed from the subscription app's events (cma.subscription_moves_of) and the observed amount changes (cma.subscription_change) | every subscriptions.take_refresh_minutes (15), skipped while its inputs are unchanged |
+| `cma.subscription_store_start` | connection_id, market, first_event_month, rate_start_month, stragglers | CMA | the subscription facts refresh (cma.subscription_rate_start_of) | every subscriptions.take_refresh_minutes (15) |
 
 **Filters**
 
@@ -39582,26 +39582,35 @@ Pending: no code computes it. As intended: churn_rate(month) = subscriptions chu
 
 **Time** Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone.
 
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `subscriptions.rates_start_month` |  | 2026-06 |
+
 **Who may see it** `reports.view` or `performance.team`
 
 **Refresh** On page load (server component; four reads side by side per view, each one statement in its own transaction: cma.active_top and cma.active_rest answer the documents the refresh stored (a key lookup; computed from the take's rows for a combination of filters), cma.active_now the present of the tiles (live, or from the stored take by active.present_source), cma.active_rows the list's page). No polling.
 
-**Computed in** `ACTIVE_SLOTS` in src/lib/active.ts; `PlaceholderCard` in src/components/ActiveParts.tsx
+**Computed in** `cma.subscriptions_churn_card` (0009zh); `ChurnRateFigures` in src/components/ActiveParts.tsx
 
-**Verification query** none is faithful for this figure; the notes name the closest check
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
-**Fixture check** Not run against prod data here. db/173_verify_active_customers.sql checks the read on a hand-computed base in two throwaway tenants (B1 to B16) and the pure functions against a brute force (P1 to P6); web/verify/active.mjs checks the page's library and the mock's mirror. At three times prod's volume (web/verify/perf-volume-fixture.sql, locally) the page's read took about 1.3 to 1.7 s, above the 500 ms budget (the PR of addition 0009l says where the time goes and what is proposed). Martin runs 173 and 131 in Studio.
+```sql
+select x.month, sum(x.subscriptions) filter (where x.kind = 'churned')::numeric / nullif(sum(x.subscriptions) filter (where x.kind = 'start'), 0) from (select set_config('app.tenant_id', :tenant_id::text, true)) s, cma.subscription_month_take x where x.tenant_id = :tenant_id and x.currency = '' and x.complete group by 1 order by 1 desc limit 1
+```
+
+**Fixture check** db/217_verify_subscriptions_page.sql B9 checks the card equals Customers -> Subscriptions' last complete month for a market and for every market; run locally only (12 PASS); Martin runs 217 in dev.
 
 **Data prerequisites**
 
-- Kira confirms Churn (subscription) (Open decisions, The Flash definitions)
-- Three complete months of the subscription app's events per store (GB since 29 October 2026, the other stores since 5 November 2026)
+- Kira confirms Churn (subscription) and whether failed counts (Open decisions, The Flash definitions)
 
 **Documented in** features.md 5 and 9 (Customers -> Active); kpis.md 2, 4 and 12; api.md, GET /api/v1/reports/active; data-model/0008.md, Data model: active customers (addition 0009l); definitions.md, Active customer terms; decisions.md, 11 Nov 2026 (Customers -> Active, D1 to D12)
 
 **Notes**
 
-A placeholder (decision D5): the definition is Pending in docs/definitions.md. verify_sql is null: there is no figure to recompute.
+Filled by addition 0009zh (D.4): read in the same statement as cma.active_top, so the page gains no round trip. The definition moves from Pending to Proposed. unitEconomics.slots in the API still lists churn_rate as pending (the slot's key); the figure is churnCard. Without a market filter (and on Active's card without one) the rate pools every market's stores: the churned over the base summed over the stores whose month counts; a store filter gives that store's.
 
 #### `active.cac`
 
@@ -39853,6 +39862,639 @@ Pending: no code computes it. As intended: payback_months = cac / average monthl
 **Notes**
 
 A placeholder (decision D5): the definition is Pending in docs/definitions.md. verify_sql is null: there is no figure to recompute.
+
+### /reports/subscriptions
+
+#### `subscriptions.total_subscriptions`
+
+**Total subscriptions** on /reports/subscriptions · Total subscriptions (Totaal abonnementen)
+
+Subscriptions in a device-holding status now, as Flash counts them, split per status.
+
+**Formula as computed**
+
+```
+count(subscription_take where status = any(flash.device_holding_statuses), under the filters); by_status the same per holding status
+```
+
+**Unit** count · **Grain** now, per_market, per_status · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription_take` | subscription_id, connection_id, market, status, payment_state, monthly_amount, currency, interval_group, device_units, propositions, models, migrated | CMA | the minute job's subscription facts refresh (cma.subscription_facts_refresh_of, additions 0009ze and 0009zf) from the subscription app's mirror (cma.subscription, its lines and events) | every subscriptions.take_refresh_minutes (15), skipped while its inputs are unchanged |
+
+**Filters**
+
+- tenant: cma.subscriptions_page under RLS + the current tenant (cma.subscriptions_page_of with the tenant passed explicitly)
+- the page's filters, in the database: market (the store's market, or unknown), store (its subscriptions connection), proposition (a code of subscriptions.propositions, or none) and billing interval group; the month take is per store, so the movements and the rates follow market and store only
+- a tenant without a subscriptions connection set up gives no figure (set_up false, the placeholder), and one without a stored take none either (history false: 'being prepared'), never zero
+
+**Time** Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.
+
+**Previous period** None on the tiles; the months stand side by side.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one read, cma.subscriptions_page, one statement in its own transaction, from the stored takes). No polling.
+
+**Computed in** `cma.subscriptions_page` (0009zh); `cma.subscriptions_page_of` (0009zh); `default (SubscriptionsPage)` in src/app/reports/subscriptions/page.tsx; `SubscriptionsTiles` in src/components/SubscriptionsReport.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select x.status, count(*) from (select set_config('app.tenant_id', :tenant_id::text, true)) s, cma.subscription_take x where x.tenant_id = :tenant_id and x.status = any (cma.flash_list_of(cma.setting_of(:tenant_id, 'flash.device_holding_statuses'))) group by 1
+```
+
+**Fixture check** 217 ran locally only (Postgres 16 with the dev seed and the 3x volume fixture, 12 PASS); Martin runs 216 and 217 in dev, then prod (verify REFUSED there for want of the dev seed, as 211).
+
+**Documented in** features.md 5 (Customers -> Subscriptions); kpis.md 4; api.md, GET /api/v1/reports/subscriptions; data-model/0008.md, Customers -> Subscriptions (addition 0009zh); definitions.md, Subscription terms
+
+**Notes**
+
+Equal to Flash's holding subscriptions as of the take's moment (the take reads the same mirror); the page states Refreshed at.
+
+#### `subscriptions.paused`
+
+**Paused** on /reports/subscriptions · Paused (Gepauzeerd)
+
+Subscriptions whose status in the subscription app is paused now.
+
+**Formula as computed**
+
+```
+count(subscription_take where status = 'paused', under the filters)
+```
+
+**Unit** count · **Grain** now, per_market · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription_take` | subscription_id, connection_id, market, status, payment_state, monthly_amount, currency, interval_group, device_units, propositions, models, migrated | CMA | the minute job's subscription facts refresh (cma.subscription_facts_refresh_of, additions 0009ze and 0009zf) from the subscription app's mirror (cma.subscription, its lines and events) | every subscriptions.take_refresh_minutes (15), skipped while its inputs are unchanged |
+
+**Filters**
+
+- tenant: cma.subscriptions_page under RLS + the current tenant (cma.subscriptions_page_of with the tenant passed explicitly)
+- the page's filters, in the database: market (the store's market, or unknown), store (its subscriptions connection), proposition (a code of subscriptions.propositions, or none) and billing interval group; the month take is per store, so the movements and the rates follow market and store only
+- a tenant without a subscriptions connection set up gives no figure (set_up false, the placeholder), and one without a stored take none either (history false: 'being prepared'), never zero
+
+**Time** Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.
+
+**Previous period** None on the tiles; the months stand side by side.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one read, cma.subscriptions_page, one statement in its own transaction, from the stored takes). No polling.
+
+**Computed in** `cma.subscriptions_page` (0009zh); `cma.subscriptions_page_of` (0009zh); `default (SubscriptionsPage)` in src/app/reports/subscriptions/page.tsx; `SubscriptionsTiles` in src/components/SubscriptionsReport.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*) from (select set_config('app.tenant_id', :tenant_id::text, true)) s, cma.subscription_take x where x.tenant_id = :tenant_id and x.status = 'paused'
+```
+
+**Fixture check** 217 ran locally only (Postgres 16 with the dev seed and the 3x volume fixture, 12 PASS); Martin runs 216 and 217 in dev, then prod (verify REFUSED there for want of the dev seed, as 211).
+
+**Documented in** features.md 5 (Customers -> Subscriptions); kpis.md 4; api.md, GET /api/v1/reports/subscriptions; data-model/0008.md, Customers -> Subscriptions (addition 0009zh); definitions.md, Subscription terms
+
+**Notes**
+
+The list's measure paused lists the same subscriptions (217 B6).
+
+#### `subscriptions.source_counts`
+
+**Subscription app: {n} on {date}** on /reports/subscriptions · Source figures (Bronwaarden)
+
+Under Total subscriptions, Paused and the Monthly recurring amount: the subscription app's own figures of the day (Source figures), summed over the stores in scope that have one, with the number of those figures that are a Source figure gap one by one (figures among those Data quality lists; the rule is never applied to the sum).
+
+**Formula as computed**
+
+```
+cma.subscriptions_source_counts_of: per store under the market and store filters, its latest business date of today or yesterday with a subscriptions_in_status figure; sum(value) over dims.status in flash.device_holding_statuses (total) and = paused; recurring_amount_active per currency; total and paused only where every store counted has a figure for each of their statuses; beside sum(cma_value) (null where one figure has none); gaps = count of the figures with abs(cma_value - value) > source_figures.tolerance_min and abs(cma_value - value) * 100 > source_figures.tolerance_pct * value (214's rule per row); each amount with its stores; null under a proposition or interval filter or without a figure
+```
+
+**Unit** count · **Grain** now, per_market, per_status, per_currency · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.source_figure` | connection_id, figure_key, business_date, dims, value, currency, cma_value, fetched_at | Juo | Juo analytics (POST /analytics/query) → ingest-source-figures → cma.ingest_upsert_source_figures (addition 0009zg) | hourly job, one read a store a day after source_figures.local_time |
+
+**Filters**
+
+- tenant: cma.subscriptions_page under RLS + the current tenant (cma.subscriptions_page_of with the tenant passed explicitly)
+- the page's filters, in the database: market (the store's market, or unknown), store (its subscriptions connection), proposition (a code of subscriptions.propositions, or none) and billing interval group; the month take is per store, so the movements and the rates follow market and store only
+- a tenant without a subscriptions connection set up gives no figure (set_up false, the placeholder), and one without a stored take none either (history false: 'being prepared'), never zero
+
+**Time** Each store's latest business date of today or yesterday in the tenant's time zone (the read's day; from and to are the oldest and latest of them, both shown when they differ) and the read's moment (fetched_at), not the tile's take; the month range does not apply.
+
+**Previous period** The CMA's value of the same read (cma_value) per figure, by 214's rule.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+| `source_figures.tolerance_pct` | 1 | 1 |
+| `source_figures.tolerance_min` | 2 | 2 |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load, inside the page's one read (cma.subscriptions_page); the figures themselves are read once a store a day after source_figures.local_time by the hourly job ingest-source-figures. No polling.
+
+**Computed in** `cma.subscriptions_source_counts_of` (0009zh); `SubscriptionsTiles` in src/components/SubscriptionsReport.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with z as (select (now() at time zone t.timezone)::date as today, cma.flash_list_of(cma.setting_of(t.id, 'flash.device_holding_statuses')) as holding, cma.setting_of(t.id, 'source_figures.tolerance_pct')::numeric as pct, cma.setting_of(t.id, 'source_figures.tolerance_min')::numeric as mn from cma.tenant t where t.id = :tenant_id), l as (select f.connection_id, max(f.business_date) as d from cma.source_figure f, z where f.tenant_id = :tenant_id and f.figure_key = 'subscriptions_in_status' and f.business_date between z.today - 1 and z.today group by 1), r as (select f.*, f.dims ->> 'status' = any (z.holding) as held, f.cma_value is not null and abs(f.cma_value - f.value) > z.mn and abs(f.cma_value - f.value) * 100 > z.pct * f.value as gap from cma.source_figure f join l on l.connection_id = f.connection_id and l.d = f.business_date, z where f.tenant_id = :tenant_id and f.figure_key = 'subscriptions_in_status') select count(distinct r.connection_id) as stores, sum(r.value) filter (where r.held) as total, sum(r.cma_value) filter (where r.held) as total_cma, count(*) filter (where r.held and r.gap) as total_gaps, sum(r.value) filter (where r.dims ->> 'status' = 'paused') as paused, count(*) filter (where r.dims ->> 'status' = 'paused' and r.gap) as paused_gaps, (select count(*) from (select r2.connection_id from r r2 group by 1 having count(distinct r2.dims ->> 'status') filter (where r2.held) < (select count(distinct h) from z, unnest(z.holding) h)) x) as stores_missing_a_holding_status from (select set_config('app.tenant_id', :tenant_id::text, true)) s, r
+```
+
+**Fixture check** 217 B12 builds figures for four stores in a rolled-back block (today, yesterday only, out of date; opposite gaps whose sum is within; a paused figure without a CMA value; an amount without a currency) and checks the sums, the CMA's values, the gaps per figure, the amounts' stores, the market filter, the absence under a proposition filter and no total where a holding status has no figure (13 PASS locally, provoked 0 of 13); Martin runs 217 in dev.
+
+**Data prerequisites**
+
+- The job ingest-source-figures has read the day's figures (PROD_RUNBOOK phase 19) (data quality check `source_figure_gap`)
+- Every store has a subscriptions_in_status figure for each holding status (flash.device_holding_statuses) and for paused on its latest date: the adapter reads active, paused, failed and canceled only and skips a status the app answers without a value, and a total or paused count is shown only where every store counted has one (data quality check `verify_sql's stores_missing_a_holding_status is 0`)
+
+**Documented in** features.md 5 (Customers -> Subscriptions); kpis.md 4; api.md, GET /api/v1/reports/subscriptions; data-model/0008.md, Customers -> Subscriptions (addition 0009zh); definitions.md, Subscription terms
+
+**Notes**
+
+The app's figure and the CMA's value it was compared with are both of the read (fetched_at), not of the tile's take (Refreshed at): the line shows the app's value and its day, and the gap is B39b's comparison of that read. A store without a figure of today or yesterday is left out and the line names how many stores it covers. Renewal survival is not compared with the app's own yet. Unit count for the total and paused; the amount line is in its currency's own unit.
+
+#### `subscriptions.monthly_recurring_amount`
+
+**Monthly recurring amount** on /reports/subscriptions · Monthly recurring amount (Maandelijks terugkerend bedrag)
+
+The amount per cycle of the active subscriptions brought to a month, per currency, never added across currencies; an indicative euro line only when every currency has a rate.
+
+**Formula as computed**
+
+```
+sum(subscription_take.monthly_amount where status = any(flash.active_subscription_statuses)) per currency; monthly_amount = amount_per_cycle × Customers -> Active's month factor (cma.active_month_factor_of); eur = sum(cma.active_eur_of(amount, currency, reports.fx_eur_rates)) only when no currency lacks a rate
+```
+
+**Unit** currency · **Grain** now, per_market, per_currency · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription_take` | subscription_id, connection_id, market, status, payment_state, monthly_amount, currency, interval_group, device_units, propositions, models, migrated | CMA | the minute job's subscription facts refresh (cma.subscription_facts_refresh_of, additions 0009ze and 0009zf) from the subscription app's mirror (cma.subscription, its lines and events) | every subscriptions.take_refresh_minutes (15), skipped while its inputs are unchanged |
+
+**Filters**
+
+- tenant: cma.subscriptions_page under RLS + the current tenant (cma.subscriptions_page_of with the tenant passed explicitly)
+- the page's filters, in the database: market (the store's market, or unknown), store (its subscriptions connection), proposition (a code of subscriptions.propositions, or none) and billing interval group; the month take is per store, so the movements and the rates follow market and store only
+- a tenant without a subscriptions connection set up gives no figure (set_up false, the placeholder), and one without a stored take none either (history false: 'being prepared'), never zero
+
+**Time** Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.
+
+**Previous period** None on the tiles; the months stand side by side.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.active_subscription_statuses` | active | active |
+| `reports.fx_eur_rates` | {} | {} |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one read, cma.subscriptions_page, one statement in its own transaction, from the stored takes). No polling.
+
+**Computed in** `cma.subscriptions_page` (0009zh); `cma.subscriptions_page_of` (0009zh); `default (SubscriptionsPage)` in src/app/reports/subscriptions/page.tsx; `SubscriptionsTiles` in src/components/SubscriptionsReport.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select x.currency, round(sum(x.monthly_amount), 2), count(*) from (select set_config('app.tenant_id', :tenant_id::text, true)) s, cma.subscription_take x where x.tenant_id = :tenant_id and x.status = any (cma.flash_list_of(cma.setting_of(:tenant_id, 'flash.active_subscription_statuses'))) and x.monthly_amount is not null group by 1
+```
+
+**Fixture check** 217 ran locally only (Postgres 16 with the dev seed and the 3x volume fixture, 12 PASS); Martin runs 216 and 217 in dev, then prod (verify REFUSED there for want of the dev seed, as 211).
+
+**Data prerequisites**
+
+- Monthly amounts of movements are known from the first load (20 Nov 2026 in prod): the first complete month with amounts is December 2026
+
+**Documented in** features.md 5 (Customers -> Subscriptions); kpis.md 4; api.md, GET /api/v1/reports/subscriptions; data-model/0008.md, Customers -> Subscriptions (addition 0009zh); definitions.md, Subscription terms
+
+**Notes**
+
+The CMA's word, never MRR. One-time lines are in the amount per cycle as the app states it; B39b's comparison with the app's current-mrr names that difference.
+
+#### `subscriptions.churn_rate`
+
+**Churn rate** on /reports/subscriptions · Churn rate (Uitvalpercentage)
+
+The subscriptions churned in the last complete month over the Total subscriptions at the end of the month before, over the stores whose rates have started.
+
+**Formula as computed**
+
+```
+churned / start over subscription_month_take rows with currency '' and complete, of the latest complete month at most to, under the market and store filters
+```
+
+**Unit** share · **Grain** per_month, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription_month_take` | connection_id, market, month, kind, currency, subscriptions, amount, complete | CMA | the subscription facts refresh (cma.subscription_facts_refresh_of): the status moves reconstructed from the subscription app's events (cma.subscription_moves_of) and the observed amount changes (cma.subscription_change) | every subscriptions.take_refresh_minutes (15), skipped while its inputs are unchanged |
+| `cma.subscription_store_start` | connection_id, market, first_event_month, rate_start_month, stragglers | CMA | the subscription facts refresh (cma.subscription_rate_start_of) | every subscriptions.take_refresh_minutes (15) |
+
+**Filters**
+
+- tenant: cma.subscriptions_page under RLS + the current tenant (cma.subscriptions_page_of with the tenant passed explicitly)
+- the page's filters, in the database: market (the store's market, or unknown), store (its subscriptions connection), proposition (a code of subscriptions.propositions, or none) and billing interval group; the month take is per store, so the movements and the rates follow market and store only
+- a tenant without a subscriptions connection set up gives no figure (set_up false, the placeholder), and one without a stored take none either (history false: 'being prepared'), never zero
+
+**Time** Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.
+
+**Previous period** None on the tiles; the months stand side by side.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.ended_subscription_statuses` | canceled,expired | canceled,expired |
+| `subscriptions.migration_bulk_min_pct` | 5 | 5 |
+| `subscriptions.rates_start_month` |  | 2026-06 |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one read, cma.subscriptions_page, one statement in its own transaction, from the stored takes). No polling.
+
+**Computed in** `cma.subscriptions_page` (0009zh); `cma.subscriptions_page_of` (0009zh); `default (SubscriptionsPage)` in src/app/reports/subscriptions/page.tsx; `SubscriptionsTiles` in src/components/SubscriptionsReport.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select x.month, sum(x.subscriptions) filter (where x.kind = 'churned')::numeric / nullif(sum(x.subscriptions) filter (where x.kind = 'start'), 0) from (select set_config('app.tenant_id', :tenant_id::text, true)) s, cma.subscription_month_take x where x.tenant_id = :tenant_id and x.currency = '' and x.complete group by 1 order by 1 desc limit 1
+```
+
+**Fixture check** 217 ran locally only (Postgres 16 with the dev seed and the 3x volume fixture, 12 PASS); Martin runs 216 and 217 in dev, then prod (verify REFUSED there for want of the dev seed, as 211).
+
+**Data prerequisites**
+
+- Kira confirms Churn (subscription) and whether failed counts (Open decisions, The Flash definitions)
+
+**Documented in** features.md 5 (Customers -> Subscriptions); kpis.md 4; api.md, GET /api/v1/reports/subscriptions; data-model/0008.md, Customers -> Subscriptions (addition 0009zh); definitions.md, Subscription terms
+
+**Notes**
+
+Its churned count links to Flash's Churn for that month; Flash counts canceled and status_changed events per day (Churn (subscription)), the month take counts moves into an ended status reconstructed per subscription, so the two can differ by the synthesized moves (a status without an event). Whether failed counts as churn is flash.ended_subscription_statuses (Kira). Without a market filter (and on Active's card without one) the rate pools every market's stores: the churned over the base summed over the stores whose month counts; a store filter gives that store's.
+
+#### `subscriptions.failed_rate`
+
+**Failed rate** on /reports/subscriptions · Failed rate (Mislukt-percentage)
+
+The subscriptions that moved to failed in the last complete month over the same base as the churn rate; beside it, never inside it.
+
+**Formula as computed**
+
+```
+moved_to_failed / start over the same rows as subscriptions.churn_rate
+```
+
+**Unit** share · **Grain** per_month, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription_month_take` | connection_id, market, month, kind, currency, subscriptions, amount, complete | CMA | the subscription facts refresh (cma.subscription_facts_refresh_of): the status moves reconstructed from the subscription app's events (cma.subscription_moves_of) and the observed amount changes (cma.subscription_change) | every subscriptions.take_refresh_minutes (15), skipped while its inputs are unchanged |
+| `cma.subscription_store_start` | connection_id, market, first_event_month, rate_start_month, stragglers | CMA | the subscription facts refresh (cma.subscription_rate_start_of) | every subscriptions.take_refresh_minutes (15) |
+
+**Filters**
+
+- tenant: cma.subscriptions_page under RLS + the current tenant (cma.subscriptions_page_of with the tenant passed explicitly)
+- the page's filters, in the database: market (the store's market, or unknown), store (its subscriptions connection), proposition (a code of subscriptions.propositions, or none) and billing interval group; the month take is per store, so the movements and the rates follow market and store only
+- a tenant without a subscriptions connection set up gives no figure (set_up false, the placeholder), and one without a stored take none either (history false: 'being prepared'), never zero
+
+**Time** Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.
+
+**Previous period** None on the tiles; the months stand side by side.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `subscriptions.rates_start_month` |  | 2026-06 |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one read, cma.subscriptions_page, one statement in its own transaction, from the stored takes). No polling.
+
+**Computed in** `cma.subscriptions_page` (0009zh); `cma.subscriptions_page_of` (0009zh); `default (SubscriptionsPage)` in src/app/reports/subscriptions/page.tsx; `SubscriptionsTiles` in src/components/SubscriptionsReport.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select x.month, sum(x.subscriptions) filter (where x.kind = 'moved_to_failed')::numeric / nullif(sum(x.subscriptions) filter (where x.kind = 'start'), 0) from (select set_config('app.tenant_id', :tenant_id::text, true)) s, cma.subscription_month_take x where x.tenant_id = :tenant_id and x.currency = '' and x.complete group by 1 order by 1 desc limit 1
+```
+
+**Fixture check** 217 ran locally only (Postgres 16 with the dev seed and the 3x volume fixture, 12 PASS); Martin runs 216 and 217 in dev, then prod (verify REFUSED there for want of the dev seed, as 211).
+
+**Data prerequisites**
+
+- Kira confirms whether failed counts as churn (flash.ended_subscription_statuses; Open decisions, The Flash definitions)
+
+**Documented in** features.md 5 (Customers -> Subscriptions); kpis.md 4; api.md, GET /api/v1/reports/subscriptions; data-model/0008.md, Customers -> Subscriptions (addition 0009zh); definitions.md, Subscription terms
+
+**Notes**
+
+Never 'failed payment rate' or 'dunning rate'. Without a market filter (and on Active's card without one) the rate pools every market's stores: the churned over the base summed over the stores whose month counts; a store filter gives that store's.
+
+#### `subscriptions.device_units`
+
+**Device units** on /reports/subscriptions · Device units (Apparaateenheden)
+
+The devices the subscriptions in a device-holding status pay for, from the variant mapping; those with a variant not mapped counted beside it.
+
+**Formula as computed**
+
+```
+sum(subscription_take.device_units where status is holding); unmapped = count(holding where device_units is null)
+```
+
+**Unit** count · **Grain** now, per_market · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription_take` | subscription_id, connection_id, market, status, payment_state, monthly_amount, currency, interval_group, device_units, propositions, models, migrated | CMA | the minute job's subscription facts refresh (cma.subscription_facts_refresh_of, additions 0009ze and 0009zf) from the subscription app's mirror (cma.subscription, its lines and events) | every subscriptions.take_refresh_minutes (15), skipped while its inputs are unchanged |
+
+**Filters**
+
+- tenant: cma.subscriptions_page under RLS + the current tenant (cma.subscriptions_page_of with the tenant passed explicitly)
+- the page's filters, in the database: market (the store's market, or unknown), store (its subscriptions connection), proposition (a code of subscriptions.propositions, or none) and billing interval group; the month take is per store, so the movements and the rates follow market and store only
+- a tenant without a subscriptions connection set up gives no figure (set_up false, the placeholder), and one without a stored take none either (history false: 'being prepared'), never zero
+
+**Time** Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.
+
+**Previous period** None on the tiles; the months stand side by side.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one read, cma.subscriptions_page, one statement in its own transaction, from the stored takes). No polling.
+
+**Computed in** `cma.subscriptions_page` (0009zh); `cma.subscriptions_page_of` (0009zh); `default (SubscriptionsPage)` in src/app/reports/subscriptions/page.tsx; `SubscriptionsTiles` in src/components/SubscriptionsReport.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select coalesce(sum(x.device_units), 0), count(*) filter (where x.device_units is null) from (select set_config('app.tenant_id', :tenant_id::text, true)) s, cma.subscription_take x where x.tenant_id = :tenant_id and x.status = any (cma.flash_list_of(cma.setting_of(:tenant_id, 'flash.device_holding_statuses')))
+```
+
+**Fixture check** 217 ran locally only (Postgres 16 with the dev seed and the 3x volume fixture, 12 PASS); Martin runs 216 and 217 in dev, then prod (verify REFUSED there for want of the dev seed, as 211).
+
+**Data prerequisites**
+
+- Every variant on an active line mapped (Configuration -> Sources) (data quality check `subscription_variant_unmapped`)
+
+**Documented in** features.md 5 (Customers -> Subscriptions); kpis.md 4; api.md, GET /api/v1/reports/subscriptions; data-model/0008.md, Customers -> Subscriptions (addition 0009zh); definitions.md, Subscription terms
+
+**Notes**
+
+The unmapped count links to Data quality's subscription_variant_unmapped.
+
+#### `subscriptions.movements`
+
+**Movements by month** on /reports/subscriptions · Movements by month (Bewegingen per maand)
+
+Per month the Total subscriptions at its start and end and the subscriptions that moved: new, migrated, reactivated, resumed, paused, churned, moved to failed; and the amount changes without a status move.
+
+**Formula as computed**
+
+```
+sum(subscription_month_take.subscriptions) per month and kind (currency ''); amounts sum(amount) per month, kind and currency, from the take's amounts_from
+```
+
+**Unit** count · **Grain** per_month, per_market, per_currency · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription_month_take` | connection_id, market, month, kind, currency, subscriptions, amount, complete | CMA | the subscription facts refresh (cma.subscription_facts_refresh_of): the status moves reconstructed from the subscription app's events (cma.subscription_moves_of) and the observed amount changes (cma.subscription_change) | every subscriptions.take_refresh_minutes (15), skipped while its inputs are unchanged |
+
+**Filters**
+
+- tenant: cma.subscriptions_page under RLS + the current tenant (cma.subscriptions_page_of with the tenant passed explicitly)
+- the page's filters, in the database: market (the store's market, or unknown), store (its subscriptions connection), proposition (a code of subscriptions.propositions, or none) and billing interval group; the month take is per store, so the movements and the rates follow market and store only
+- a tenant without a subscriptions connection set up gives no figure (set_up false, the placeholder), and one without a stored take none either (history false: 'being prepared'), never zero
+
+**Time** Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.
+
+**Previous period** None on the tiles; the months stand side by side.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `subscriptions.rates_start_month` |  | 2026-06 |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one read, cma.subscriptions_page, one statement in its own transaction, from the stored takes). No polling.
+
+**Computed in** `cma.subscriptions_page` (0009zh); `cma.subscriptions_page_of` (0009zh); `default (SubscriptionsPage)` in src/app/reports/subscriptions/page.tsx; `SubscriptionsTiles` in src/components/SubscriptionsReport.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select x.month, x.kind, x.currency, sum(x.subscriptions), sum(x.amount) from (select set_config('app.tenant_id', :tenant_id::text, true)) s, cma.subscription_month_take x where x.tenant_id = :tenant_id and x.month between :from and :to group by 1, 2, 3 order by 1, 2, 3
+```
+
+**Fixture check** 217 ran locally only (Postgres 16 with the dev seed and the 3x volume fixture, 12 PASS); Martin runs 216 and 217 in dev, then prod (verify REFUSED there for want of the dev seed, as 211).
+
+**Data prerequisites**
+
+- Monthly amounts of movements are known from the first load (20 Nov 2026 in prod): the first complete month with amounts is December 2026
+
+**Documented in** features.md 5 (Customers -> Subscriptions); kpis.md 4; api.md, GET /api/v1/reports/subscriptions; data-model/0008.md, Customers -> Subscriptions (addition 0009zh); definitions.md, Subscription terms
+
+**Notes**
+
+Counts reach back to each store's first event; amounts only from the first load (20 Nov 2026 in prod), so earlier months show a dash in the amounts view. Not filtered by proposition or interval (the month take is per store); the page says so. A pause or a move to failed need not change whether a subscription holds devices, so the lines need not add up to the end.
+
+#### `subscriptions.renewal_survival`
+
+**Renewal survival** on /reports/subscriptions · Renewal survival (Verlengingsbehoud)
+
+Per start cohort and billing interval, the share of the subscriptions started in the subscription app that renewed at least that many times; a dash until the cohort is mature for it.
+
+**Formula as computed**
+
+```
+survived / started per cohort, interval group and renewal number, summed over the stores; mature when eligible = started; migrated subscriptions left out and counted
+```
+
+**Unit** share · **Grain** per_cohort, per_group · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription_survival_take` | connection_id, market, cohort_month, interval_group, renewal_number, started, eligible, survived | CMA | the subscription facts refresh (step 5) | every subscriptions.take_refresh_minutes (15) |
+| `cma.subscription_take` | subscription_id, connection_id, market, status, payment_state, monthly_amount, currency, interval_group, device_units, propositions, models, migrated | CMA | the minute job's subscription facts refresh (cma.subscription_facts_refresh_of, additions 0009ze and 0009zf) from the subscription app's mirror (cma.subscription, its lines and events) | every subscriptions.take_refresh_minutes (15), skipped while its inputs are unchanged |
+
+**Filters**
+
+- tenant: cma.subscriptions_page under RLS + the current tenant (cma.subscriptions_page_of with the tenant passed explicitly)
+- the page's filters, in the database: market (the store's market, or unknown), store (its subscriptions connection), proposition (a code of subscriptions.propositions, or none) and billing interval group; the month take is per store, so the movements and the rates follow market and store only
+- a tenant without a subscriptions connection set up gives no figure (set_up false, the placeholder), and one without a stored take none either (history false: 'being prepared'), never zero
+
+**Time** Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.
+
+**Previous period** None on the tiles; the months stand side by side.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one read, cma.subscriptions_page, one statement in its own transaction, from the stored takes). No polling.
+
+**Computed in** `cma.subscriptions_page` (0009zh); `cma.subscriptions_page_of` (0009zh); `default (SubscriptionsPage)` in src/app/reports/subscriptions/page.tsx; `SubscriptionsTiles` in src/components/SubscriptionsReport.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select x.interval_group, x.cohort_month, x.renewal_number, sum(x.started), sum(x.eligible), sum(x.survived) from (select set_config('app.tenant_id', :tenant_id::text, true)) s, cma.subscription_survival_take x where x.tenant_id = :tenant_id and x.cohort_month between :from and :to group by 1, 2, 3 order by 1, 2, 3
+```
+
+**Fixture check** 217 ran locally only (Postgres 16 with the dev seed and the 3x volume fixture, 12 PASS); Martin runs 216 and 217 in dev, then prod (verify REFUSED there for want of the dev seed, as 211).
+
+**Documented in** features.md 5 (Customers -> Subscriptions); kpis.md 4; api.md, GET /api/v1/reports/subscriptions; data-model/0008.md, Customers -> Subscriptions (addition 0009zh); definitions.md, Subscription terms
+
+**Notes**
+
+The cohorts of the page's month range. The proposition filter does not narrow it (the take is per store and interval group).
+
+#### `subscriptions.mix`
+
+**Mix of the Total subscriptions** on /reports/subscriptions · Mix of the Total subscriptions (Mix van het totaal abonnementen)
+
+The Total subscriptions now by proposition, model, billing interval, device units band, Subscription age band, payment instrument and payment state.
+
+**Formula as computed**
+
+```
+count(holding subscription_take rows) per breakdown; propositions and models unnested (a subscription with several counts in each); device band cma.flash_count_band_of(device_units, flash.device_bands); Subscription age band cma.flash_age_band_of(whole months since cma.subscription.source_created_at, flash.subscription_age_months); instrument and created date from cma.subscription by the take's id
+```
+
+**Unit** count · **Grain** now, per_group, per_model, per_status · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription_take` | subscription_id, connection_id, market, status, payment_state, monthly_amount, currency, interval_group, device_units, propositions, models, migrated | CMA | the minute job's subscription facts refresh (cma.subscription_facts_refresh_of, additions 0009ze and 0009zf) from the subscription app's mirror (cma.subscription, its lines and events) | every subscriptions.take_refresh_minutes (15), skipped while its inputs are unchanged |
+| `cma.subscription` | id, source_number, payment_instrument_type, customer_source_id, source_created_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (additions 0008zl, 0009za) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+
+**Filters**
+
+- tenant: cma.subscriptions_page under RLS + the current tenant (cma.subscriptions_page_of with the tenant passed explicitly)
+- the page's filters, in the database: market (the store's market, or unknown), store (its subscriptions connection), proposition (a code of subscriptions.propositions, or none) and billing interval group; the month take is per store, so the movements and the rates follow market and store only
+- a tenant without a subscriptions connection set up gives no figure (set_up false, the placeholder), and one without a stored take none either (history false: 'being prepared'), never zero
+
+**Time** Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.
+
+**Previous period** None on the tiles; the months stand side by side.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `flash.device_holding_statuses` | active | active,failed |
+| `flash.device_bands` | 1,2,3 | 1,2,3 |
+| `flash.subscription_age_months` | 12,24,36,48,60 | 12,24,36,48,60 |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one read, cma.subscriptions_page, one statement in its own transaction, from the stored takes). No polling.
+
+**Computed in** `cma.subscriptions_page` (0009zh); `cma.subscriptions_page_of` (0009zh); `default (SubscriptionsPage)` in src/app/reports/subscriptions/page.tsx; `SubscriptionsTiles` in src/components/SubscriptionsReport.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select x.interval_group, count(*) from (select set_config('app.tenant_id', :tenant_id::text, true)) s, cma.subscription_take x where x.tenant_id = :tenant_id and x.status = any (cma.flash_list_of(cma.setting_of(:tenant_id, 'flash.device_holding_statuses'))) group by 1
+```
+
+**Fixture check** 217 ran locally only (Postgres 16 with the dev seed and the 3x volume fixture, 12 PASS); Martin runs 216 and 217 in dev, then prod (verify REFUSED there for want of the dev seed, as 211).
+
+**Documented in** features.md 5 (Customers -> Subscriptions); kpis.md 4; api.md, GET /api/v1/reports/subscriptions; data-model/0008.md, Customers -> Subscriptions (addition 0009zh); definitions.md, Subscription terms
+
+**Notes**
+
+The payment instrument and the created date are the mirror's columns read by the take's key: the take does not carry them. The age is Subscription age (Flash's term: since the app's created date); the original start (estimated) is not used on a page until Martin's hand check of migrated subscriptions (Decision log, 20 Nov 2026).
+
+#### `subscriptions.list`
+
+**Subscriptions** on /reports/subscriptions · Subscriptions (Abonnementen)
+
+One row per subscription of a measure (a tile's population): the app's id and number, codes, the monthly amount, device units, Subscription age, propositions, the payment instrument and the contact's link.
+
+**Formula as computed**
+
+```
+cma.subscription_rows_of: the take's rows under the filters and the measure, sorted by a fixed list, 50 a page; total = count of the measure
+```
+
+**Unit** count · **Grain** per_record · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.subscription_take` | subscription_id, connection_id, market, status, payment_state, monthly_amount, currency, interval_group, device_units, propositions, models, migrated | CMA | the minute job's subscription facts refresh (cma.subscription_facts_refresh_of, additions 0009ze and 0009zf) from the subscription app's mirror (cma.subscription, its lines and events) | every subscriptions.take_refresh_minutes (15), skipped while its inputs are unchanged |
+| `cma.subscription` | id, source_number, payment_instrument_type, customer_source_id, source_created_at | Juo | Juo Admin API → ingest-poll-subscriptions and ingest-reconcile → cma.ingest_upsert_subscriptions (additions 0008zl, 0009za) | every 5 minutes (subscriptions_poll_interval_minutes), a full read nightly |
+
+**Filters**
+
+- tenant: cma.subscriptions_page under RLS + the current tenant (cma.subscriptions_page_of with the tenant passed explicitly)
+- the page's filters, in the database: market (the store's market, or unknown), store (its subscriptions connection), proposition (a code of subscriptions.propositions, or none) and billing interval group; the month take is per store, so the movements and the rates follow market and store only
+- a tenant without a subscriptions connection set up gives no figure (set_up false, the placeholder), and one without a stored take none either (history false: 'being prepared'), never zero
+
+**Time** Now is the stored take's moment (Refreshed at, cma.subscription_take_state.computed_at), refreshed every subscriptions.take_refresh_minutes (15); months are calendar months in the tenant's time zone; the range is from and to (YYYY-MM), by default the last twelve complete months and the current one.
+
+**Previous period** None on the tiles; the months stand side by side.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one read, cma.subscriptions_page, one statement in its own transaction, from the stored takes). No polling.
+
+**Computed in** `cma.subscription_rows` (0009zh); `cma.subscription_rows_of` (0009zh); `SubscriptionList` in src/components/SubscriptionsReport.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** 217 ran locally only (Postgres 16 with the dev seed and the 3x volume fixture, 12 PASS); Martin runs 216 and 217 in dev, then prod (verify REFUSED there for want of the dev seed, as 211).
+
+**Documented in** features.md 5 (Customers -> Subscriptions); kpis.md 4; api.md, GET /api/v1/reports/subscriptions; data-model/0008.md, Customers -> Subscriptions (addition 0009zh); definitions.md, Subscription terms
+
+**Notes**
+
+verify_sql is null: a list, not a figure; 217 B6 and B7 check its totals per measure against the tiles and walk its pages whole. The file (/api/v1/reports/subscriptions/file) writes the contact's id, never its link, and is recorded in the audit log before it is sent. The original start (estimated) and its basis are not shown until the hand check of migrated subscriptions (Decision log, 20 Nov 2026); the amount sorts within its currency.
 
 ## Configuration
 

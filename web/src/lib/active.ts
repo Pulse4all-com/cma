@@ -36,7 +36,7 @@ export const ACTIVE_PAGE_SIZE = 50;
  * paper every panel takes its own height
  */
 export const ACTIVE_PANEL_HEIGHT = {
-  tiles: 372, churn: 40, hero: 404, flow: 344, amount: 344, markets: 384, comparison: 560, survival: 448, age: 328, channel: 328,
+  tiles: 372, churn: 152, hero: 404, flow: 344, amount: 344, markets: 384, comparison: 560, survival: 448, age: 328, channel: 328,
   cohortTable: 424, cohortCurves: 348, mix: 232, devices: 376, list: 656,
 } as const;
 export type ActivePanel = keyof typeof ACTIVE_PANEL_HEIGHT;
