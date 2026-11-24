@@ -16,15 +16,15 @@ CREATE FUNCTION
 DO
 DO
 CREATE FUNCTION
-psql:237_verify_jobs_off_the_vcpu.sql:588: NOTICE:  relation "subscription_facts_units" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:588: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:588: NOTICE:  relation "subscription_facts_take" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:588: NOTICE:  relation "subscription_facts_units" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:588: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:588: NOTICE:  relation "subscription_facts_take" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:588: NOTICE:  relation "subscription_facts_units" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:588: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
-psql:237_verify_jobs_off_the_vcpu.sql:588: NOTICE:  relation "subscription_facts_take" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:593: NOTICE:  relation "subscription_facts_units" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:593: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:593: NOTICE:  relation "subscription_facts_take" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:593: NOTICE:  relation "subscription_facts_units" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:593: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:593: NOTICE:  relation "subscription_facts_take" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:593: NOTICE:  relation "subscription_facts_units" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:593: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
+psql:237_verify_jobs_off_the_vcpu.sql:593: NOTICE:  relation "subscription_facts_take" already exists, skipping
 DO
 DO
 DROP FUNCTION

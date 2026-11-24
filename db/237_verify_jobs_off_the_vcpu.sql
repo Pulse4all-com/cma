@@ -529,6 +529,11 @@ begin
     v_at := least(now(), ((now() at time zone v_tz)::date + time '22:00') at time zone v_tz);
     insert into cma.tenant_setting (tenant_id, key, value) values (v_t, 'subscriptions.take_refresh_minutes', '15')
     on conflict (tenant_id, key) do update set value = excluded.value;
+    -- a tenant without a chargeback (dev on 25 November 2026): the rule "a chargeback written since" has no chargeback to
+    -- read, so the checks run in that case, which 0009zr's first 236 decided as unknown (null) instead of false; removed
+    -- before the forced refresh, inside this block that is always rolled back, so every computation below sees the same
+    -- inputs. F4 writes one again
+    delete from cma.billing_event b where b.tenant_id = v_t and b.kind = 'chargeback';
     r0 := cma.subscription_facts_refresh_of(v_t, true, v_at);
     -- provoked: one stored outcome removed, a deliberate difference the comparison must see (its detail then says 1)
     if current_setting('verify.provoke')::boolean then

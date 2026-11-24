@@ -424,10 +424,15 @@ begin
   --    whole computation (237, F1 to F4)
   v_out_read := clock_timestamp();
   v_out_from := v_state.outcomes_read_at - interval '10 minutes';
-  v_out_full := p_force or not v_found or v_state.outcomes_read_at is null or v_state.outcomes_full_at is null
-                or v_state.business_date is distinct from v_today
-                or v_now - v_state.outcomes_full_at >= interval '60 minutes'
-                or (select max(b.synced_at) from cma.billing_event b where b.tenant_id = p_tenant_id and b.kind = 'chargeback') >= v_out_from;
+  -- never null (25 November 2026, dev): a tenant without a chargeback has no max(synced_at), and null >= a time is
+  -- unknown, which made the whole decision unknown, so every run computed the whole set without saying so and never
+  -- kept outcomes_full_at; unknown now means whole
+  v_out_full := coalesce(coalesce(p_force, false) or not v_found or v_state.outcomes_read_at is null or v_state.outcomes_full_at is null
+                         or v_state.business_date is distinct from v_today
+                         or v_now - v_state.outcomes_full_at >= interval '60 minutes'
+                         or coalesce((select max(b.synced_at) from cma.billing_event b
+                                      where b.tenant_id = p_tenant_id and b.kind = 'chargeback') >= v_out_from, false),
+                         true);
   if not v_out_full then
     select coalesce(array_agg(x.c order by x.c, x.s), '{}'), coalesce(array_agg(x.s order by x.c, x.s), '{}')
       into v_scope_c, v_scope_s
