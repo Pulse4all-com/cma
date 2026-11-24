@@ -4283,11 +4283,23 @@ gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-w
 ```
 Expected: `Execution [ingest-backfill-…] has successfully completed.`, 30 to 90 minutes as 17.6. A failed execution is run again with the same arguments: every store continues from its cursor.
 
-**Terminal** (the finished line: served, skipped, failed, the per-store results)
+**Terminal** (one `backfill` line per connection, with its counts and `failed`)
 ```bash
-gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.message="backfill finished" AND jsonPayload.adapter="juo"' --project=p4a-cma-prod --freshness=3h --limit=1 --format='value(timestamp,jsonPayload.connections,jsonPayload.served,jsonPayload.skipped,jsonPayload.failed,jsonPayload.results)'
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.message="backfill" AND jsonPayload.object="subscription_event"' --project=p4a-cma-prod --freshness=12h --limit=20 --format='table(timestamp,jsonPayload.connection,jsonPayload.again,jsonPayload.events_new,jsonPayload.failed,jsonPayload.error,jsonPayload.ms)'
 ```
-Expected: every Juo connection served, `failed` 0, and per store `events_new` above 0 for a store with history before 28 January 2026 (GB, NL, DE, BE, FR, SE). AT, DK and IE, which started after January, read 0 or near it.
+Expected: one row per Juo connection of the run (nine), `again` True, `failed` 0 and `error` empty. `events_new` is above 0 for a store with history before 28 January 2026 (GB, NL, DE, BE, FR, SE). AT, DK and IE, which started after January, read 0 or near it. Read it later than 12 hours after the run: widen `--freshness` (1d).
+
+**Terminal** (per store, what the adapter read: `backfill: subscription events`)
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.message="backfill: subscription events"' --project=p4a-cma-prod --freshness=12h --limit=20 --format='table(timestamp,jsonPayload.connection,jsonPayload.eventsRead,jsonPayload.eventsKept,jsonPayload.eventsUnreadable)'
+```
+Expected: one row per connection that read events, `eventsUnreadable` 0.
+
+**Terminal** (a connection skipped or failed is a line of its own)
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.message=~"^backfill: connection (skipped|failed)"' --project=p4a-cma-prod --freshness=12h --limit=20 --format='value(timestamp,jsonPayload.message,jsonPayload.connection,jsonPayload.code)'
+```
+Expected: nothing.
 
 The poll resumed:
 
@@ -4304,6 +4316,8 @@ The table vacuumed, so the minute job's markers read stays index-only on the new
 cd ~/cma && cma_db prod && psql "$PGCONN" -v ON_ERROR_STOP=1 -c "set role cma_owner" -c "set statement_timeout = '10min'" -c "vacuum (analyze) cma.subscription_event"
 ```
 Expected: `VACUUM`, within a minute or two. Then 213's I1 as 21.6 reads it: `heap fetches none` (or under 1 %).
+
+Note on 213 here and in 23.9: once 224 (#308's 0009zl) and its seed are in prod, **main's** `213_verify_subscription_facts_speed.sql` reads A3 FAIL with `:digests`. That is main's 213 lacking 224's floor part (#308 edits 213 for it), not a data fault. #308's 213 reads A3 PASS (verified in prod on 24 November 2026). Run 213 from #308's branch until #308 is merged.
 
 ## 23.6 Studio (cma-prod-pg): the status events per store and month, after
 19.19's query again. Expected: `status_changed` rows in every month from each store's history start, with no gap before 28 January 2026; the months from February 2026 as before (the events were held already).
@@ -4360,7 +4374,7 @@ set role cma_owner;
 select x.computed_at from cma.subscription_take_state x where x.tenant_id = (select id from cma.tenant where slug = 'pulse4all-subscriptions');
 reset role;
 ```
-Expected: `computed_at` later than the timestamp of 23.5's `backfill finished` line. Earlier: wait 15 minutes and run it again. 23.8 and 23.9 read the stored take, so they come after this.
+Expected: `computed_at` later than the latest timestamp of 23.5's `backfill` lines (one per connection). Earlier: wait 15 minutes and run it again. 23.8 and 23.9 read the stored take, so they come after this.
 
 ## 23.8 Studio (cma-prod-pg): when each store's rates start
 20.8's query of `cma_read.subscription_store_start`. Expected: the same `rate_start_month` per store as before: the start follows the migrated events, which this does not touch.
@@ -4412,6 +4426,8 @@ Expected:
 - **From February 2026:** as before, or closer to 1.
 
 - **A store's migration months** (before its own rate start) may read off 1: the app's migrated subscriptions enter without a move there. Judge the months after them.
+
+213 here: as the note under 23.5, main's 213 reads A3 FAIL `:digests` until #308 is merged, and #308's reads PASS.
 
 Keep the output for `records/0009zk-prod-<date>` (months and ratios only). With both near 1 before 2026, #308 (B39d) can go on; its rates then start at June 2026 (0009zl), and these months stay visible here and in `cma.subscription_month_take`, not on the page.
 
