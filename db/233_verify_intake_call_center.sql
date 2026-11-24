@@ -240,10 +240,11 @@ begin
     || ' | view 18 lead_deals_created,lead_deals_closed,other_deals_created | readers true');
 
   -- S3
-  select string_agg(format('%s: owner %s, definer %s, config %s, app %s, readers %s, public %s', f.sig, pg_get_userbyid(p.proowner), p.prosecdef,
-                           coalesce(array_to_string(p.proconfig, ';'), '-'), has_function_privilege('cma_app', p.oid, 'execute'),
-                           has_function_privilege('cma_readonly', p.oid, 'execute'),
-                           exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where x.grantee = 0 and x.privilege_type = 'EXECUTE')),
+  -- booleans cast to text: format's %s would print them as t and f
+  select string_agg(format('%s: owner %s, definer %s, config %s, app %s, readers %s, public %s', f.sig, pg_get_userbyid(p.proowner), p.prosecdef::text,
+                           coalesce(array_to_string(p.proconfig, ';'), '-'), has_function_privilege('cma_app', p.oid, 'execute')::text,
+                           has_function_privilege('cma_readonly', p.oid, 'execute')::text,
+                           (exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x where x.grantee = 0 and x.privilege_type = 'EXECUTE'))::text),
                     ' / ' order by f.ord)
   into v_txt
   from (values (1, 'cma.intake_per_day_of(uuid,timestamptz,timestamptz)'), (2, 'cma.intake_per_day(date,date)'),

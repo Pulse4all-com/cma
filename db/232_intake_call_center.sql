@@ -4,7 +4,8 @@
 -- =============================================================================================
 -- Universal: no customer, tenant, pipeline or vendor specifics. Runs unchanged in every database, after
 -- 230_hours_market.sql (0009zo); it refuses to run before 0009zo is recorded. Rerunnable, forward-only, in one transaction
--- with a lock timeout. It reads crm_record and changes no table: no index, no lock on a busy table.
+-- with a lock timeout. It reads crm_record and changes no table: no index, no lock on a busy table. After it, 40, 74 and
+-- 132 cannot be rerun: their intake_per_day_of returns fifteen columns against the eighteen of cma.intake_per_day_row.
 -- Run as your own IAM login: dev first, then 233_verify_intake_call_center.sql there (normal, then provoked), then the
 -- verifies that read what this changes (below), then the datamap refresh; then prod, before the merge: this script, 233
 -- and the same verifies. Main's web runs unchanged on it: its read of Intake takes select * from cma.intake_per_day and
@@ -97,9 +98,10 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- 2. Intake per day: the deals of lead pipelines apart
 -- ---------------------------------------------------------------------------------------------
--- As 0008zr's (132): the same rows and the fifteen earlier columns. A deal row carries whether its pipeline is a lead
--- pipeline as cma.counted_deals_of reads it (coalesce(p.is_lead, true): a pipeline not yet seen is one; is_order plays no
--- part, so a pipeline marked lead and order is one); every other row carries null. The three counts follow
+-- As 0008zr's (132): the same rows and the fifteen earlier columns. A deal or ticket row carries whether its pipeline is
+-- a lead pipeline as cma.counted_deals_of reads it (coalesce(p.is_lead, true): a pipeline not yet seen is one; is_order
+-- plays no part, so a pipeline marked lead and order is one), and only the deal counts read it; the other sources carry
+-- null. The three counts follow
 -- based on: 132_perf.sql
 create or replace function cma.intake_per_day_of(p_tenant_id uuid, p_from timestamptz, p_to timestamptz)
 returns setof cma.intake_per_day_row
