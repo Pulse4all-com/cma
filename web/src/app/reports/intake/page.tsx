@@ -26,10 +26,10 @@ import { pickCopy } from "@/lib/copy";
  *
  * Since addition 0009zp (Martin, 24 November 2026) the columns stand in two groups under a header level of their
  * own: Call center work (leads, lead deals in and closed, tickets in and closed; calls in and out, tagged) and Overall
- * (other deals in; the shop). Overall is the quieter group, never a warning (Pulse4all-Style 2.1, 2.3, 7.1, 7.6): a
- * 16 px gap between the groups in every row (7.1's spacing step), its group label underlined in Border grey where Call
- * center work's has the thin Deep Blue divider (7.1), its header cells on Warm Off-White instead of Background Blue,
- * its labels and figures in Muted text. The Volume bar counts call center work only.
+ * (other deals in; the shop). Overall is the quieter group, never a warning (Pulse4all-Style 2.3, 7.1, 7.6): a 16 px gap
+ * between the groups in every row (7.1's spacing step), its group label underlined in Border grey where Call center
+ * work's has the thin Deep Blue divider (7.1), its labels and figures in Muted text; every column header keeps 7.6's
+ * Background Blue. The Volume bar counts call center work only.
  */
 export default async function IntakePage({ searchParams }: PageProps<"/reports/intake">) {
   const r = await resolve();
@@ -77,7 +77,7 @@ export default async function IntakePage({ searchParams }: PageProps<"/reports/i
   const th = "h-10 px-2 font-semibold";
   const td = "h-10 whitespace-nowrap px-2";
   const sep = "border-l border-p4a-border";
-  // Overall, the quieter group: Warm Off-White header cells, Muted labels and figures
+  // Overall, the quieter group: Muted labels and figures
   const quiet = "text-p4a-muted";
   const workSpan = CRM_FIELDS.length + TELEPHONY_FIELDS.length;
   const overallSpan = OVERALL_CRM_FIELDS.length + COMMERCE_FIELDS.length;
@@ -103,9 +103,9 @@ export default async function IntakePage({ searchParams }: PageProps<"/reports/i
     );
   }
 
-  /** A column header: Background Blue in Call center work, Warm Off-White and Muted in Overall */
+  /** A column header: Background Blue (Style 7.6) in both groups, its label Muted in Overall */
   const head = (f: IntakeField, first: boolean, overall: boolean) => (
-    <th key={f} scope="col" className={`${th} text-right ${overall ? `bg-p4a-offwhite ${quiet}` : "bg-p4a-bgblue"} ${first ? sep : ""}`}>
+    <th key={f} scope="col" className={`${th} bg-p4a-bgblue text-right ${overall ? quiet : ""} ${first ? sep : ""}`}>
       <HintLabel label={labels[f]}>{hint(labels[f], hints[f])}</HintLabel>
     </th>
   );

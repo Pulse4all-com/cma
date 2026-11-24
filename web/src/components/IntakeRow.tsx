@@ -59,8 +59,8 @@ function IntakeTile({
  * cma.crm_records_per_day, and the deals are those of lead pipelines only: call center work. Overall is
  * the quieter group (Pulse4all-Style 7.1: a 1 px Border divider and a 16 px gap; its label in Muted text).
  *
- * Since 12 November 2026 the row's two reads arrive on their own (lib/head-start): the counts (the intake, the records
- * created and the callbacks kept, one transaction) and the speed to lead (the dearest read of the page, its own). The
+ * Since 12 November 2026 the row's two reads arrive on their own (lib/head-start): the counts (the intake and the
+ * callbacks kept, one transaction) and the speed to lead (the dearest read of the page, its own). The
  * row's frame, the tiles' labels and their hints are drawn at once; a read still on its way shows its tiles as
  * outlines of the same size, so nothing moves when the figures land.
  */
