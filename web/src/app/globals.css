@@ -235,3 +235,21 @@ a:has([data-link-pending="true"]) {
   opacity: 0.75;
 }
 
+
+/* A report part below the fold (night N07, WP4): the browser skips its layout and paint until it nears the viewport,
+   so a long report page draws its first screen sooner; the intrinsic size keeps the scrollbar steady (auto: the last
+   size the part had). Paint containment makes the part the box of a fixed element inside it, so while a header hint
+   in the part is open (HeaderHint: fixed, placed in the viewport) the part is shown as usual and the hint is never
+   clipped. Never on print: the printed report lays out every part */
+.cma-below-fold {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 640px;
+}
+.cma-below-fold:has([data-hint-panel]:not([hidden])) {
+  content-visibility: visible;
+}
+@media print {
+  .cma-below-fold {
+    content-visibility: visible;
+  }
+}

@@ -4,7 +4,7 @@ import { FollowUpFilters } from "@/components/FollowUpFilters";
 import { LeadsTable, TasksTable, TicketsTable, type TableContext } from "@/components/FollowUpTables";
 import { HeaderHint } from "@/components/HeaderHint";
 import { HintLabel } from "@/components/HintLabel";
-import { LiveRefresh } from "@/components/LiveRefresh";
+import { FollowUpPoll } from "@/components/FollowUpPoll";
 import { NoReportPermission, NotConnected } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
@@ -39,7 +39,7 @@ function Tile({ label, info, value, testId }: {
 
 /**
  * Follow-up (Reports, addition 0008o, night run N16-B): what is waiting, read every 10 seconds while the tab
- * is open (LiveRefresh): the eight counts as tiles, then the open lead deals not called, the open tickets
+ * is open (FollowUpPoll since night N07: the snapshot's time from an API route, the page read again when it moved): the eight counts as tiles, then the open lead deals not called, the open tickets
  * against their response time and the open tasks, each with a link to the record in its own system, and for
  * performance.team the figures per person (per-person figures sit under the employee-monitoring point, like
  * Calls per agent). The market (K), person (O) and state (S) filters narrow the three lists; the tiles count
@@ -103,7 +103,7 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/reports
 
   return (
     <Shell copy={copy} me={me} active="follow-up" wide>
-      <LiveRefresh />
+      <FollowUpPoll computedAt={page.computedAt} />
       <PageTitle>{t.title}</PageTitle>
       <p className={`-mt-2 mb-2 text-small ${stale ? "text-p4a-muted" : "text-p4a-body"}`} data-testid="follow-up-updated" data-stale={stale ? "true" : "false"}>
         <time dateTime={page.computedAt} title={fmtDateTime(page.computedAt, me.timeZone, me.locale)}>
@@ -128,22 +128,22 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/reports
           <LeadsTable rows={page.leads.rows} ctx={ctx} empty={empty(page.counts.leads, t.leadsEmpty)} />
           <Showing list={page.leads} t={t} locale={me.locale} testId="follow-up-leads-showing" />
         </Card>
-        <Card title={t.ticketsTitle}>
+        <Card title={t.ticketsTitle} className="cma-below-fold">
           <TicketsTable rows={page.tickets.rows} ctx={ctx} empty={empty(page.counts.tickets, t.ticketsEmpty)} />
           <Showing list={page.tickets} t={t} locale={me.locale} testId="follow-up-tickets-showing" />
         </Card>
-        <Card title={t.tasksTitle}>
+        <Card title={t.tasksTitle} className="cma-below-fold">
           <TasksTable rows={page.tasks.rows} ctx={ctx} empty={empty(page.counts.tasks, t.tasksEmpty)} />
           <Showing list={page.tasks} t={t} locale={me.locale} testId="follow-up-tasks-showing" />
         </Card>
         {byOwner ? (
-          <Card title={t.byOwnerTitle}>
+          <Card title={t.byOwnerTitle} className="cma-below-fold">
             <p className="-mt-2 mb-4 text-caption text-p4a-grey">{t.byOwnerIntro}</p>
             <ByOwnerTable rows={byOwner} copy={copy} ctx={ctx} />
           </Card>
         ) : null}
         {callbacks ? (
-          <section id="callbacks" className="rounded-card border border-p4a-border bg-white p-6" data-testid="callbacks-kept">
+          <section id="callbacks" className="cma-below-fold rounded-card border border-p4a-border bg-white p-6" data-testid="callbacks-kept">
             <h2 className="mb-4 text-panel font-semibold text-p4a-heading">{t.callbacksTitle}</h2>
             {!callbacks.connected ? (
               <p className="text-body" data-testid="callbacks-not-connected">
@@ -162,7 +162,7 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/reports
           </section>
         ) : null}
         {callbacks && callbackOwners ? (
-          <Card title={t.callbacksByOwnerTitle}>
+          <Card title={t.callbacksByOwnerTitle} className="cma-below-fold">
             <p className="-mt-2 mb-4 max-w-3xl text-caption text-p4a-grey">{t.callbacksByOwnerIntro}</p>
             <CallbackOwnersTable rows={callbackOwners} minutes={callbacks.windowMinutes} copy={copy} locale={me.locale} />
           </Card>

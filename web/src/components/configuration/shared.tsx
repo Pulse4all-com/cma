@@ -5,7 +5,7 @@
  * as every other write), the refusal messages per HTTP status, a save note, the field classes,
  * and a native <dialog> form shell with Ctrl+Enter to save and Esc to close.
  */
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useOptimistic, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Copy } from "@/lib/copy";
 import { Button, Notice } from "../primitives";
@@ -33,10 +33,39 @@ export function refusalMessage(status: number, c: Copy["configuration"], conflic
   return c.notSaved;
 }
 
-/** Runs a write, shows its state and re-reads the page on success, so the table shows the database's answer */
+/**
+ * Runs a write, shows its state and re-reads the page on success, so the table shows the database's answer.
+ *
+ * A toggle (night N07, decision D3): `toggle(id, next, run)` shows the switch's new value at once (`flag(id, server)`
+ * answers it, useOptimistic over the values the person set), keeps it once the write succeeded until the page's next read
+ * brings the same value, and drops it on a refusal, whose message the save note shows as for any write
+ */
 export function useSave(c: Copy["configuration"]) {
   const router = useRouter();
   const [state, setState] = useState<SaveState>({ kind: "idle" });
+  const [, startTransition] = useTransition();
+  /** The values the person set and the database accepted, until the page's read follows */
+  const [confirmed, setConfirmed] = useState<Record<string, boolean>>({});
+  const [flags, showFlag] = useOptimistic(confirmed, (m: Record<string, boolean>, [id, v]: [string, boolean]) => ({ ...m, [id]: v }));
+  const flag = (id: string, server: boolean): boolean => flags[id] ?? server;
+  function toggle(id: string, next: boolean, run: () => Promise<Response>) {
+    setState({ kind: "saving" });
+    startTransition(async () => {
+      showFlag([id, next]);
+      try {
+        const res = await run();
+        if (!res.ok) {
+          setState({ kind: "problem", message: refusalMessage(res.status, c) });
+          return;
+        }
+        setConfirmed((m) => ({ ...m, [id]: next }));
+        setState({ kind: "saved" });
+        startTransition(() => router.refresh());
+      } catch {
+        setState({ kind: "problem", message: c.notSaved });
+      }
+    });
+  }
   async function save(run: () => Promise<Response>, conflict?: string): Promise<boolean> {
     setState({ kind: "saving" });
     try {
@@ -53,7 +82,7 @@ export function useSave(c: Copy["configuration"]) {
       return false;
     }
   }
-  return { state, save, reset: () => setState({ kind: "idle" }) };
+  return { state, save, flag, toggle, reset: () => setState({ kind: "idle" }) };
 }
 
 export function SaveNote({ state, c }: { state: SaveState; c: Copy["configuration"] }) {
