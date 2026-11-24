@@ -273,9 +273,6 @@ begin
   return new;
 end
 $$;
-drop trigger if exists check_sync_run_setting on cma.tenant_setting;
-create trigger check_sync_run_setting before insert or update on cma.tenant_setting
-  for each row execute function cma.check_sync_run_setting();
 
 create or replace function cma.sync_run_purge(p_batch integer default 2000)
 returns jsonb
@@ -356,7 +353,15 @@ $$;
 revoke execute on function cma.sync_run_hour_count() from public;
 
 -- ---------------------------------------------------------------------------------------------
--- 4. Record the addition
+-- 4. Last, before the addition's row and the commit (CLAUDE.md, Performance): the trigger on cma.tenant_setting takes an
+--    ACCESS EXCLUSIVE lock held to the commit; every settings read waits on it for this moment only
+-- ---------------------------------------------------------------------------------------------
+drop trigger if exists check_sync_run_setting on cma.tenant_setting;
+create trigger check_sync_run_setting before insert or update on cma.tenant_setting
+  for each row execute function cma.check_sync_run_setting();
+
+-- ---------------------------------------------------------------------------------------------
+-- 5. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
 values ('0009zt', 'The ingest''s source writes out of the audit log and the run rows'' retention (Martin, 24 Nov 2026; brief N07, D12, D13): cma.audit_source_mirror_tables(); cma.audit_row skips the ingest''s writes (actor ingest:<adapter>, a system user) to those tables; cma.refresh_follow_up also checks the tenant''s latest processed ingest event (ingest_event_processed_idx, built concurrently first); settings sync_run.retention_days (90) and sync_run.failed_retention_days (365), checked by cma.check_sync_run_setting(); cma.sync_run_purge(integer) (SECURITY DEFINER, a system user, batches, never a pair''s 20 latest or a stream''s latest succeeded run) and cma.sync_run_hour_count keeping the hourly counts for its deletes')
