@@ -37,18 +37,22 @@
 --   cma_read.intake_per_day_v       recreated: a view's columns are fixed when it is created, so it appends the three
 -- lead_deals_created + other_deals_created = deals_created on every row, and lead_deals_closed <= deals_closed (233).
 --
--- Verifies that read what this changes (grep -lw 'cma\.intake_per_day\|cma_read\.intake_per_day' db/*verify*.sql; no
--- function in db/ calls them): rerun each after this script, in dev and in prod
---   41_verify_lead_metrics.sql     intake_per_day by named columns and sums; F4 compares the function's rows with the
---                                  view's as whole-row text, so it passes once the view is recreated here; unchanged
---   75_verify_forms_reporting.sql  intake_per_day_of by named columns; unchanged
---   133_verify_perf.sql            E6 compares intake_per_day_of with 74's definition, kept as a function returning
---                                  cma.intake_per_day_row: edited by this change (the kept definition returns its fifteen
---                                  columns as a table of its own, and E6 compares the new function's fifteen earlier
---                                  columns); S5's jit = off holds again, as this script repeats it
--- 131_time_all.sql: the Dashboard's row 'crm records per day' goes (the Dashboard no longer reads cma.crm_records_per_day:
--- its Lead deals and Tickets tiles read the intake); 'intake per day' (dashboard and intake) is unchanged and is timed
--- again after this script.
+-- Verifies that read what this changes (grep -lw 'cma\.intake_per_day' db/*verify*.sql, and the same for
+-- cma_read\.intake_per_day; the three below are all, and no function or view in db/ calls these): rerun each after this
+-- script, in dev and in prod
+--   41_verify_lead_metrics.sql     A2 to A5, D1, D2 and F4 read by names, grants and sums; F4 compares the function's and
+--                                  the view's rows as whole-row text (eighteen columns each side once the view is
+--                                  recreated here): unchanged, passes
+--   75_verify_forms_reporting.sql  intake_per_day_of by named columns: unchanged
+--   133_verify_perf.sql            edited by this change: the kept 74 definition returns its fifteen columns as a table of
+--                                  its own, and E6 compares the new function's fifteen earlier columns with it; S5's
+--                                  jit = off holds again, as this script repeats it
+--   233_verify_intake_call_center.sql  the new verify of this change: normal, then provoked
+-- Datamap: docs/datamap/catalog.json (intake_per_day_v) is edited; Martin refreshes docs/datamap/schema.json from dev
+-- after running this script there.
+-- 131_time_all.sql (a budget, not a verify) is edited: the Dashboard's row 'crm records per day' goes (the Dashboard no
+-- longer reads cma.crm_records_per_day: its Lead deals and Tickets tiles read the intake); 'intake per day' (dashboard
+-- and intake) is unchanged and is timed again after this script.
 --
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
