@@ -162,8 +162,8 @@
       "tables": [
         {
           "name": "device",
-          "what": "The asset register's devices per connection, mirrored read-only: record id, serial, model, market and device status from the catalogs (null when unmapped), warehouse, customer, subscription and order references, shipment, stock, warranty and end-of-life dates, the loan it secures (pledge_ref: the register's maatje_id as an id, null for none) and its language (a two-letter code through the language aliases, null when unmapped), named ids of other systems (such as NetSuite's), the row as mapped (raw, key allow-list, never an @); missing from the latest full snapshot as source_deleted_at; never a name, email, phone or address (0008zi, 0009j)",
-          "how": "Airtable API: changed records every 15 minutes, full snapshot nightly (ingest-poll-assets every 5 minutes, each connection on its assets_poll_interval_minutes, default 15; the full snapshot in the nightly reconcile at 03:30), loaded in chunks of assets_load_chunk rows (default 1000) by cma.ingest_load_device_chunk, each chunk its own call and nothing staged, the next chunk half the size (at least 100) after a call slower than a third of the ingest's statement timeout and a chunk the timeout cancels sent again once at half its size, and a full snapshot ends with cma.ingest_mark_devices_missing in slices of assets_load_chunk record ids, each slice its own call (0008zk); the whole table is read, never a view; CSV fallback a person loads in one call with cma.load_device_snapshot; pledge_ref and language come from the register's maatje_id and language fields, mapped on the connection (sent only while mapped) or in the import's map (0009j)"
+          "what": "The asset register's devices per connection, mirrored read-only: record id, serial, model, market and device status from the catalogs (null when unmapped), warehouse, customer, subscription and order references, shipment, stock, warranty and end-of-life dates, the loan it secures (pledge_ref: the register's maatje_id as an id, null for none) its language (a two-letter code through the language aliases, null when unmapped) and its debt status (debt_status_key: the key of the register's debt_status label through the debt status aliases, null for none or an unmapped label; the register owns it), named ids of other systems (such as NetSuite's), the row as mapped (raw, key allow-list, never an @); missing from the latest full snapshot as source_deleted_at; never a name, email, phone or address (0008zi, 0009j, 0009zm)",
+          "how": "Airtable API: changed records every 15 minutes, full snapshot nightly (ingest-poll-assets every 5 minutes, each connection on its assets_poll_interval_minutes, default 15; the full snapshot in the nightly reconcile at 03:30), loaded in chunks of assets_load_chunk rows (default 1000) by cma.ingest_load_device_chunk, each chunk its own call and nothing staged, the next chunk half the size (at least 100) after a call slower than a third of the ingest's statement timeout and a chunk the timeout cancels sent again once at half its size, and a full snapshot ends with cma.ingest_mark_devices_missing in slices of assets_load_chunk record ids, each slice its own call (0008zk); the whole table is read, never a view; CSV fallback a person loads in one call with cma.load_device_snapshot; pledge_ref and language come from the register's maatje_id and language fields, mapped on the connection (sent only while mapped) or in the import's map (0009j); debt_status_key comes from the register's debt_status field (Airtable 2.0, Installed Base; a single select only), read at every load and mapped the same way, emptied by the next load that reads the device when the register empties the field (0009zm)"
         },
         {
           "name": "device_component",
@@ -172,7 +172,7 @@
         },
         {
           "name": "device_import_row",
-          "what": "The device import's staged rows: a batch key and the export's mapped columns as text, written through the view device_import_staging (the COPY target) and deleted by the load; a value holding an @ is kept as a bare @, the audit log keeps a staged row's keys only; no name, email, phone or address column (0008zi); pledge_ref and language join the mapped columns (0009j)",
+          "what": "The device import's staged rows: a batch key and the export's mapped columns as text, written through the view device_import_staging (the COPY target) and deleted by the load; a value holding an @ is kept as a bare @, the audit log keeps a staged row's keys only; no name, email, phone or address column (0008zi); pledge_ref and language join the mapped columns (0009j), debt_status after language (0009zm)",
           "how": "CSV fallback only (0008zk): staged by tools/devices-to-staging.mjs and psql \\copy, read, loaded and emptied by cma.load_device_snapshot in one call; the Airtable API read stages nothing, it loads in chunks by cma.ingest_load_device_chunk"
         },
         {
@@ -199,6 +199,16 @@
           "name": "device_language_alias",
           "what": "The register's language labels (an option name such as English, matched lower-cased and trimmed) and the two-letter code each maps to; the pledge file writes the code in capitals (0009j)",
           "how": "Tenant configuration set in Studio (cma.set_device_language_alias), no seed; read by every load of the register, by the API or from its CSV export"
+        },
+        {
+          "name": "device_debt_status",
+          "what": "The tenant's debt statuses of a device (a key, a name, whether it pauses maintenance, a sort order): the asset register's debt_status labels; a device in the field under a status that pauses maintenance is left out of Reports → Maintenance by default and its items stay in the forecast (0009zm)",
+          "how": "Tenant configuration set in Studio (cma.set_device_debt_status; the keys none, any, all and unpaused are refused), no seed, never deleted by the application; read by every load of the register, by the API or from its CSV export, and live by Maintenance and the Installed base (names and order are labels)"
+        },
+        {
+          "name": "device_debt_status_alias",
+          "what": "The register's debt_status labels (an option name such as In debt collection, matched lower-cased and trimmed) and the debt status key each maps to; a label no alias maps is a data-quality finding (device_debt_status_unmapped) (0009zm)",
+          "how": "Tenant configuration set in Studio (cma.set_device_debt_status_alias; an empty key removes the alias), no seed; read by every load of the register, by the API or from its CSV export"
         },
         {
           "name": "pledge_loan",
@@ -390,8 +400,8 @@
         },
         {
           "name": "time_event",
-          "what": "Clock in, status changes, clock out, corrections",
-          "how": "Every click in the Workspace, immediately; corrections by supervisors"
+          "what": "Clock in, status changes, clock out, corrections; a start or status event carries the hours market it was booked under (hours_market_code, empty for no market)",
+          "how": "Every click in the Workspace, immediately, each start and status event with the hours market in force (the person's default market, else the last day's, at clock-in; the agent's choice on My day); corrections by supervisors, a correction keeping the market of the event it replaces or the market in force at its time unless the manager sets another"
         },
         {
           "name": "roster_week",
@@ -452,7 +462,7 @@
       "tables": [
         {
           "name": "app_user",
-          "what": "People and system users",
+          "what": "People and system users; a person's optional default market (default_hours_market_code), the hours market clock-in books under",
           "how": "People screen, invitations"
         },
         {
@@ -569,8 +579,8 @@
         },
         {
           "name": "market",
-          "what": "Markets: zone, language, currency",
-          "how": "Configuration"
+          "what": "Markets: zone, language, currency, and the hours market each books its time under (hours_market_code: its own code, or the hours market the tenant maps it to)",
+          "how": "Configuration (the hours market mapping in Configuration → Markets)"
         },
         {
           "name": "market_alias",
@@ -604,7 +614,7 @@
         },
         {
           "name": "work_status",
-          "what": "Statuses: working, productive, paid, billable",
+          "what": "Statuses: working, productive, paid, billable, and for a working and productive status an optional Work area (Sales or Operations)",
           "how": "Configuration"
         },
         {
@@ -666,7 +676,7 @@
         },
         {
           "name": "flash_snapshot",
-          "what": "The figures of every Flash overview per business date as the live computation gave them at the take: one row per grouping set, dims (codes: market, store, status, pipeline id) and measures (counts, ages, amounts per currency); no id of a record, no @ (0008zn). Insert only",
+          "what": "The figures of every Flash overview per business date as the live computation gave them at the take: one row per grouping set, dims (codes: market, store, status, pipeline id) and measures (counts, ages, amounts per currency); no id of a record, no @ (0008zn); the installed base's dim debt_status (a debt status's key or none) and measure under_debt_status since 0009zm. Insert only",
           "how": "Written by the take only (cma.flash_snapshot_take, called by cma-snapshot-flash once per tenant and business date) through cma.flash_compute_of as of that date (the live computation, one code path); the application reads; never changed"
         },
         {
@@ -791,7 +801,7 @@
     },
     {
       "name": "time_interval",
-      "what": "Every status interval with its length"
+      "what": "Every status interval with its length and the hours market of the event that opened it (hours_market_code)"
     },
     {
       "name": "roster_published_entry",

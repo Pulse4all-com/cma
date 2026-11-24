@@ -23,8 +23,11 @@
 -- where 210_subscription_facts.sql has run, skip before; since addition 0009zf, 212, the refresh's budget is 10,000 ms
 -- until prod's runs set it, and its answer names each step's milliseconds; since addition 0009zg the source figures' due
 -- check, part a, and their comparison of today under Data quality, outside its set, both skip before
--- 214_source_figures.sql). Since addition 0009zh (Customers → Subscriptions' page, its list and file, and Customers →
--- Active's Churn rate card), after 216_subscriptions_page.sql. Prod is the proof; dev's shared core is for
+-- 214_source_figures.sql; since addition 0009zm Maintenance's read is the page's form with the debt status filter, its
+-- default unpaused, and its device list, the installed base's records under a debt status filter and its measure
+-- under_debt_status are timed, each skipping before 226_device_debt_status.sql). Since addition 0009zh (Customers →
+-- Subscriptions' page, its list and file, and Customers → Active's Churn rate card), after 216_subscriptions_page.sql.
+-- Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
 -- performance.team and the tenant's reports.per_person holding its key (cma.assert_per_person): while the key is off the
@@ -67,6 +70,9 @@
 -- makes whenever the snapshot job keeps the take fresh. Since addition 0009p that refresh is a timed row of its own
 -- against verify.max_takes_ms (six takes by default, where it was one). A take that cannot be made (a source not set up, an error)
 -- leaves the live read, timed as it is.
+-- Since addition 0009zn (228_work_area.sql) the rows 'work status flags', 'statuses' and 'team status time' read work_area as
+-- the web does (the flags and the time read also whether any status has one, in the same statement), so this script runs
+-- after 228.
 -- A poll's row (class poll; since 16 November 2026, Martin's brief on 131's poll timings) is the median of
 -- verify.poll_runs runs after verify.poll_warmup untimed ones (5 after 6), not the best of two: a poll runs every few
 -- seconds on a connection the pool keeps, so it pays neither a session's first calls (its plans built, its functions'
@@ -281,7 +287,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
    cma.workday_can_clock_in_again(n.workday_id) as can_clock_in_again
    from cma.team_now() n left join lateral (select count(*) as sessions, max(e.occurred_at) as session_started_at
    from cma.time_event_effective e where e.workday_id = n.workday_id and e.kind = 'start') se on true$q$, 'poll', array['monitoring.live']),
-('a', 'polls', 'work status flags', $q$select is_working, is_productive, is_paid from cma.work_status where status = 'active' order by sort_order, key$q$, 'poll', array['monitoring.live']),
+('a', 'polls', 'work status flags', $q$select is_working, is_productive, is_paid, work_area, (select coalesce(bool_or(a.work_area is not null), false) from cma.work_status a where a.tenant_id = cma.current_tenant_id()) as tenant_has_work_area from cma.work_status where status = 'active' order by sort_order, key$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'inbound today', $q$select * from cma.inbound_today()$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'missed callbacks', $q$select m.*, cma.record_url(m.connection_id, 'call', m.source_id) as record_url from cma.missed_callbacks() m$q$, 'poll', array['monitoring.live']),
 ('a', 'polls', 'missed callbacks summary', $q$select * from cma.missed_callbacks_summary()$q$, 'poll', array['monitoring.live']),
@@ -294,7 +300,8 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- agent pages
 ('a', 'welcome agent', 'own day today', $q$select s.business_date, s.status, s.started_at, s.ended_at, ws.key, ws.name, coalesce(c.closed_seconds, 0)::int, c.running_since, c.status_since,
    cma.business_day_end(s.business_date, s.timezone), coalesce(se.sessions, 0)::int, se.session_started_at,
-   (select coalesce(cma.setting_of(cma.current_tenant_id(), 'workday.clock_in_again') = 'true', false)), cma.workday_can_clock_in_again(s.workday_id)
+   (select coalesce(cma.setting_of(cma.current_tenant_id(), 'workday.clock_in_again') = 'true', false)), cma.workday_can_clock_in_again(s.workday_id),
+   cma.workday_hours_market(s.workday_id)
    from cma.workday_summary s left join cma.work_status ws on ws.tenant_id = cma.current_tenant_id() and ws.id = s.current_status_id
    left join lateral (select sum(i.seconds) filter (where iws.is_working and (not i.is_open or i.is_capped)) as closed_seconds,
      max(i.from_at) filter (where iws.is_working and i.is_open and not i.is_capped) as running_since,
@@ -302,7 +309,11 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
      from cma.time_interval i join cma.work_status iws on iws.tenant_id = cma.current_tenant_id() and iws.id = i.status_id where i.workday_id = s.workday_id) c on true
    left join lateral (select count(*) as sessions, max(e.occurred_at) as session_started_at from cma.time_event_effective e where e.workday_id = s.workday_id and e.kind = 'start') se on true
    where s.user_id = cma.current_user_id() and s.business_date = cma.business_date(now(), cma.user_timezone(cma.current_user_id()))$q$, 'agent', array['workday.own']),
-('a', 'welcome agent', 'statuses', $q$select key, name, is_working, is_productive, is_default from cma.work_status where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, key$q$, 'agent', array['workday.own']),
+('a', 'welcome agent', 'statuses', $q$select key, name, is_working, is_productive, work_area, is_default from cma.work_status where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, key$q$, 'agent', array['workday.own']),
+-- My day's choices (addition 0009zo): the statuses with the active hours markets in the same statement
+('a', 'my day', 'statuses and hours markets', $q$select key, name, is_working, is_productive, work_area, is_default,
+   (select coalesce(json_agg(json_build_object('code', h.code, 'name', h.name) order by h.sort_order, h.code collate "C"), '[]'::json) from cma.hours_markets() h where h.status = 'active') as hours_markets
+   from cma.work_status where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, key$q$, 'agent', array['workday.own']),
 ('a', 'welcome agent', 'app links', $q$select key, label, address from cma.app_links()$q$, 'agent', array['*']),
 ('a', 'welcome agent', 'my roster today', $q$select * from cma.my_roster('{today}', '{today}')$q$, 'agent', array['roster.view']),
 ('a', 'welcome agent', 'updates (5 messages)', $q$select (select count(*) from cma.my_messages(null, 5)), cma.my_unread_count()$q$, 'agent', array['*']),
@@ -325,6 +336,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'live board', 'tenant settings', $q$select * from cma.tenant_settings()$q$, 'agent', array['monitoring.live']),
 -- Team, Roster, Follow-up
 ('a', 'team people', 'directory', $q$select * from cma.directory()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),
+('a', 'team people', 'hours markets', $q$select code, name, status from cma.hours_markets()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),
 ('a', 'team people', 'teams', $q$select * from cma.teams()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),
 ('a', 'team people', 'skills', $q$select * from cma.skills()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),
 ('a', 'team people', 'organisations', $q$select * from cma.organisations()$q$, 'agent', array['users.manage_agents', 'users.manage_all']),
@@ -422,7 +434,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- Campaigns
 ('a', 'campaigns', 'journeys', $q$select * from cma.journeys()$q$, 'agent', array['reports.view', 'performance.team']),
 -- report cores, the previous month then 92 days ({P} is replaced by the period's name, {f} and {t} by its bounds)
-('b', 'dashboard {P}', 'team status time', $q$select * from cma.team_status_time('{f}', '{t}', null)$q$, 'overview', array['performance.team']),
+('b', 'dashboard {P}', 'team status time', $q$select t.*, h.tenant_has_work_area from (select coalesce(bool_or(w.work_area is not null), false) as tenant_has_work_area from cma.work_status w where w.tenant_id = cma.current_tenant_id()) h left join cma.team_status_time('{f}', '{t}', null) t on true$q$, 'overview', array['performance.team']),
 ('b', 'dashboard {P}', 'intake per day', $q$select * from cma.intake_per_day('{f}', '{t}')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'dashboard {P}', 'crm records per day', $q$select * from cma.crm_records_per_day('{f}', '{t}')$q$, 'overview', array['performance.team']),
 ('b', 'dashboard {P}', 'speed to lead rows', $q$select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) from cma.speed_to_lead_rows('{f}', '{t}') r$q$, 'list', array['reports.view', 'performance.team']),
@@ -455,7 +467,13 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'forms {P}', 'forms report', $q$select * from cma.forms_report('{f}', '{t}', 'day', null, null, null)$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'forms {P}', 'forms whole period', $q$select * from cma.forms_report('{f}', '{t}', 'week', null, null, null) where period = 'current' and group_key is null$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'forms {P}', 'forms answers', $q$select * from cma.forms_answers('{f}', '{t}', null, null, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
-('b', 'maintenance now', 'maintenance 12 months', $q$select cma.maintenance_page('{month}', 12, null, null, null)$q$, 'overview', array['reports.view', 'performance.team']),
+('b', 'maintenance now', 'maintenance 12 months', $q$select cma.maintenance_page('{month}', 12, null, null, null, 'unpaused')$q$, 'overview', array['reports.view', 'performance.team']),
+-- since addition 0009zm: the device list of every bucket under the page's default filter, and the installed base's
+-- records under a debt status filter and the measure under_debt_status (each a list of its own request)
+('b', 'maintenance now', 'maintenance list all buckets', $q$select * from cma.maintenance_rows('{month}', 12, 'all', null, null, null, 'unpaused', 'exchanges', 500)$q$, 'list', array['reports.view', 'performance.team']),
+('a', 'installed base', 'records with a debt status page of 50', $q$select cma.flash_rows('installed_base', '{"debt_status": "any"}', 'serial', false, 50, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
+('a', 'installed base', 'records without a debt status page of 50', $q$select cma.flash_rows('installed_base', '{"debt_status": "none"}', 'serial', false, 50, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
+('a', 'installed base', 'under a debt status page of 50', $q$select cma.flash_rows('installed_base', '{"measure": "under_debt_status"}', 'serial', false, 50, 0, null, null, null)$q$, 'list', array['reports.view', 'performance.team']),
 -- Customers → Active (addition 0009l, decisions D13, D15 and D16): the page's four reads, each its own transaction,
 -- on one page here so their sum is held against the overview budget (the one live read they replace took 1.4 to 2.0 s at
 -- three times prod's volume): above and below the fold from their stored documents (class agent, 50 ms: a key lookup),
@@ -507,6 +525,16 @@ where page = 'pledge lists now' and name = 'pledge file stored';
 -- outside Data quality's set; a database without 214 has nothing to time (42883)
 update pg_temp.reads_0131 set in_set = false, skip_state = '42883', skip_why = 'addition 0009zg has not run'
 where page = 'data quality' and name = 'source figures compared today';
+-- Maintenance's read with the debt status filter (addition 0009zm), the page's default: a database without 226 has no such
+-- form (42883)
+update pg_temp.reads_0131 set skip_state = '42883', skip_why = 'addition 0009zm has not run'
+where page = 'maintenance now' and name = 'maintenance 12 months';
+-- the device list is a read of its own request; the records under a debt status filter or its measure are refused (CMA04)
+-- by a database without 226
+update pg_temp.reads_0131 set in_set = false, skip_state = '42883', skip_why = 'addition 0009zm has not run'
+where page = 'maintenance now' and name = 'maintenance list all buckets';
+update pg_temp.reads_0131 set skip_state = 'CMA04', skip_why = 'addition 0009zm has not run'
+where page = 'installed base' and name in ('records with a debt status page of 50', 'records without a debt status page of 50', 'under a debt status page of 50');
 -- Customers → Active: the set is the page's four reads; what is computed without a stored document, the filtered list
 -- and the file are reads of other requests
 update pg_temp.reads_0131 set in_set = false

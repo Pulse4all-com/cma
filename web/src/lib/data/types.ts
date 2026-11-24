@@ -80,7 +80,19 @@ export interface Workday {
    * shows again only then
    */
   canClockInAgain: boolean;
+  /**
+   * The hours market the day's current (on an ended day: last) status was booked under (addition 0009zo, D3); null
+   * without one. My day's market select shows it; a status change keeps it until the person changes it
+   */
+  hoursMarket: string | null;
 }
+
+/**
+ * A status's work area (addition 0009zn, decision of 23 November 2026): tenant configuration on a working,
+ * productive status that splits the hours views' working groups into Sales and Operations. It changes the
+ * group and its colour only, never a figure. docs/definitions.md, Work area
+ */
+export type WorkArea = "sales" | "operations";
 
 /**
  * A status the caller can choose: the tenant's own list (work_status), in its order. Names are
@@ -93,7 +105,36 @@ export interface WorkStatus {
   name: string;
   isWorking: boolean;
   isProductive: boolean;
+  /** For the status colour: Sales, Operations or none (null) */
+  workArea: WorkArea | null;
   isDefault: boolean;
+}
+
+/**
+ * An hours market (addition 0009zo, decision of 23 November 2026, D1): a market of the tenant that maps to itself, under
+ * which time is booked and billed. The code is the market's (ISO 3166-1 alpha-2, GB never UK); the name is tenant
+ * configuration. docs/definitions.md, Hours market
+ */
+export interface HoursMarket {
+  code: string;
+  name: string;
+  /** Only an active hours market can be chosen on My day or as a Default market; a past day may hold an inactive one */
+  isActive: boolean;
+}
+
+/** My day's choices in one read (addition 0009zo): the tenant's active statuses and its active hours markets, each in order */
+export interface MyDayChoices {
+  statuses: WorkStatus[];
+  hoursMarkets: HoursMarket[];
+}
+
+/**
+ * A status change on My day (addition 0009zo, D3): a status, a market or both. Without a status the status in force is
+ * booked again under the new market; without a market the market in force is kept
+ */
+export interface StatusChange {
+  key: string | null;
+  hoursMarket: string | null;
 }
 
 export interface HoursDay {
@@ -186,12 +227,16 @@ export interface TimeEvent {
   approvedByName: string | null;
   /** False once a later correction replaced or voided it, and for the void row itself */
   isEffective: boolean;
+  /** The hours market a start or status event was booked under (addition 0009zo); null: no market, and on an end or a void */
+  hoursMarket: string | null;
 }
 
 export interface TeamDayDetail {
   /** null when the person has no day on this date */
   day: TeamDay | null;
   events: TimeEvent[];
+  /** The tenant's hours markets, active and inactive (addition 0009zo): Correct day's Market column offers them */
+  hoursMarkets: HoursMarket[];
 }
 
 /** One change of a correction; see cma.correct_workday */
@@ -203,6 +248,12 @@ export interface CorrectionChange {
   statusKey?: string;
   /** The event this change replaces; required for void */
   supersedes?: string;
+  /**
+   * Start and status only (addition 0009zo, D5): an hours market of the tenant, or null for none. Left out, a change
+   * that replaces a start or status keeps that event's market and an added one the market in force at its time (D3);
+   * either as it books now, after any remapping
+   */
+  hoursMarket?: string | null;
 }
 
 export interface Correction {
@@ -238,6 +289,11 @@ export interface ExportHoursRow {
   isCapped: boolean;
   needsCorrection: boolean;
   hasCorrection: boolean;
+  /**
+   * The day's hours markets (addition 0009zo, D6): the markets its stretches were booked under, sorted, with null last
+   * when part of the day has none ("No market"); empty for a day without stretches
+   */
+  hoursMarkets: (string | null)[];
 }
 
 /** One stretch in a status, from its change to the next effective event of the day */
@@ -253,6 +309,8 @@ export interface StatusChangeRow {
   isProductive: boolean;
   isPaid: boolean;
   isBillable: boolean;
+  /** The status's current work area (Sales, Operations or none) */
+  workArea: WorkArea | null;
   from: Instant;
   /** null while the stretch is open, also when capped at the end of its business day */
   to: Instant | null;
@@ -261,6 +319,8 @@ export interface StatusChangeRow {
   seconds: number;
   /** Who entered the change that began it */
   source: TimeEventSource;
+  /** The hours market the stretch was booked under (addition 0009zo); null: no market */
+  hoursMarket: string | null;
 }
 
 /**
@@ -284,15 +344,27 @@ export interface StatusTimeRow {
   isProductive: boolean;
   isPaid: boolean;
   isBillable: boolean;
+  /** The status's current work area, for its group and colour; never a figure */
+  workArea: WorkArea | null;
   seconds: number;
   /** How many stretches in this status that day */
   stretches: number;
   /** A stretch that runs to the end of a day not clocked out */
   isCapped: boolean;
+  /**
+   * The hours market these stretches were booked under (addition 0009zo); null: no market. A status with time under two
+   * markets on one day is two rows; every sum over a status is as before
+   */
+  hoursMarket: string | null;
 }
 
 export interface TeamStatusTime extends HoursRange {
   rows: StatusTimeRow[];
+  /**
+   * Whether any status of the tenant, active or retired, has a work area: the group of working, productive statuses
+   * without one is then labelled Other productive, else Productive (Martin, 23 November 2026)
+   */
+  tenantHasWorkArea: boolean;
 }
 
 /** An export read with the tenant's settings, from one transaction */
@@ -319,6 +391,8 @@ export interface TeamNowStatus {
   isProductive: boolean;
   isPaid: boolean;
   isBillable: boolean;
+  /** The status's work area, for its group and colour */
+  workArea: WorkArea | null;
 }
 
 export interface TeamNowPerson {
@@ -343,7 +417,9 @@ export interface TeamNow {
    * only for a group that at least one status belongs to (a tenant without paid pauses gets no
    * Paid pause tile). Keys and names stay out: nothing on the board branches on them.
    */
-  statusFlags: { isWorking: boolean; isProductive: boolean; isPaid: boolean }[];
+  statusFlags: { isWorking: boolean; isProductive: boolean; isPaid: boolean; workArea: WorkArea | null }[];
+  /** Whether any status of the tenant, active or retired, has a work area (the label of Other productive) */
+  tenantHasWorkArea: boolean;
 }
 
 /**
@@ -437,6 +513,14 @@ export interface DirectoryPerson {
   skills: PersonSkill[];
   /** Whether the caller may change this person; never for oneself */
   mayEdit: boolean;
+  /** The person's Default market (addition 0009zo, D4): the hours market a clock-in books under; null without one */
+  defaultHoursMarket: string | null;
+}
+
+/** People's read in one transaction (addition 0009zo): the directory and the tenant's hours markets for Default market */
+export interface PeopleDirectory {
+  people: DirectoryPerson[];
+  hoursMarkets: HoursMarket[];
 }
 
 /** The caller's own details for My account (cma.my_profile, addition 0005b): their own row only */
@@ -550,6 +634,8 @@ export interface ConfigStatus {
   isProductive: boolean;
   isPaid: boolean;
   isBillable: boolean;
+  /** Sales, Operations or none; only on a working, productive status, and never frozen by time booked on it */
+  workArea: WorkArea | null;
   isDefault: boolean;
   sortOrder: number;
   /** Retired statuses keep their history and cannot be chosen */
@@ -565,6 +651,7 @@ export interface ConfigStatusInput {
   isProductive: boolean;
   isPaid: boolean;
   isBillable: boolean;
+  workArea: WorkArea | null;
   sortOrder: number;
 }
 
@@ -2704,6 +2791,11 @@ export interface MaintenanceFilter {
   /** A model's key or "unknown" */
   model: string | null;
   scope: MaintenanceScope | null;
+  /**
+   * The debt status filter (addition 0009zm): unpaused (the page's default: no debt status that pauses maintenance), none
+   * (without a debt status), any (with one), a debt status's key, or null for every device. Left out: every device
+   */
+  debt?: string | null;
 }
 
 /** One bucket (past_due or a month as its first day), market and model of the grid (cma.maintenance_page) */
@@ -2800,6 +2892,10 @@ export interface MaintenanceReport {
   markets: string[];
   /** The models of the tracked devices with their names, for the filter, unknown last */
   models: { key: string; name: string | null }[];
+  /** Tracked devices of the scope, market and model whose maintenance is paused (addition 0009zm), whatever the debt filter */
+  maintenancePausedDevices: number;
+  /** The tenant's debt statuses in their sort order, for the filter (addition 0009zm) */
+  debtStatuses: { key: string; name: string; pausesMaintenance: boolean }[];
 }
 
 /** One row of the device list of a cell (cma.maintenance_rows): a device's ids and codes, never a name, email, phone or address */
@@ -2825,6 +2921,10 @@ export interface MaintenanceRow {
   crmContactId: string | null;
   /** The contact's link from the CRM connection's record_url_contact template; null without one */
   contactUrl: string | null;
+  /** The device's debt status's key, null without one (addition 0009zm) */
+  debtStatus: string | null;
+  /** Its maintenance is paused: in the field under a debt status that pauses maintenance (addition 0009zm) */
+  maintenancePaused: boolean;
 }
 
 export interface MaintenanceRows {
@@ -3505,6 +3605,8 @@ export interface MarketConfig {
   sortOrder: number;
   /** How sources write the market, lower-cased */
   aliases: string[];
+  /** The hours market its time is booked under (addition 0009zo, D1); its own code for an hours market */
+  hoursMarketCode: string;
 }
 
 export interface MarketInput {
@@ -3516,6 +3618,11 @@ export interface MarketInput {
   languageSkillKey: string | null;
   minLanguageLevel: number | null;
   sortOrder: number;
+  /**
+   * The hours market its time is booked under (addition 0009zo): its own code (or left out) for an hours market, else
+   * an active hours market of the tenant
+   */
+  hoursMarketCode?: string;
 }
 
 /** Office hours of one market ("*" is the default) on one weekday (1 Monday … 7 Sunday), as "09:00-12:30,13:00-17:00" */
@@ -4212,11 +4319,15 @@ export interface CmaData {
   endWorkday(me: Principal, now: Instant): Promise<Workday>;
   /** The tenant's active work statuses, in the tenant's order */
   listStatuses(me: Principal): Promise<WorkStatus[]>;
+  /** My day's choices (addition 0009zo): the active statuses and the active hours markets, in one statement */
+  listMyDayChoices(me: Principal): Promise<MyDayChoices>;
   /**
-   * Sets the caller's status on today's workday (cma.set_status). No day today is CMA02, an
-   * unknown or inactive key is CMA02, an ended day is CMA03: changing an ended day is a correction.
+   * Sets the caller's status, hours market or both on today's workday (cma.set_status, addition 0009zo). No day today
+   * is CMA02, an unknown or inactive key is CMA02, an ended day is CMA03 (changing an ended day is a correction); a
+   * market of another tenant is CMA02, one that is no active hours market CMA04. Without a key the status in force is
+   * booked again under the new market (D3); without a market the market in force is kept.
    */
-  setStatus(me: Principal, key: string, now: Instant): Promise<Workday>;
+  setStatus(me: Principal, change: StatusChange, now: Instant): Promise<Workday>;
   getHours(me: Principal, range: HoursRange): Promise<HoursSummary>;
   /** Hours per person per day; all people of the tenant, or one. Needs workday.team (CMA06) */
   getTeamHours(me: Principal, range: HoursRange, userId: string | null): Promise<TeamHours>;
@@ -4265,6 +4376,14 @@ export interface CmaData {
   // ---- Team screen (migration 0004): the database decides who is listed and editable (CMA06)
   /** People with role, employer, teams and skills. Needs users.manage_agents or users.manage_all */
   listDirectory(me: Principal): Promise<DirectoryPerson[]>;
+  /** People's page read (addition 0009zo): the directory and the tenant's hours markets in one transaction */
+  getPeopleDirectory(me: Principal): Promise<PeopleDirectory>;
+  /**
+   * Sets or clears a person's Default market (cma.set_person_default_hours_market, addition 0009zo): as the other
+   * People writes, the caller manages the person (CMA06); a market of another tenant CMA02, one that is no active
+   * hours market CMA04
+   */
+  setPersonDefaultHoursMarket(me: Principal, userId: string, hoursMarket: string | null): Promise<void>;
   /** The tenant's ladder with whether the caller may assign each role. Needs users.manage_agents or users.manage_all */
   listRoles(me: Principal): Promise<RoleInfo[]>;
   /** The tenant's current teams; any person of the tenant */

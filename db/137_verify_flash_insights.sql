@@ -18,7 +18,9 @@
 -- Expected verdict in dev and in prod (block C off, the default): "0008zt verified | 137_verify_flash_insights: 24 ok,
 -- 0 FAIL, 1 skip" (since 210_subscription_facts.sql, 0009ze, edited by that change: A4, A7 and B7 expect its
 -- definition version 0009ze of subscriptions and installed_base and its two data-quality checks, conditional on its row;
--- since 214_source_figures.sql, 0009zg, edited by that change: A7 expects its check source_figure_gap, conditional on its row)
+-- since 214_source_figures.sql, 0009zg, edited by that change: A7 expects its check source_figure_gap, conditional on its row;
+-- since 226_device_debt_status.sql, 0009zm, edited by that change: A4 expects the installed base's dim debt_status, its set,
+-- the measure under_debt_status and the version 0009zm, and B7 the version 0009zm stored, conditional on its row)
 -- (25 checks: A1 to A7, B1 to B13, S1, D1 to D3 ok; C1 skip, volume off). A database without Pulse4all's CRM connection (a local one) reads S1 skip as
 -- well, and one whose tenants have no set-up source reads D1 to D3 skip: still "0008zt verified" with those skips. A
 -- local run with verify.volume 'true': C1 ok. Provoked: "PROVOKED, NOT A PASS | 137_verify_flash_insights: 0 ok, <n>
@@ -276,10 +278,15 @@ begin
      -- since 0008zu (138): the subscriptions' split set [market, status]
      || 'subscriptions|market,store,status,payment_state,device_band,age_band|[[], ["market"], ["market", "status"], ["market", "store", "status", "payment_state"], ["market", "device_band"], ["market", "age_band"]]|subscriptions,active_subscriptions,paused_subscriptions,amount_per_cycle,holding_subscriptions,devices_on_holding,devices_per_holding_subscription|subscriptions,active_subscriptions,paused_subscriptions,holding_subscriptions,devices_on_holding '
      -- since 0008zy (146) the subscription-status set holds the model too
-     || 'installed_base|market,status,model,warehouse,link,subscription_status|[[], ["market"], ["market", "status", "model", "warehouse", "link"], '
+     || 'installed_base|market,status,model,warehouse,link,subscription_status'
+     || (case when exists (select 1 from cma.schema_migration where version = '0009zm') then ',debt_status' else '' end)
+     || '|[[], ["market"], ["market", "status", "model", "warehouse", "link"], '
      || (case when exists (select 1 from cma.schema_migration where version = '0008zy') then '["market", "model", "subscription_status"]'
               else '["market", "subscription_status"]' end)
-     || ']|devices,in_field,in_stock,components_past_due,items_due_3m,in_field_on_holding|devices,in_field,in_stock,components_past_due,items_due_3m,in_field_on_holding' then
+     -- since 0009zm (226): the dim debt_status, its set [market, model, debt_status] and the measure under_debt_status
+     || (case when exists (select 1 from cma.schema_migration where version = '0009zm')
+              then ', ["market", "model", "debt_status"]]|devices,in_field,in_stock,components_past_due,items_due_3m,in_field_on_holding,under_debt_status|devices,in_field,in_stock,components_past_due,items_due_3m,in_field_on_holding,under_debt_status'
+              else ']|devices,in_field,in_stock,components_past_due,items_due_3m,in_field_on_holding|devices,in_field,in_stock,components_past_due,items_due_3m,in_field_on_holding' end) then
     v_bad := v_bad || 'the catalog; ';
   end if;
   if exists (select 1 from cma.flash_overviews() o where 'devices_per_holding_subscription' = any (o.count_measures))
@@ -288,9 +295,10 @@ begin
   end if;
   if (select string_agg(o.key || ':' || cma.flash_definition_version(o.key), ',' order by o.sort_order) from cma.flash_overviews() o)
      -- since 0008zu (138): customers and subscriptions 0008zu
-     -- since 0009ze (210): subscriptions and installed_base 0009ze
+     -- since 0009ze (210): subscriptions and installed_base 0009ze; since 0009zm (226): installed_base 0009zm
      is distinct from 'customers:0008zu,subscriptions:'
-                      || (case when exists (select 1 from cma.schema_migration where version = '0009ze') then '0009ze,installed_base:0009ze' else '0008zu,installed_base:0008zt' end)
+                      || (case when exists (select 1 from cma.schema_migration where version = '0009zm') then '0009ze,installed_base:0009zm'
+                               when exists (select 1 from cma.schema_migration where version = '0009ze') then '0009ze,installed_base:0009ze' else '0008zu,installed_base:0008zt' end)
                       || ',churn:0008zn,orders:0008zn,payments:0008zn,open_deals:0008zn,'
                       || 'open_tickets:0008zn,open_tasks:0008zn,reviews:0008zn,data_quality:0008zn' then
     v_bad := v_bad || 'versions; ';
@@ -672,9 +680,10 @@ begin
     perform set_config('role', 'cma_owner', true);
     v_rows := v_rows || array['17', 'B7 the snapshot equals the computation as of its date (0008zt), the document as of it; devices_on_holding = in_field_on_holding; the run''s settings; no jump on the ratio',
       -- since 0008zu (138): customers and subscriptions stored under 0008zu
-      -- since 0009ze (210): subscriptions and installed_base stored under 0009ze
+      -- since 0009ze (210): subscriptions and installed_base stored under 0009ze; since 0009zm (226): installed_base under 0009zm
       case when v_txt = 'true 2026-10-29 true 2026-10-30 | customers:true:0008zu subscriptions:true:'
-                        || case when exists (select 1 from cma.schema_migration where version = '0009ze') then '0009ze installed_base:true:0009ze' else '0008zu installed_base:true:0008zt' end
+                        || case when exists (select 1 from cma.schema_migration where version = '0009zm') then '0009ze installed_base:true:0009zm'
+                                when exists (select 1 from cma.schema_migration where version = '0009ze') then '0009ze installed_base:true:0009ze' else '0008zu installed_base:true:0008zt' end
                         || ' | GB:4,5,7,1.40 NL:1,1,2,2.00 true '
                         || '| 1,2,3 12,24,36,48,60 B2B,B2C active,failed | installed_base/devices/NL installed_base/in_field/NL installed_base/in_field_on_holding/NL '
                         || 'subscriptions/devices_on_holding/NL | snapshot 1.50 [1, 2, 3] [12, 24, 36, 48, 60] ["B2B", "B2C"] 13 none 0'

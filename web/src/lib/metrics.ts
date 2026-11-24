@@ -492,6 +492,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "flash.installed_base.components_past_due",
     "flash.installed_base.items_due_3m",
     "flash.installed_base.in_field_on_holding",
+    "flash.installed_base.under_debt_status",
     "flash.churn.churned",
     "flash.orders.orders",
     "flash.orders.units",
@@ -521,6 +522,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "maintenance.total",
     "maintenance.unknown_items",
     "maintenance.devices",
+    "maintenance.paused_devices",
     "maintenance.list.shown",
     "maintenance.list.serial",
     "maintenance.list.model",
@@ -655,6 +657,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "data_quality.device_customer_ref_invalid",
     "data_quality.component_due_unknown",
     "data_quality.field_device_without_subscription_ref",
+    "data_quality.device_debt_status_unmapped",
   ],
   "/messages/send": [
     "messages.sent.recipients",

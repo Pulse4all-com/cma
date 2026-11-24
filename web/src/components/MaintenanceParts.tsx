@@ -15,7 +15,7 @@ import { fmtDate } from "@/lib/time";
 import { HeaderHint } from "./HeaderHint";
 import { HintLabel } from "./HintLabel";
 import { RecordLink } from "./RecordLink";
-import { Keycap } from "./primitives";
+import { Badge, Keycap } from "./primitives";
 
 const th = "h-10 px-2 py-1 align-bottom font-semibold";
 const td = "h-10 whitespace-nowrap px-2 tabular text-right";
@@ -196,7 +196,11 @@ export function MaintenanceDeviceList({ list, report, copy, locale }: { list: Ma
             <td className="h-10 whitespace-nowrap px-2 font-semibold tabular">{r.serial ?? <span className="font-normal text-p4a-muted">{t.noSerial}</span>}</td>
             <td className="h-10 whitespace-nowrap px-2">{modelName(r.model, r.modelName, copy)}</td>
             <td className="h-10 whitespace-nowrap px-2">{marketName(r.market, copy)}</td>
-            <td className="h-10 whitespace-nowrap px-2">{text(r.deviceStatusName ?? r.deviceStatus)}</td>
+            <td className="h-10 whitespace-nowrap px-2">
+              {text(r.deviceStatusName ?? r.deviceStatus)}
+              {/* a device under a debt status that pauses its maintenance (addition 0009zm): its items stay, marked */}
+              {r.maintenancePaused ? <span className="ml-2" data-testid="maintenance-paused"><Badge tone="warning">{t.paused}</Badge></span> : null}
+            </td>
             <td className="h-10 whitespace-nowrap px-2">{r.components.map((c) => kindName.get(c) ?? c).join(", ")}</td>
             <td className="h-10 whitespace-nowrap px-2 tabular">{date(r.dueOn)}</td>
             <td className="h-10 whitespace-nowrap px-2">{r.bases.map((b) => basis[b] ?? b).join(", ")}</td>

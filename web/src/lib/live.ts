@@ -4,7 +4,7 @@
  * screen. Pure and without runtime imports, so verify/live.mjs tests it without a browser or a
  * database.
  *
- * Groups come from the current status's flags through the Dashboard's rule (lib/dashboard, one
+ * Groups come from the current status's flags and work area through the Dashboard's rule (lib/dashboard, one
  * definition for both screens), plus two states of the day itself: clocked out (today's day has
  * ended) and not clocked in (no day today). No ranking: rows are sorted by group, then by name
  * (the employee-monitoring decision, README).
@@ -17,13 +17,21 @@ import type { Copy } from "./copy";
 import type { DateKey, Instant, InboundToday, MissedCallback, MissedReason, OutboundNow, TeamMembership, TeamNowPerson, WorkdayClock } from "./data/types";
 // With its extension, so verify/live.mjs can run this module under Node's type stripping, which
 // resolves no extensionless path (tsconfig: allowImportingTsExtensions)
-import { GROUPS, groupOf, type Group } from "./dashboard.ts";
+import { GROUPS, groupOf, type Group, type StatusFlags } from "./dashboard.ts";
 import { callsFigures, inboundCalls, unansweredPct, type CallRecord, type InboundLine, type TelephonyCallFixture } from "./reports.ts";
 
 export type LiveGroup = Group | "clockedOut" | "notClockedIn";
 
 /** Tile and row order: at work first, then the pauses, then the people who are not on the clock */
 export const LIVE_GROUPS: readonly LiveGroup[] = [...GROUPS, "clockedOut", "notClockedIn"];
+
+/**
+ * The Live board's Hours market cell (addition 0009zo, D6): the market the person's current status was booked under,
+ * null for time without one (No market), undefined without an open day (the cell stays empty: no day, or ended)
+ */
+export function liveHoursMarketOf(p: TeamNowPerson): string | null | undefined {
+  return p.day && p.day.status === "working" ? p.day.hoursMarket ?? null : undefined;
+}
 
 export function liveGroupOf(p: TeamNowPerson): LiveGroup {
   if (!p.day) return "notClockedIn";
@@ -52,11 +60,12 @@ export interface Tile {
 }
 
 /**
- * The tiles: one per flag group that at least one active status belongs to (a tenant without
- * paid pauses gets no Paid pause tile), always Clocked out and Not clocked in, each with its
- * count over all rows, before any filter.
+ * The tiles: one per group that at least one active status belongs to (a tenant without paid
+ * pauses gets no Paid pause tile, one without a status in work area Sales no Sales tile; D6 of
+ * 23 November 2026), always Clocked out and Not clocked in, each with its count over all rows,
+ * before any filter.
  */
-export function tiles(rows: LiveRow[], statusFlags: { isWorking: boolean; isProductive: boolean; isPaid: boolean }[]): Tile[] {
+export function tiles(rows: LiveRow[], statusFlags: StatusFlags[]): Tile[] {
   const present = new Set<LiveGroup>(statusFlags.map(groupOf));
   present.add("clockedOut");
   present.add("notClockedIn");

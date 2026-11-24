@@ -1,12 +1,12 @@
 /**
  * The Dashboard's tiles and charts (Pulse4all-Style.md 7.7): server components, plain SVG and
- * CSS, no chart library. Colours come from the flag groups in lib/dashboard, never from a status
- * key or name, and every coloured mark carries its label or a title, so colour is never the only
+ * CSS, no chart library. Colours come from the groups in lib/dashboard (flags and work area), never
+ * from a status key or name, and every coloured mark carries its label or a title, so colour is never the only
  * signal. Gridlines Border Grey, axis labels 12 px Footnote Grey.
  */
 import type { Copy, Locale } from "@/lib/copy";
 import {
-  GROUP_BG, GROUP_FILL, GROUPS, hoursAxis, share, type DayTotal, type Group, type GroupSeconds,
+  GROUP_BG, GROUP_FILL, GROUPS, hoursAxis, legendGroups, productiveGroupName, share, type DayTotal, type Group, type GroupSeconds,
   type PersonTotal, type StatusTotal,
 } from "@/lib/dashboard";
 import { fmtDate, fmtMinutes, fmtPercent } from "@/lib/time";
@@ -15,10 +15,19 @@ import { Badge } from "./primitives";
 
 const minutes = (seconds: number) => fmtMinutes(Math.floor(seconds / 60));
 
-export function groupLabels(copy: Pick<Copy, "dashboard">): Record<Group, { label: string; hint: string }> {
+/**
+ * The groups' labels and hints. The group of working, productive statuses without a work area is Other productive when
+ * the tenant has a status with a work area, else Productive (lib/dashboard productiveGroupName)
+ */
+export function groupLabels(copy: Pick<Copy, "dashboard">, tenantHasWorkArea: boolean): Record<Group, { label: string; hint: string }> {
   const t = copy.dashboard;
+  const productive = productiveGroupName(tenantHasWorkArea) === "otherProductive"
+    ? { label: t.groupOtherProductive, hint: t.groupOtherProductiveHint }
+    : { label: t.groupProductive, hint: t.groupProductiveHint };
   return {
-    productive: { label: t.groupProductive, hint: t.groupProductiveHint },
+    sales: { label: t.groupSales, hint: t.groupSalesHint },
+    operations: { label: t.groupOperations, hint: t.groupOperationsHint },
+    productive,
     otherWork: { label: t.groupOtherWork, hint: t.groupOtherWorkHint },
     paidPause: { label: t.groupPaidPause, hint: t.groupPaidPauseHint },
     unpaidPause: { label: t.groupUnpaidPause, hint: t.groupUnpaidPauseHint },
@@ -48,14 +57,14 @@ export function Tile({
 }
 
 /**
- * The four groups with their totals: the key to every chart below it. Times only: the shares sit
+ * The groups with their totals (Sales and Operations only with time in the period): the key to every chart below it. Times only: the shares sit
  * in Time per status, so the Productive tile (share of worked time) is the only percentage of its kind.
  */
-export function GroupLegend({ groups, copy }: { groups: GroupSeconds; copy: Copy }) {
-  const labels = groupLabels(copy);
+export function GroupLegend({ groups, copy, tenantHasWorkArea }: { groups: GroupSeconds; copy: Copy; tenantHasWorkArea: boolean }) {
+  const labels = groupLabels(copy, tenantHasWorkArea);
   return (
     <ul aria-label={copy.dashboard.groups} className="flex flex-wrap gap-x-8 gap-y-2 text-small">
-      {GROUPS.map((g) => (
+      {legendGroups(groups).map((g) => (
         <li key={g} className="flex items-center gap-2" title={labels[g].hint}>
           <Swatch group={g} />
           <span className="font-semibold text-p4a-body">{labels[g].label}</span>
@@ -114,8 +123,8 @@ export function StatusBars({
  * Columns per day, stacked bottom to top in group order. Drawn in a fixed viewBox that scales with
  * the card, so the text scales too (12 units at the 1280 px minimum).
  */
-export function DayChart({ days, copy, locale }: { days: DayTotal[]; copy: Copy; locale: Locale }) {
-  const labels = groupLabels(copy);
+export function DayChart({ days, copy, locale, tenantHasWorkArea }: { days: DayTotal[]; copy: Copy; locale: Locale; tenantHasWorkArea: boolean }) {
+  const labels = groupLabels(copy, tenantHasWorkArea);
   const W = 960;
   const H = 260;
   const m = { l: 44, r: 8, t: 12, b: 30 };
@@ -170,9 +179,9 @@ export function DayChart({ days, copy, locale }: { days: DayTotal[]; copy: Copy;
 }
 
 /** One stacked bar per person, by name, against the longest clocked time in the list */
-export function PersonBars({ people, copy }: { people: PersonTotal[]; copy: Copy }) {
+export function PersonBars({ people, copy, tenantHasWorkArea }: { people: PersonTotal[]; copy: Copy; tenantHasWorkArea: boolean }) {
   const t = copy.dashboard;
-  const labels = groupLabels(copy);
+  const labels = groupLabels(copy, tenantHasWorkArea);
   const longest = Math.max(1, ...people.map((p) => p.clockedSeconds));
   const th = "h-10 whitespace-nowrap px-3 font-semibold";
   return (

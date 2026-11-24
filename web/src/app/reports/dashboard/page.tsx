@@ -176,7 +176,7 @@ function TimeSection({ all, asked, me, copy, period, today, query, caption }: {
           </div>
 
           <Card>
-            <GroupLegend groups={summary.groups} copy={copy} />
+            <GroupLegend groups={summary.groups} copy={copy} tenantHasWorkArea={all.tenantHasWorkArea} />
           </Card>
 
           <Card title={t.byStatus}>
@@ -186,13 +186,13 @@ function TimeSection({ all, asked, me, copy, period, today, query, caption }: {
 
           {days.length > 1 ? (
             <Card title={t.byDay}>
-              <DayChart days={days} copy={copy} locale={me.locale} />
+              <DayChart days={days} copy={copy} locale={me.locale} tenantHasWorkArea={all.tenantHasWorkArea} />
             </Card>
           ) : null}
 
           <Card title={t.byPerson}>
             <p className="-mt-2 mb-4 text-caption text-p4a-grey">{t.byPersonHint}</p>
-            <PersonBars people={persons} copy={copy} />
+            <PersonBars people={persons} copy={copy} tenantHasWorkArea={all.tenantHasWorkArea} />
           </Card>
         </div>
       )}

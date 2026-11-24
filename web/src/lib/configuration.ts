@@ -4,7 +4,7 @@
  * stripping. Nothing here knows a status key, a team key or a setting value: it shapes what the
  * tenant configured and explains the database's refusals.
  */
-import type { ConfigStatus, CoverageTargetRow, SkillLevel, TenantSetting } from "@/lib/data/types";
+import type { ConfigStatus, CoverageTargetRow, MarketConfig, SkillLevel, TenantSetting, WorkArea } from "@/lib/data/types";
 import { exportSettingsFrom, formatDate, formatDuration, toCsv } from "./csv.ts";
 
 /** Flag changes on a status with time behind it are refused by the database; the form says so first */
@@ -27,11 +27,32 @@ export function visibleStatuses<T extends Pick<ConfigStatus, "isActive" | "sortO
     .sort((a, b) => Number(!a.isActive) - Number(!b.isActive) || a.sortOrder - b.sortOrder || a.key.localeCompare(b.key));
 }
 
+/** The work areas a status may carry (addition 0009zn; docs/definitions.md, Work area), in the select's order */
+export const WORK_AREAS: readonly WorkArea[] = ["sales", "operations"];
+
+/** "sales", "operations" or none (null or ""); anything else is undefined, which the route refuses */
+export function parseWorkArea(value: unknown): WorkArea | null | undefined {
+  if (value === null || value === undefined || value === "") return null;
+  return WORK_AREAS.find((a) => a === value);
+}
+
+/**
+ * Only a working and productive status carries a work area: the check the database applies
+ * (cma.work_status, CMA04). The flags of a status with time behind it are frozen; its work area is not
+ */
+export function workAreaAllowed(f: { isWorking: boolean; isProductive: boolean }): boolean {
+  return f.isWorking && f.isProductive;
+}
+
 /** A new or edited status: the shape the route checks, so the form explains before sending */
-export function statusFormProblem(f: { key: string; name: string }, isNew: boolean, existingKeys: string[]): "key" | "name" | "duplicate" | null {
+export function statusFormProblem(
+  f: { key: string; name: string; isWorking?: boolean; isProductive?: boolean; workArea?: WorkArea | null },
+  isNew: boolean, existingKeys: string[],
+): "key" | "name" | "duplicate" | "workArea" | null {
   if (!/^[a-z0-9_]+$/.test(f.key) || f.key.length > 40) return "key";
   if (isNew && existingKeys.includes(f.key)) return "duplicate";
   if (f.name.trim().length === 0 || f.name.trim().length > 40) return "name";
+  if (f.workArea && !workAreaAllowed({ isWorking: f.isWorking === true, isProductive: f.isProductive === true })) return "workArea";
   return null;
 }
 
@@ -109,4 +130,36 @@ export function exportPreview(settings: TenantSetting[], labels: { date: string;
   const lines = csv.replace(/\r\n$/, "").split("\r\n");
   const bom = lines[0]?.startsWith("\uFEFF");
   return [(bom ? labels.bom : labels.noBom), ...lines.map((l) => l.replace(/^\uFEFF/, "").replace(/\t/g, " ⇥ "))];
+}
+
+// ---- Hours markets (addition 0009zo, D1) -----------------------------------------------------------
+
+type MarketMapping = Pick<MarketConfig, "code" | "hoursMarketCode" | "isActive">;
+
+/** The hours markets a market may book under, besides itself: the tenant's other active markets that map to themselves */
+export function hoursMarketChoices<T extends MarketMapping>(markets: readonly T[], code: string): T[] {
+  return markets.filter((m) => m.code !== code && m.hoursMarketCode === m.code && m.isActive);
+}
+
+export type HoursMarketProblem = "unknown" | "notHoursMarket" | "inactive" | "bookedUnder" | "stillBookedUnder";
+
+/**
+ * Why the database would refuse market `code` booking under `target` (its own code: itself) while `active`, or null:
+ * the rules of cma.market_hours_market_rules that the screen can see. A target must exist (unknown), map to itself
+ * (notHoursMarket) and be active (inactive); a market that others book under keeps booking under itself (bookedUnder)
+ * and stays active while an active market books under it (stillBookedUnder). A person's Default market is the
+ * database's answer alone (409)
+ */
+export function hoursMarketProblem(markets: readonly MarketMapping[], code: string, target: string, active: boolean): HoursMarketProblem | null {
+  const others = markets.filter((m) => m.code !== code);
+  if (target !== code) {
+    const t = others.find((m) => m.code === target);
+    if (!t) return "unknown";
+    if (t.hoursMarketCode !== t.code) return "notHoursMarket";
+    if (!t.isActive) return "inactive";
+    if (others.some((m) => m.hoursMarketCode === code)) return "bookedUnder";
+    return null;
+  }
+  if (!active && others.some((m) => m.hoursMarketCode === code && m.isActive)) return "stillBookedUnder";
+  return null;
 }

@@ -10,11 +10,14 @@
  * request that writes user, login id and role in one statement, so a refusal writes nothing. No
  * role, team or skill key is known here: the lists come from the tenant's catalogs.
  *
+ * Default market (addition 0009zo, D4): the hours market the person's clock-in books under, from the tenant's active
+ * hours markets (an inactive one held stays shown, not choosable), or none; saved through its own directory route.
+ *
  * Keyboard: Tab through the fields, Ctrl+Enter saves, Esc closes (twice with unsaved changes).
  */
 import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import type { Copy } from "@/lib/copy";
-import type { DirectoryPerson, LinkedAccounts, OrganisationInfo, RoleInfo, SkillInfo, TeamInfo } from "@/lib/data";
+import type { DirectoryPerson, HoursMarket, LinkedAccounts, OrganisationInfo, RoleInfo, SkillInfo, TeamInfo } from "@/lib/data";
 import {
   checkNewPerson, editChanges, hasChanges, linkedChanges, linkedIdProblem, linkedLabel, linkedStateOf, roleOptions, skillStateOf, skillsByDimension,
   type EditState, type LinkedState, type NewPersonForm, type NewPersonProblem, type SkillState,
@@ -43,6 +46,7 @@ export function PersonDialog({
   maySetSkills,
   defaultLoginSystem,
   linked,
+  hoursMarkets = [],
   copy,
   onClose,
   onSaved,
@@ -56,6 +60,8 @@ export function PersonDialog({
   defaultLoginSystem: string;
   /** Linked accounts (addition 0008e): the systems a person can hold an id in, and the ids held */
   linked: LinkedAccounts;
+  /** The tenant's hours markets (addition 0009zo): the active ones can be a Default market */
+  hoursMarkets?: HoursMarket[];
   copy: Pick<Copy, "team">;
   onClose: () => void;
   onSaved: () => void;
@@ -94,7 +100,11 @@ export function PersonDialog({
   const groups = useMemo(() => skillsByDimension(skills), [skills]);
   const changes = useMemo(() => editChanges(initial, edit, skills), [initial, edit, skills]);
   const linkChanges = useMemo(() => linkedChanges(initialLinked, linkedEdit), [initialLinked, linkedEdit]);
-  const dirty = target.mode === "edit" ? hasChanges(changes) || linkChanges.length > 0 : JSON.stringify(form) !== JSON.stringify(emptyForm);
+  /** The Default market as it opened and as edited (addition 0009zo); "" for none */
+  const initialMarket = person?.defaultHoursMarket ?? "";
+  const [market, setMarket] = useState(initialMarket);
+  const marketChanged = target.mode === "edit" && market !== initialMarket;
+  const dirty = target.mode === "edit" ? hasChanges(changes) || linkChanges.length > 0 || marketChanged : JSON.stringify(form) !== JSON.stringify(emptyForm);
 
   useEffect(() => {
     const d = ref.current;
@@ -141,7 +151,7 @@ export function PersonDialog({
       return;
     }
     if (!person) return;
-    if (!hasChanges(changes) && linkChanges.length === 0) {
+    if (!hasChanges(changes) && linkChanges.length === 0 && !marketChanged) {
       setError(t.problemNoChange);
       return;
     }
@@ -157,6 +167,7 @@ export function PersonDialog({
       if (changes.teams) steps.push([`${base}/teams`, { teamKeys: changes.teams }]);
       if (changes.skills) steps.push([`${base}/skills`, { skills: changes.skills }]);
       for (const l of linkChanges) steps.push([`${base}/linked-accounts`, l, t.linkedTaken]);
+      if (marketChanged) steps.push([`${base}/default-market`, { hoursMarket: market || null }]);
       // The active flag last: deactivating first would make the other writes pointless
       if (changes.active !== undefined) steps.push([`${base}/active`, { active: changes.active }]);
       for (const [path, body, conflict] of steps) {
@@ -281,6 +292,21 @@ export function PersonDialog({
                 </span>
               </label>
             </div>
+
+            {hoursMarkets.length > 0 ? (
+              <label className={label}>
+                {t.defaultMarket}
+                <select className={field} value={market} data-testid="default-market" onChange={(e) => setMarket(e.target.value)}>
+                  <option value="">{t.noDefaultMarket}</option>
+                  {hoursMarkets.map((m) => (
+                    <option key={m.code} value={m.code} disabled={!m.isActive && m.code !== initialMarket}>
+                      {m.code} · {m.name}{m.isActive ? "" : ` · ${t.inactiveMarket}`}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-caption font-normal text-p4a-grey">{t.defaultMarketHint}</span>
+              </label>
+            ) : null}
 
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-2 text-small font-semibold">{t.teams}</legend>

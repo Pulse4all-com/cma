@@ -1,25 +1,34 @@
 "use client";
 
 /**
- * Statuses: the tenant's work_status list with its four flags, the default, retire and
- * reactivate. Every write goes through /api/v1/configuration/statuses; the database applies the
+ * Statuses: the tenant's work_status list with its four flags and work area, the default, retire
+ * and reactivate. The work area (Sales, Operations or none) is open only on a working, productive
+ * status and is never frozen: it colours the hours views and changes no figure (addition 0009zn). Every write goes through /api/v1/configuration/statuses; the database applies the
  * rules (frozen flags on a status with time behind it, one working default, never the last
  * working status) and the form explains them first (lib/configuration). Keyboard: A adds, R
  * shows or hides retired statuses, Ctrl+Enter saves in the dialog, Esc closes.
  */
 import { useState } from "react";
 import type { Copy } from "@/lib/copy";
-import type { ConfigStatus } from "@/lib/data";
-import { flagsFrozen, retireProblem, statusFormProblem, visibleStatuses } from "@/lib/configuration";
+import type { ConfigStatus, WorkArea } from "@/lib/data";
+import { flagsFrozen, retireProblem, statusFormProblem, visibleStatuses, WORK_AREAS, workAreaAllowed } from "@/lib/configuration";
 import { Badge, Button } from "../primitives";
 import { FlagField, FormDialog, SaveNote, field, label, send, td, th, useSave } from "./shared";
 
-type Form = { key: string; name: string; isWorking: boolean; isProductive: boolean; isPaid: boolean; isBillable: boolean; sortOrder: number };
+type Form = {
+  key: string; name: string; isWorking: boolean; isProductive: boolean; isPaid: boolean; isBillable: boolean; workArea: WorkArea | null; sortOrder: number;
+};
 
 function formOf(s: ConfigStatus | null): Form {
   return s
-    ? { key: s.key, name: s.name, isWorking: s.isWorking, isProductive: s.isProductive, isPaid: s.isPaid, isBillable: s.isBillable, sortOrder: s.sortOrder }
-    : { key: "", name: "", isWorking: true, isProductive: true, isPaid: true, isBillable: true, sortOrder: 100 };
+    ? { key: s.key, name: s.name, isWorking: s.isWorking, isProductive: s.isProductive, isPaid: s.isPaid, isBillable: s.isBillable, workArea: s.workArea, sortOrder: s.sortOrder }
+    : { key: "", name: "", isWorking: true, isProductive: true, isPaid: true, isBillable: true, workArea: null, sortOrder: 100 };
+}
+
+/** A flag change that leaves the status not working or not productive takes its work area away, as the database requires */
+function withFlags(f: Form, change: Partial<Pick<Form, "isWorking" | "isProductive">>): Form {
+  const next = { ...f, ...change };
+  return workAreaAllowed(next) ? next : { ...next, workArea: null };
 }
 
 export function StatusConfig({ statuses, copy }: { statuses: ConfigStatus[]; copy: Pick<Copy, "configStatuses" | "configuration"> }) {
@@ -43,7 +52,7 @@ export function StatusConfig({ statuses, copy }: { statuses: ConfigStatus[]; cop
   async function submit() {
     const p = statusFormProblem(form, editing === null, statuses.map((s) => s.key));
     if (p) {
-      setProblem(p === "name" ? c.invalid : c.keyHint);
+      setProblem(p === "name" ? c.invalid : p === "workArea" ? t.workAreaOnlyProductive : c.keyHint);
       return;
     }
     const conflict = editing?.isDefault && !form.isWorking ? t.defaultMustWork : t.flagsFrozen;
@@ -52,6 +61,8 @@ export function StatusConfig({ statuses, copy }: { statuses: ConfigStatus[]; cop
 
   const flags = (s: ConfigStatus) =>
     [s.isWorking && t.working, s.isProductive && t.productive, s.isPaid && t.paid, s.isBillable && t.billable].filter(Boolean).join(" · ") || "—";
+  const areaLabel: Record<WorkArea, string> = { sales: t.workAreaSales, operations: t.workAreaOperations };
+  const areaOpen = workAreaAllowed(form);
 
   return (
     <>
@@ -76,6 +87,7 @@ export function StatusConfig({ statuses, copy }: { statuses: ConfigStatus[]; cop
               <th className={th}>{t.status}</th>
               <th className={th}>{c.key}</th>
               <th className={th}>{t.flags}</th>
+              <th className={th}>{t.workArea}</th>
               <th className={`${th} text-right`}>{c.order}</th>
               <th className={`${th} text-right`}>{t.usage}</th>
               <th className={th}>{c.active}</th>
@@ -93,6 +105,7 @@ export function StatusConfig({ statuses, copy }: { statuses: ConfigStatus[]; cop
                   </td>
                   <td className={`${td} text-small`}>{s.key}</td>
                   <td className={`${td} text-small`}>{flags(s)}</td>
+                  <td className={`${td} text-small`}>{s.workArea ? areaLabel[s.workArea] : "—"}</td>
                   <td className={`${td} text-right tabular-nums`}>{s.sortOrder}</td>
                   <td className={`${td} text-right tabular-nums`}>{s.usageCount}</td>
                   <td className={td}>{s.isActive ? <Badge tone="success">{c.active}</Badge> : <Badge tone="neutral">{c.retired}</Badge>}</td>
@@ -157,11 +170,27 @@ export function StatusConfig({ statuses, copy }: { statuses: ConfigStatus[]; cop
             </label>
           </div>
           <div className="flex flex-col gap-3">
-            <FlagField name={t.working} hint={t.workingHint} checked={form.isWorking} disabled={frozen} onChange={(v) => setForm({ ...form, isWorking: v })} />
-            <FlagField name={t.productive} hint={t.productiveHint} checked={form.isProductive} disabled={frozen} onChange={(v) => setForm({ ...form, isProductive: v })} />
+            <FlagField name={t.working} hint={t.workingHint} checked={form.isWorking} disabled={frozen} onChange={(v) => setForm(withFlags(form, { isWorking: v }))} />
+            <FlagField name={t.productive} hint={t.productiveHint} checked={form.isProductive} disabled={frozen} onChange={(v) => setForm(withFlags(form, { isProductive: v }))} />
             <FlagField name={t.paid} hint={t.paidHint} checked={form.isPaid} disabled={frozen} onChange={(v) => setForm({ ...form, isPaid: v })} />
             <FlagField name={t.billable} hint={t.billableHint} checked={form.isBillable} disabled={frozen} onChange={(v) => setForm({ ...form, isBillable: v })} />
           </div>
+          {/* Never frozen: the work area changes the colour and the group, never a figure (D4) */}
+          <label className={label}>
+            {t.workArea}
+            <select
+              className={field}
+              value={form.workArea ?? ""}
+              disabled={!areaOpen}
+              onChange={(e) => setForm({ ...form, workArea: WORK_AREAS.find((a) => a === e.target.value) ?? null })}
+            >
+              <option value="">{t.workAreaNone}</option>
+              {WORK_AREAS.map((a) => (
+                <option key={a} value={a}>{areaLabel[a]}</option>
+              ))}
+            </select>
+            <span className="font-normal text-caption text-p4a-muted">{areaOpen ? t.workAreaHint : t.workAreaOnlyProductive}</span>
+          </label>
           {problem ? <p className="text-small text-p4a-error">{problem}</p> : null}
           <SaveNote state={state} c={c} />
         </FormDialog>

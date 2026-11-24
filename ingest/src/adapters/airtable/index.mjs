@@ -29,7 +29,7 @@
  * it), each field must be in the table (GET /meta/bases/{base}/tables; otherwise unknown_field, naming the field's id:
  * it was deleted) and of the type the connection recorded when it first read it (otherwise field_type_changed, naming
  * the field's id and name and both types); a field mapped to pledge_ref or language (addition 0009j) of a type other than
- * a single select or text fails the same way (field_type_changed, the allowed types as was); the first read records the
+ * a single select or text, or to debt_status (0009zm) of a type other than a single select, fails the same way (field_type_changed, the allowed types as was); the first read records the
  * types (cma.ingest_record_field_types). A field
  * renamed in Airtable keeps its id and changes nothing. The log names fields, never a value. The base is the
  * connection's account id; the table the setting table_id (none: table_id_not_set); no mapped field: mapping_not_set.

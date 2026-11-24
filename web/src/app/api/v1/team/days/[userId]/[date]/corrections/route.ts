@@ -1,4 +1,5 @@
 import { ApiError, assertSameSiteWrite, dateParam, forPrincipal, jsonBody, ok, uuidParam } from "@/lib/api/respond";
+import { hoursMarketOrNull } from "@/lib/api/configuration";
 import { data, type CorrectionChange, type TimeEventKind } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,7 @@ function parseChanges(raw: unknown): CorrectionChange[] {
   }
   return raw.map((c, i) => {
     if (!c || typeof c !== "object" || Array.isArray(c)) invalid(`change ${i + 1} must be an object`);
-    const { kind, at, statusKey, supersedes } = c as Record<string, unknown>;
+    const { kind, at, statusKey, supersedes, hoursMarket } = c as Record<string, unknown>;
     if (typeof kind !== "string" || !(KINDS as readonly string[]).includes(kind)) {
       invalid(`change ${i + 1}: kind must be start, status, end or void`);
     }
@@ -44,12 +45,23 @@ function parseChanges(raw: unknown): CorrectionChange[] {
       out.supersedes = supersedes.toLowerCase();
     }
     if (kind === "void" && !out.supersedes) invalid(`change ${i + 1}: void needs the event it cancels`);
+    // The hours market (addition 0009zo, D5): start and status only; left out, a replaced event's market is kept
+    if (hoursMarket !== undefined) {
+      if (kind !== "start" && kind !== "status") {
+        if (hoursMarket !== null) invalid(`change ${i + 1}: only a start or a status carries an hours market`);
+      } else {
+        out.hoursMarket = hoursMarketOrNull(hoursMarket, `change ${i + 1}: hoursMarket`);
+      }
+    }
     return out;
   });
 }
 
 /**
- * Correct one person's day: body { "reason": "…", "changes": [ { kind, at, statusKey, supersedes } ] }.
+ * Correct one person's day: body { "reason": "…", "changes": [ { kind, at, statusKey, supersedes, hoursMarket } ] }.
+ * hoursMarket (addition 0009zo): on a start or status, an hours market of the tenant (an inactive one allowed) or null
+ * for none; left out, a change that replaces a start or status keeps that event's market and an added one the market
+ * in force at its time (as it books now, after any remapping).
  * On a date without a day this is Add day, and the first change must be the start. The caller is
  * the approver (V1). Answers { day, events } as the day now stands.
  *

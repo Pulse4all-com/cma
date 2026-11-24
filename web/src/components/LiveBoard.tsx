@@ -80,6 +80,8 @@ const TEAM_COLUMNS: Record<number, string> = {
   2: "grid-cols-[repeat(2,minmax(0,1fr))_minmax(9.5rem,auto)]", 3: "grid-cols-[repeat(3,minmax(0,1fr))_minmax(9.5rem,auto)]",
   4: "grid-cols-[repeat(4,minmax(0,1fr))_minmax(9.5rem,auto)]", 5: "grid-cols-[repeat(5,minmax(0,1fr))_minmax(9.5rem,auto)]",
   6: "grid-cols-[repeat(6,minmax(0,1fr))_minmax(9.5rem,auto)]",
+  // Sales and Operations (addition 0009zn): up to eight tiles when a tenant has both work areas
+  7: "grid-cols-[repeat(7,minmax(0,1fr))_minmax(9.5rem,auto)]", 8: "grid-cols-[repeat(8,minmax(0,1fr))_minmax(9.5rem,auto)]",
 };
 
 const isGroup = (g: LiveGroup): g is Group => g !== "clockedOut" && g !== "notClockedIn";
@@ -91,6 +93,7 @@ export function LiveBoard({
   teams,
   copy,
   locale,
+  tenantHasWorkArea,
 }: {
   rows: BoardRow[];
   tiles: Tile[];
@@ -100,13 +103,15 @@ export function LiveBoard({
   copy: Pick<Copy, "live" | "dashboard"> & { hints: Pick<Copy["hints"], "about"> };
   /** The labels' language, so a long word breaks where the language breaks it */
   locale: Locale;
+  /** Whether any status of the tenant has a work area: the productive group is then Other productive */
+  tenantHasWorkArea: boolean;
 }) {
   const t = copy.live;
   const [group, setGroup] = useState<LiveGroup | "">("");
   const [employer, setEmployer] = useState("");
   const [team, setTeam] = useState("");
 
-  const labels = groupLabels(copy);
+  const labels = groupLabels(copy, tenantHasWorkArea);
   const flagLabel = (f: Adherence): string =>
     f === "late" ? t.late : f === "leftEarly" ? t.leftEarly : f === "expected" ? t.expected : f === "absent" ? t.absent : f === "unplanned" ? t.unplanned : t.onTime;
   const label = (g: LiveGroup): { label: string; hint: string } =>
@@ -133,7 +138,7 @@ export function LiveBoard({
           </p>
         </div>
         {/* A group of toggle buttons: the name needs a role to be allowed on a div (the IT audit of 17 October 2026) */}
-        <div className={`grid ${TEAM_COLUMNS[tiles.length] ?? "grid-cols-[repeat(6,minmax(0,1fr))_minmax(9.5rem,auto)]"} divide-x divide-p4a-border`} role="group" aria-label={t.group} data-testid="team-tiles">
+        <div className={`grid ${TEAM_COLUMNS[tiles.length] ?? "grid-cols-[repeat(8,minmax(0,1fr))_minmax(9.5rem,auto)]"} divide-x divide-p4a-border`} role="group" aria-label={t.group} data-testid="team-tiles">
           {tiles.map((tile) => (
             <div key={tile.group} className="flex min-w-0 px-2 first:pl-0 last:pr-0">
               <button
@@ -219,7 +224,7 @@ export function LiveBoard({
       {shown.length === 0 ? (
         <p className="text-body text-p4a-muted">{t.empty}</p>
       ) : (
-        // At 1280 px the nine columns can be wider than the main area: the table scrolls inside its own
+        // At 1280 px the ten columns can be wider than the main area: the table scrolls inside its own
         // box, never the page (as the report tables, addition 0008i)
         <div className="overflow-x-auto" data-testid="live-people-scroll" role="region" aria-label={t.title} tabIndex={0}>
         <table className="w-full border-collapse text-body leading-table">
@@ -230,6 +235,7 @@ export function LiveBoard({
               <th className={th}>{t.team}</th>
               <th className={th}>{t.shift}</th>
               <th className={th}>{t.status}</th>
+              <th className={th}>{t.hoursMarket}</th>
               <th className={`${th} text-right`}>{t.since}</th>
               <th className={`${th} text-right`}>{t.clockedInAt}</th>
               <th className={`${th} text-right`}>{t.clockedOut}</th>
@@ -258,6 +264,9 @@ export function LiveBoard({
                     {r.statusName ?? label(r.group).label}
                     {r.statusName && !r.statusActive ? <Badge tone="neutral">{t.inactive}</Badge> : null}
                   </span>
+                </td>
+                <td className="whitespace-nowrap px-3" data-testid="live-hours-market">
+                  {r.hoursMarket === undefined ? "" : r.hoursMarket ?? <span className="text-p4a-muted">{t.noMarket}</span>}
                 </td>
                 <td className="tabular whitespace-nowrap px-3 text-right"><Since at={r.statusSince} /></td>
                 <td className="tabular whitespace-nowrap px-3 text-right">

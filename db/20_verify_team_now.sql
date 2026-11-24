@@ -10,6 +10,10 @@
 -- (reached only when the run does not stop on errors) says PROVOKED instead of PASS.
 -- Edited by addition 0009z (200_live_paid_today.sql, 19 November 2026): A3 expects team_now's two paid columns,
 -- paid_closed_seconds and paid_running_since, last; nothing else changed.
+-- Edited by addition 0009zn (228_work_area.sql, 23 November 2026): A3 expects work_area after the paid columns, last;
+-- nothing else changed. Run it after 228.
+-- Edited by addition 0009zo (230_hours_market.sql, 23 November 2026): A3 expects hours_market_code after work_area, last,
+-- where 0009zo is recorded; nothing else changed. Run it after 230.
 -- =============================================================================================
 
 do $$
@@ -39,7 +43,8 @@ begin
   from pg_proc p
   join lateral unnest(p.proargnames, p.proargmodes) with ordinality as a(attname, attmode, n) on true
   where p.oid = to_regprocedure(v_fn) and a.attmode = 't';
-  if v_cols is distinct from 'user_id, display_name, organisation_key, organisation_name, timezone, business_date, workday_id, day_status, started_at, ended_at, status_key, status_name, status_active, is_working, is_productive, is_paid, is_billable, status_since, closed_seconds, running_since, paid_closed_seconds, paid_running_since'
+  if v_cols is distinct from 'user_id, display_name, organisation_key, organisation_name, timezone, business_date, workday_id, day_status, started_at, ended_at, status_key, status_name, status_active, is_working, is_productive, is_paid, is_billable, status_since, closed_seconds, running_since, paid_closed_seconds, paid_running_since, work_area'
+       || (case when exists (select 1 from cma.schema_migration where version = '0009zo') then ', hours_market_code' else '' end)
      or v_provoke then
     raise exception 'FAIL A3: team_now returns [%]', v_cols;
   end if;

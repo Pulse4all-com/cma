@@ -3,67 +3,111 @@
  * totals and the series of its three charts. Pure and without runtime imports, so
  * verify/dashboard.mjs tests it without a browser or a database.
  *
- * Groups come from a status's flags, never from its key or name (Martin, 7 October 2026):
- *   productive    working and productive          Leaf Green
- *   otherWork     working, not productive         Deep Blue
- *   paidPause     not working, paid               Light Blue
- *   unpaidPause   not working, not paid           Soft Rose (always with its label)
- * On My day an agent sees three of them: whether a pause is paid is not agent information.
+ * Groups come from a status's flags and its work area, never from its key or name (Martin, 7 October 2026,
+ * amended 23 November 2026):
+ *   sales         working and productive, work area sales        Leaf Green
+ *   operations    working and productive, work area operations   Deep Blue
+ *   productive    working and productive, no work area           Leaf Green
+ *   otherWork     working, not productive                        Inkt
+ *   paidPause     not working, paid                              Light Blue
+ *   unpaidPause   not working, not paid                          Soft Rose (always with its label)
+ * A work area changes the group and the colour only, never a figure: worked, paid and productive time
+ * read the flags alone. On My day an agent sees the working groups and one pause: whether a pause is
+ * paid is not agent information.
  *
  * Worked and paid minutes are whole minutes per person per day, added up, exactly as Team hours
  * adds them, so the two screens show the same figure for the same period and person.
  */
-import type { DateKey, StatusTimeRow } from "./data/types";
+import type { DateKey, StatusTimeRow, WorkArea } from "./data/types";
 
-export type Group = "productive" | "otherWork" | "paidPause" | "unpaidPause";
-/** Bottom to top in a stack, first to last in a legend */
-export const GROUPS: readonly Group[] = ["productive", "otherWork", "paidPause", "unpaidPause"];
+export type Group = "sales" | "operations" | "productive" | "otherWork" | "paidPause" | "unpaidPause";
+/** Bottom to top in a stack, first to last in a legend, on the Live board's tiles and rows (D3, 23 November 2026) */
+export const GROUPS: readonly Group[] = ["sales", "operations", "productive", "otherWork", "paidPause", "unpaidPause"];
 
 export interface StatusFlags {
   isWorking: boolean;
   isProductive: boolean;
   isPaid: boolean;
+  /** The status's current work area; null without one. Counts only on a working, productive status */
+  workArea: WorkArea | null;
+}
+
+/** The working group: a work area splits working and productive time, and nothing else */
+function workingGroup(f: Pick<StatusFlags, "isProductive" | "workArea">): "sales" | "operations" | "productive" | "otherWork" {
+  if (!f.isProductive) return "otherWork";
+  return f.workArea === "sales" ? "sales" : f.workArea === "operations" ? "operations" : "productive";
 }
 
 export function groupOf(f: StatusFlags): Group {
-  if (f.isWorking) return f.isProductive ? "productive" : "otherWork";
+  if (f.isWorking) return workingGroup(f);
   return f.isPaid ? "paidPause" : "unpaidPause";
 }
 
 /** The status colour an agent sees on My day: the same rule without the pay flag */
-export type AgentGroup = "productive" | "otherWork" | "pause";
+export type AgentGroup = "sales" | "operations" | "productive" | "otherWork" | "pause";
 
-export function agentGroupOf(f: { isWorking: boolean; isProductive: boolean }): AgentGroup {
-  return f.isWorking ? (f.isProductive ? "productive" : "otherWork") : "pause";
+export function agentGroupOf(f: Pick<StatusFlags, "isWorking" | "isProductive" | "workArea">): AgentGroup {
+  return f.isWorking ? workingGroup(f) : "pause";
 }
 
 /**
  * Palette classes per group (Pulse4all-Style.md 7.7). Written out in full so Tailwind finds them;
- * the theme verifier checks that nothing off-palette is painted.
+ * the theme verifier checks that nothing off-palette is painted. Deep Blue marks Operations: the
+ * style guide's On call state has no counterpart in the CMA (decision of 23 November 2026, D7).
  */
 export const GROUP_BG: Record<Group | "pause", string> = {
+  sales: "bg-p4a-green",
+  operations: "bg-p4a-deepblue",
   productive: "bg-p4a-green",
-  otherWork: "bg-p4a-deepblue",
+  otherWork: "bg-p4a-inkt",
   paidPause: "bg-p4a-lightblue",
   unpaidPause: "bg-p4a-rose",
   pause: "bg-p4a-lightblue",
 };
 
 export const GROUP_FILL: Record<Group, string> = {
+  sales: "fill-p4a-green",
+  operations: "fill-p4a-deepblue",
   productive: "fill-p4a-green",
-  otherWork: "fill-p4a-deepblue",
+  otherWork: "fill-p4a-inkt",
   paidPause: "fill-p4a-lightblue",
   unpaidPause: "fill-p4a-rose",
 };
 
 export type GroupSeconds = Record<Group, number>;
 
+/**
+ * The name of the group of working, productive statuses without a work area (Martin, 23 November 2026): Other
+ * productive when any of the tenant's statuses, active or retired, has a work area, so the word Productive keeps one
+ * meaning beside Sales and Operations; Productive when none has (Invest). The Productive tile keeps its own meaning, all
+ * working, productive time, and is not named here
+ */
+export function productiveGroupName(tenantHasWorkArea: boolean): "productive" | "otherProductive" {
+  return tenantHasWorkArea ? "otherProductive" : "productive";
+}
+
+/** Whether any of the statuses has a work area: the input of productiveGroupName where a screen holds the statuses */
+export function hasWorkArea(statuses: readonly { workArea: WorkArea | null }[]): boolean {
+  return statuses.some((s) => s.workArea !== null);
+}
+
+/** The groups a work area makes: they exist only where a tenant configured one (decision of 23 November 2026, D6) */
+export const WORK_AREA_GROUPS: readonly Group[] = ["sales", "operations"];
+
+/**
+ * The legend's groups in D3's order: the flag groups always, Sales and Operations only with time in the period,
+ * so a tenant without work areas sees the legend it saw before
+ */
+export function legendGroups(g: GroupSeconds): Group[] {
+  return GROUPS.filter((k) => !WORK_AREA_GROUPS.includes(k) || g[k] > 0);
+}
+
 function noGroups(): GroupSeconds {
-  return { productive: 0, otherWork: 0, paidPause: 0, unpaidPause: 0 };
+  return { sales: 0, operations: 0, productive: 0, otherWork: 0, paidPause: 0, unpaidPause: 0 };
 }
 
 export function groupTotal(g: GroupSeconds): number {
-  return g.productive + g.otherWork + g.paidPause + g.unpaidPause;
+  return GROUPS.reduce((n, k) => n + g[k], 0);
 }
 
 /** part / whole between 0 and 1, or null when there is nothing to divide by */

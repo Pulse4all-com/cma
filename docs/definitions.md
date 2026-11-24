@@ -945,6 +945,120 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Used by | `no_language`; Assets → Pledge lists |
 | As built today | `cma.device.language` and the alias table (`168`); the 0009f D3 data prerequisite is met for the import. Matches the definition |
 
+### Debt status
+
+| Field | Value |
+|---|---|
+| Term | Debt status (device; nl: Schuldstatus) |
+| Key | SQL `cma.device.debt_status_key`, `cma.device_debt_status`, `cma.device_debt_status_alias`; the Installed base's dim `debt_status` (a debt status's key, or `none`); the device import's staging column `debt_status` |
+| Definition | The asset register's word for a device whose maintenance waits on a debt: one of the tenant's debt statuses (In debt collection, Write off + restart, To be submitted, Check first for Pulse4all Subscriptions), or none. It is not a payment state. |
+| Source | The register's `debt_status` field (Airtable 2.0, Installed Base; a single select), matched lower-cased and trimmed against the tenant's aliases (`cma.set_device_debt_status_alias`, `tenant.configure`) like models and statuses; the register owns it, the CMA only reads it, and the label stays in `raw` |
+| Counts / does not count | An empty field is no debt status; a label no alias maps leaves the key empty and is counted in the load's answer as `unmapped_debt_status` (not in the ingest's run counts) and in the finding `device_debt_status_unmapped`. A device not in the field with a label keeps its key but is not counted as Under a debt status |
+| Unit and display | The status's name in Reports → Maintenance (the selector and a device's row) and in the Installed base (selector, breakdown, records and files); ids and statuses only, no amount and no name |
+| Time rule | As of the latest read of the register |
+| Scope | Devices; the processing purpose is the tenant's maintenance planning and installed base, shown per device next to the customer reference to `reports.view` or `performance.team`, pseudonymised and financial |
+| Equivalent in the source system | The register's field `debt_status` |
+| Not to use | "Payment status", "dunning", "in arrears", "Paused" alone; Juo's Payment state and NetSuite's dunning stage stay their own terms |
+| Status | Proposed for Kira |
+| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
+| Used by | `flash.installed_base.under_debt_status`, `maintenance.paused_devices`, `data_quality.device_debt_status_unmapped`; Reports → Maintenance, Reports → Installed base, Flash's Installed base tab, Reports → Data quality |
+| As built today | `226` (addition 0009zm); the statuses and aliases are set in Studio (docs/import/devices.md, Debt status), none is seeded. Matches the definition |
+
+### Pauses maintenance
+
+| Field | Value |
+|---|---|
+| Term | Pauses maintenance (a debt status's setting) |
+| Key | `pauses_maintenance`; SQL `cma.device_debt_status.pauses_maintenance` (default true), `cma.set_device_debt_status` |
+| Definition | Whether a device under this debt status gets no maintenance until the register empties the field or the device comes back. All four of Pulse4all Subscriptions' labels do. |
+| Source | Tenant configuration (Studio), not the register |
+| Counts / does not count | A debt status that does not pause maintenance still counts as Under a debt status; it leaves no device out of Maintenance's default |
+| Unit and display | A flag; not shown on a page |
+| Time rule | As of the latest read |
+| Scope | Devices in the field |
+| Equivalent in the source system | None |
+| Not to use | "Suspended" or "blocked" for the pause |
+| Status | Proposed for Kira |
+| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
+| Used by | `maintenance.paused_devices`; Reports → Maintenance |
+| As built today | `cma.maintenance_items_of` (`226`). Matches the definition |
+
+### Maintenance paused
+
+| Field | Value |
+|---|---|
+| Term | Maintenance paused (device; nl: Onderhoud gepauzeerd) |
+| Key | `maintenance_paused` (SQL, a row's field), `maintenancePaused` and `maintenancePausedDevices` (API); the page answer's `maintenance_paused_devices`; the metric `maintenance.paused_devices` |
+| Definition | A device is Maintenance paused when its debt status pauses maintenance and its device status is in the field; a device that comes back leaves the pause. Its items stay in the forecast; Maintenance's default filter leaves them out. |
+| Source | `cma.maintenance_items_of` from `cma.device.debt_status_key`, `cma.device_debt_status.pauses_maintenance` and the device status's `is_in_field` |
+| Counts / does not count | The count of tracked devices of the scope, market and model that are paused ignores the debt filter; a device in stock is never paused |
+| Unit and display | The mark "Maintenance paused" on a device's row, and the line "{n} devices under a debt status are left out" under the counts while the default filter holds |
+| Time rule | As of the latest read of the register |
+| Scope | Reports → Maintenance; the forecast's figures keep every item |
+| Equivalent in the source system | None |
+| Not to use | "Paused" alone; Juo's paused (a subscription's status) and Flash's Paused subscriptions and Paused customers are other terms |
+| Status | Proposed for Kira |
+| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
+| Used by | `maintenance.paused_devices`; Reports → Maintenance |
+| As built today | `226` and `web/src/lib/maintenance.ts`. Matches the definition |
+
+### Maintenance's Debt status filter
+
+| Field | Value |
+|---|---|
+| Term | Debt status filter (Reports → Maintenance; nl: Schuldstatus) |
+| Key | The address key `debt` and the API parameter `debt`: `unpaused`, `none`, `any`, `all`, or a debt status's key; `cma.maintenance_debt_matches`. Installed base's selector: `none`, `any` or a key (the address key `f_debt_status` on the dim `debt_status`) |
+| Definition | Maintenance: All devices (`all`), **Maintenance not paused** (`unpaused`, the default), **Without a debt status** (`none`), With a debt status (`any`), or one status. Installed base: Without a debt status (`none`), With a debt status (`any`) or one status; there is no Maintenance not paused there. **Maintenance not paused** keeps every device that is not Maintenance paused: one without a debt status, one under a debt status that does not pause maintenance, and one under a debt status whose device status is not in the field (in stock, say). **Without a debt status** keeps only the devices without a debt status (`cma.device.debt_status_key` null, an unmapped label included), on both pages in the same meaning. While every debt status pauses maintenance and the register gives labels to devices in the field only, the two hold the same devices; they part as soon as either stops being true. |
+| Source | The address or the API's `debt`; checked against the tenant's catalog by `cma.assert_maintenance_debt` (CMA04); the API leaves out `debt` for every device, as before |
+| Counts / does not count | Maintenance not paused leaves out only the devices that are Maintenance paused (the line "{n} devices under a debt status are left out" counts them); Without a debt status leaves out every device with a debt status, also one under a status that pauses nothing and one in stock that keeps its label |
+| Unit and display | A selector with the keycap B on Maintenance |
+| Time rule | As of the latest read |
+| Scope | Reports → Maintenance and its API; the Installed base and Flash's Installed base tab for the other selector |
+| Equivalent in the source system | None |
+| Not to use | "Without a debt status" for Maintenance's default, which is Maintenance not paused; "Unpaused" or "Not paused" alone (the subscription app's paused is another term) |
+| Status | Proposed for Kira; the default's name Maintenance not paused, and Without a debt status as its own value on both pages, accepted by Martin on 23 Nov 2026 |
+| Decided | docs/decisions.md, 23 Nov 2026, "Maintenance's Debt status selector ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
+| Used by | `maintenance.paused_devices`, `flash.installed_base.under_debt_status`; Reports → Maintenance, Reports → Installed base |
+| As built today | `maintenance_debt_matches` (`226`) and `web/src/components/MaintenanceFilters.tsx`. Matches the definition |
+
+### Under a debt status
+
+| Field | Value |
+|---|---|
+| Term | Under a debt status (Installed base; nl: Met een schuldstatus) |
+| Key | `flash.installed_base.under_debt_status`; the measure `under_debt_status` |
+| Definition | The devices in the field that have a debt status, whatever it pauses. |
+| Source | `cma.device.debt_status_key` and the device status's `is_in_field`, in `cma.flash_compute_of` |
+| Counts / does not count | A device in stock is never counted, whatever its label; an unmapped label counts as without a debt status |
+| Unit and display | A count: a tile on the Installed base and on Flash's Installed base tab, and a breakdown by debt status |
+| Time rule | As of the take, or live |
+| Scope | The Installed base, in every set; its definition version is `0009zm` |
+| Equivalent in the source system | None |
+| Not to use | "Paused" for this count |
+| Status | Proposed for Kira |
+| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
+| Used by | `flash.installed_base.under_debt_status`; Reports → Installed base, Flash |
+| As built today | `226` (`cma.flash_overviews`, `cma.flash_compute_of`). Matches the definition |
+
+### device_debt_status_unmapped
+
+| Field | Value |
+|---|---|
+| Term | Devices with an unknown debt status (the finding `device_debt_status_unmapped`) |
+| Key | `device_debt_status_unmapped`; Data quality sort 305 |
+| Definition | A device whose register gives a debt status label that no alias maps; the value is the label. |
+| Source | `cma.data_quality_assets_checks`; `cma.device.raw` and `cma.device.debt_status_key` |
+| Counts / does not count | An empty field is never a finding; such a device counts as without a debt status until the alias exists and the next load reads it |
+| Unit and display | A count and a list on Reports → Data quality |
+| Time rule | As of the latest read |
+| Scope | Tenants with an asset register set up |
+| Equivalent in the source system | None |
+| Not to use | "Unknown" for a label that is empty |
+| Status | Proposed for Kira |
+| Decided | docs/decisions.md, 23 Nov 2026, "All four debt status labels ..." and "Definitions: Debt status (nl Schuldstatus), ..." (addition 0009zm; Martin; this PR) |
+| Used by | `data_quality.device_debt_status_unmapped`; Reports → Data quality |
+| As built today | `226`; fixed in the asset register (an alias in the CMA's catalog, or the label in the register). Matches the definition |
+
 ## Subscription terms
 
 Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant's subscription app owns a store's subscriptions and their events: for Pulse4all Subscriptions that is Juo on each Shopify store, one connection and one key per store, the GB store first. The CMA mirrors them read-only, read by the ingest by polling only (Juo has no webhook topic for a failed renewal), so that it can report churn (KPI 4) and each subscription's payment state; Reports → Flash (Subscriptions) shows them. A subscription holds ids, statuses, codes, counts, amounts and times only, never a customer's name, email, phone, address, payment detail or free-text reason. Payment state is Juo's renewal state of a subscription, not a payment in NetSuite: payments, days to pay and dunning stages stay NetSuite's (README, Source of truth). The mirror also holds each subscription's lines (Subscription line), the store's catalog (Product variant), the billing events (Billing event, with Chargeback, Return code, Refund and Invoice renewal), more event types (Subscription event types) and the CMA's own Observed subscription changes, proposed with addition 0009za (18 November 2026, brief B39 Part A) for Kira to confirm. Placeholder store, a store's connection kept switched off until the store sells, is Decided (20 November 2026, Martin).
@@ -3151,7 +3265,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 
 ## Time terms
 
-Proposed in the brief of 3 November 2026 and decided by Martin that day (addition 0008zp, #217, split shifts). A person's day is one or more sessions: after their own log out they can clock in again on the same business day, where the tenant allows it. The time between two sessions belongs to no status and counts in no figure. Paid and Paid today (addition 0009z) are defined below; hours worked, status, working status and the other time words stay under Domains still to define.
+Proposed in the brief of 3 November 2026 and decided by Martin that day (addition 0008zp, #217, split shifts). A person's day is one or more sessions: after their own log out they can clock in again on the same business day, where the tenant allows it. The time between two sessions belongs to no status and counts in no figure. Paid and Paid today (addition 0009z), Work area and the status groups (addition 0009zn) and Hours market, Default market and No market (addition 0009zo) are defined below; hours worked, status, working status and the other time words stay under Domains still to define.
 
 ### Workday
 
@@ -3285,6 +3399,177 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Decided | 19 November 2026 (Martin); docs/decisions.md, 19 Nov 2026, "Definitions: Paid (nl: Betaald) and Paid today on the Live board" and the three build choices of addition 0009z (this PR); the verification query's session rule, 19 Nov 2026, "The metric catalog's verify_sql never depends on the session" (this PR) |
 | Used by | `live.paid_today_minutes`; copy keys `live.paidToday`, `live.paidTodayHint`; the Live board's Team panel; `GET /api/v1/team/now` and `GET /api/v1/live/board` (`day.clock.paidClosedSeconds`, `day.clock.paidRunningSince`, for `monitoring.live` only) |
 | As built today | `200` (`cma.team_now` dropped and created from `134` with `paid_closed_seconds` and `paid_running_since` last) and `201` (addition 0009z); `paidSeconds` and `paidTodayMinutes` in `web/src/lib/live.ts`. `WorkdayClock`'s `paidClosedSeconds` and `paidRunningSince` are optional and only the Live board's read fills them: `GET /api/v1/me/day`, My day and the own-day read never carry them, because whether a pause is paid is not shown to agents. The metric's verification query takes time kept for `:tenant_id` from base tables, has an optional `:organisation_key` and returns `paid_today_minutes` and `people_with_a_day`. Matches the definition |
+
+### Work area
+
+| Field | Value |
+|---|---|
+| Term | Work area (nl: Werkgebied), a setting of a work status |
+| Key | SQL `cma.work_status.work_area` and `cma_read.work_status.work_area` (last column), checks `work_status_work_area_ok` and `work_status_work_area_flags`; API `workArea` (`sales`, `operations` or null) on `GET /api/v1/me/statuses`, `GET` and `PUT /api/v1/configuration/statuses`, the team now and Live board payload (`status.workArea`, `statusFlags[].workArea`); the Work area column of the status-changes CSV; copy `configStatuses.workArea` and its options |
+| Definition | An optional label of a work status that splits its working and productive time into the groups Sales and Operations: `sales`, `operations` or none (null). Only a status that is working and productive can carry one. It is tenant configuration, set in Configuration → Statuses; no migration, seed or code names a tenant or a status key. |
+| Source | The CMA: `cma.work_status`, written by `cma.upsert_work_status` for `tenant.configure` |
+| Counts / does not count | Changes the group and the colour only, never a figure: worked, paid, billable and productive time read the flags alone. Not frozen when time is booked on the status (the four flags are); the change is audited like any status edit. Views show the status's current work area, history included |
+| Unit and display | Sales, Operations or None in the status dialog; the colour and group of the status everywhere the group colours show (the Status group term) |
+| Time rule | None: the current value, not the value when the time was booked |
+| Scope | Per tenant and status; every place that uses the group colours: Reports → Dashboard, the Live board, My day and the Welcome card |
+| Equivalent in the source system | None |
+| Not to use | "Work type" (the skills term), "department" or "team" for it; "Sales" or "Operations" as a status name in code or seed |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "A work status gets an optional Work area …" and "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" (this PR, addition 0009zn) |
+| Used by | `live.people.group`, `live.tiles.group_count`, `dashboard.time.groups`, `welcome.clock.status`, `my_day.current_status`; Configuration → Statuses, Reports → Dashboard, the Live board, My day, Welcome; `GET /api/v1/me/statuses`, `/api/v1/configuration/statuses`, `/api/v1/team/now`, `/api/v1/live/board`, `/api/v1/team/exports/status-changes` |
+| As built today | `228` (column, checks, `cma.upsert_work_status` with `p_work_area` last, `work_statuses_all`, `team_status_time`, `team_now` and `export_status_changes` returning `work_area` last; `CMA04` for an unknown value or a work area on a status not working and productive) and `229` (verify); `web/src/lib/dashboard.ts` (`groupOf`, `agentGroupOf`). Matches the definition |
+
+### Status group
+
+| Field | Value |
+|---|---|
+| Term | Status group (nl: Groep), the group a work status belongs to, with its colour |
+| Key | TypeScript `Group` and `AgentGroup` in `web/src/lib/dashboard.ts` (`groupOf`, `agentGroupOf`); copy keys `dashboard.groupSales`, `groupOperations`, `groupProductive`, `groupOtherProductive`, `groupOtherWork`, `groupPaidPause`, `groupUnpaidPause` and their hints |
+| Definition | Derived from a status's flags and Work area, never from its key or name: working and productive with work area Sales is Sales (Leaf Green); with work area Operations is Operations (Deep Blue); without a work area is Productive, labelled Other productive when any of the tenant's statuses has a work area (Leaf Green); working and not productive is Other work (Inkt); not working and paid is Paid pause (Light Blue); not working and unpaid is Unpaid pause (Soft Rose). |
+| Source | `cma.work_status` flags and `work_area`, read through `cma.team_status_time`, `cma.team_now` and `cma.export_status_changes` |
+| Counts / does not count | The order, bottom to top in a stack and first to last in a legend, on the Live board's tiles and rows: Sales, Operations, Productive, Other work, Paid pause, Unpaid pause, then Clocked out and Not clocked in on the Live board. A Live tile for Sales or Operations appears only when an active status has that work area; the Dashboard legend shows Sales and Operations only with time in the period. On My day the agent sees Sales, Operations, Productive and Other work, and the two pauses as one group (whether a pause is paid is not agent information, 7 October 2026) |
+| Unit and display | A colour with its label or title, never the colour alone; white text is allowed on Inkt and Deep Blue |
+| Time rule | None; the status's current flags and work area |
+| Scope | Reports → Dashboard (Time per status, the day chart, Per person, legends and swatches), the Live board (tiles, rows, dots, group filter), My day and the Welcome card |
+| Equivalent in the source system | None |
+| Not to use | A group's name for a figure: Productive, as the group, is not the Dashboard's Productive tile or figure (all working and productive time, work areas included; `copy.dashboard.productive`, `dashboard.time.productive_share`); "Other work" in Deep Blue (it is Inkt since 23 November 2026) |
+| Status | Decided |
+| Decided | 7 October 2026 (Martin), amended 23 November 2026 (Martin); docs/decisions.md, 7 Oct 2026, "Four groups from flags with fixed palette colours …" and 23 Nov 2026, "A work status gets an optional Work area …" (this PR, addition 0009zn) |
+| Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`, `welcome.clock.status`, `my_day.current_status`; Reports → Dashboard, the Live board, My day, Welcome |
+| As built today | Matches the definition. Deep Blue marks Operations by derivation: the style guide's agent-state colours name Deep Blue for On call, the CMA has no On call state, and Deep Blue already served a working group since 7 October 2026 (CLAUDE.md, Style; named in the PR) |
+
+### Sales (work area and status group)
+
+| Field | Value |
+|---|---|
+| Term | Sales (nl: Sales), a Work area value and the status group it makes; not the rail group Sales (nl Verkoop) |
+| Key | `work_area` value `sales`; group id `sales` in `web/src/lib/dashboard.ts`; copy keys `dashboard.groupSales`, `configStatuses.workAreaSales` |
+| Definition | The Work area of a working and productive status whose time is sales work, and the group of such statuses: Leaf Green, first in the group order. |
+| Source | `cma.work_status.work_area` |
+| Counts / does not count | Counts the time of statuses working, productive and with work area `sales`; all of it stays in worked, paid, billable and productive. Does not count a status without a work area (Productive) |
+| Unit and display | Hours and minutes in the legend and charts; hint "Working and productive, work area Sales" (nl "Werkend en productief, werkgebied Sales") |
+| Time rule | None |
+| Scope | As Status group |
+| Equivalent in the source system | None |
+| Not to use | The HubSpot sales pipeline; the rail group Sales (Sales → Speed to lead and the other pages) |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "A work status gets an optional Work area …" and "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" (this PR, addition 0009zn) |
+| Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`; Reports → Dashboard, the Live board, My day, Welcome |
+| As built today | Matches the definition |
+
+### Operations (work area and status group)
+
+| Field | Value |
+|---|---|
+| Term | Operations (nl: Operations), a Work area value and the status group it makes |
+| Key | `work_area` value `operations`; group id `operations` in `web/src/lib/dashboard.ts`; copy keys `dashboard.groupOperations`, `configStatuses.workAreaOperations` |
+| Definition | The Work area of a working and productive status whose time is operations work, and the group of such statuses: Deep Blue, second in the group order. |
+| Source | `cma.work_status.work_area` |
+| Counts / does not count | Counts the time of statuses working, productive and with work area `operations`; all of it stays in worked, paid, billable and productive. Does not count a status without a work area (Productive) |
+| Unit and display | Hours and minutes in the legend and charts; hint "Working and productive, work area Operations" (nl "Werkend en productief, werkgebied Operations") |
+| Time rule | None |
+| Scope | As Status group |
+| Equivalent in the source system | None |
+| Not to use | "Back office" or a team name for it |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "A work status gets an optional Work area …" and "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" (this PR, addition 0009zn) |
+| Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`; Reports → Dashboard, the Live board, My day, Welcome |
+| As built today | Matches the definition |
+
+### Productive (status group)
+
+| Field | Value |
+|---|---|
+| Term | Productive (nl: Productief), the status group of working and productive statuses in a tenant where no status has a work area |
+| Key | Group id `productive`; copy key `dashboard.groupProductive` and its hint "Working and productive statuses" (nl "Werkende en productieve statussen"); the label rule `productiveGroupName` in `web/src/lib/dashboard.ts` |
+| Definition | The group of statuses that are working and productive, in a tenant where no status, active or retired, carries a Work area (for example Invest's statuses): Leaf Green, third in the group order. Where any status of the tenant has a work area, the same group (working, productive, no work area) is Other productive. |
+| Source | `cma.work_status` flags and `work_area` |
+| Counts / does not count | Counts the time of those statuses only. Does not count Sales or Operations time: the Productive tile and figure of the Dashboard (`copy.dashboard.productive`, `dashboard.time.productive_share`, the flag `is_productive`) count all working and productive time, work areas included, and are unchanged |
+| Unit and display | Hours and minutes in the legend and charts |
+| Time rule | None |
+| Scope | As Status group |
+| Equivalent in the source system | None |
+| Not to use | "Productive" for Sales or Operations time inside the group; "Productive" as the group's label in a tenant with a work area (that group is Other productive); the group's name for the Dashboard's Productive figure |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "A work status gets an optional Work area …", "Definitions: Work area, Status group, Sales (work area and status group), Operations (work area and status group) and Productive (status group) are new terms" and "Definitions: Other productive" (this PR, addition 0009zn) |
+| Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`; Reports → Dashboard, the Live board, My day, Welcome |
+| As built today | Matches the definition |
+
+### Other productive (status group)
+
+| Field | Value |
+|---|---|
+| Term | Other productive (nl: Overig productief), the label of the status group of working and productive statuses without a work area, in a tenant where any status has a work area |
+| Key | Group id `productive` (one group, two labels by tenant); copy keys `dashboard.groupOtherProductive` and `dashboard.groupOtherProductiveHint` ("Working and productive statuses without a work area", nl "Werkende en productieve statussen zonder werkgebied"); the label rule `productiveGroupName` in `web/src/lib/dashboard.ts` |
+| Definition | The group of statuses that are working and productive and carry no Work area, named Other productive when at least one of the tenant's statuses, active or retired, has a work area, so that it reads beside Sales and Operations: Leaf Green, third in the group order. In a tenant without any work area the same group is Productive. |
+| Source | `cma.work_status` flags and `work_area`; whether any status has a work area is read in the same statement as the Dashboard's time (`cma.team_status_time`) and the Live board's status flags (`tenantHasWorkArea`) |
+| Counts / does not count | Counts the time of working, productive statuses without a work area only. Does not count Sales or Operations time. Not the Dashboard's Productive tile and figure (`copy.dashboard.productive`, `dashboard.time.productive_share`), which keep their meaning: all working and productive time, work areas included |
+| Unit and display | Hours and minutes in the legend and charts; a count on the Live board's tile |
+| Time rule | None; the tenant's statuses as they are now |
+| Scope | As Status group: Reports → Dashboard and the Live board, where groups carry labels |
+| Equivalent in the source system | None |
+| Not to use | "Productive" for this group in a tenant with a work area; "Other work" (working, not productive) |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "Definitions: Other productive" (this PR, addition 0009zn) |
+| Used by | `dashboard.time.groups`, `live.people.group`, `live.tiles.group_count`; Reports → Dashboard, the Live board; `GET /api/v1/team/status-time` and `GET /api/v1/team/now` (`tenantHasWorkArea`) |
+| As built today | `web/src/lib/dashboard.ts` (`productiveGroupName`, `hasWorkArea`), `web/src/components/DashboardCharts.tsx` (`groupLabels`); verified by `verify:dashboard`. Matches the definition |
+
+### Hours market
+
+| Field | Value |
+|---|---|
+| Term | Hours market (nl: Urenmarkt), the market under which time is registered and billed |
+| Key | SQL `cma.time_event.hours_market_code` (nullable, an hours market of the tenant), `cma.market.hours_market_code` (the mapping; not null, its own code by default), `cma_read.time_event.hours_market_code`, `cma_read.market.hours_market_code` and `cma_read.time_interval.hours_market_code` (each last); `cma.hours_markets()`, `cma.resolve_hours_market`, `cma.clock_in_hours_market`; API `hoursMarket` (`code`, `name`, `isActive` in `GET /api/v1/me/hours-markets`), `hoursMarketCode` on a market; copy `myDay.hoursMarket`, `dayEditor.hoursMarket`, `live.hoursMarket`, `exports.hoursMarket`, `configMarkets.hoursMarket` |
+| Definition | A market of the tenant that maps to itself and under which time is booked and billed. A tenant maps each market to an hours market in Configuration → Markets (Pulse4all: BE → NL, AT → DE; every other market maps to itself). The mapping is configuration, never code: no migration or seed names a tenant's market. Every start and status event carries the hours market it was booked under (pauses included, so nobody has to think about when it applies; only a status with a work area needs one for billing), and a status interval carries the hours market of the event that opened it. |
+| Source | The CMA: `cma.time_event`, written by the agent on My day (`cma.set_status`), by clock-in (opening a day: the person's Default market, else the market of the person's last day, else none; clocking in again: the day's own market first) and by a manager's correction (Correct day's Hours market column) |
+| Counts / does not count | A dimension of the time figures, never a figure: worked, paid, billable and productive time do not change, and a status with time under two markets on one day is two rows whose sums equal the one before. Time without a market is counted under No market, never dropped. A market that is no hours market is not offered on My day or as a Default market |
+| Unit and display | A market code with its name; the Hours market select on My day (key M), the Hours market column of Correct day and of the Live board's table, the Default market field on People, the last column of the Team hours and status-changes CSVs |
+| Time rule | The market in force at the moment of the event: a status change keeps it until the agent picks another, and picking another books a new status event with the same status and the new market, so time counts for the new market from that moment. A kept market books as it books now (`cma.resolve_hours_market`), so remapping a market never blocks a day; a correction row added without a market keeps the market in force at its time |
+| Scope | Per tenant; every start and status event; the mapping per market |
+| Equivalent in the source system | None |
+| Not to use | "Market" for it: Market keeps its meaning, the country (the deal's, the line's, the customer's); "billing market" or "country" for an hours market; "activity" or "work type" for the work area (what an agent does comes from HubSpot, so My day has no activity choice) |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "Hours market (nl Urenmarkt) is …" and the rows that follow it, and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo) |
+| Used by | No catalog key: no metric reads it. Pages: My day, Correct day (Team hours), People, the Live board, Configuration → Markets; `GET /api/v1/me/hours-markets`, `POST /api/v1/me/status`, `GET /api/v1/me/day`, `GET /api/v1/team/now`, `GET /api/v1/live/board`, `GET /api/v1/team/days/{userId}/{date}`, `POST .../corrections`, `GET` and `PUT /api/v1/configuration/markets`, `GET /api/v1/team/status-time`, `GET /api/v1/team/exports/hours` and `/status-changes` |
+| As built today | `230` (columns, foreign keys to a market of the same tenant, the kind check on `time_event`, triggers for the mapping rules serialised per tenant, the functions and reads) and `231` (verify); the rules hold in the tables, so a direct write cannot break them. `cma.open_workday` keeps its one-argument signature (an explicit market at clock-in is a market change right after). The capture is built; the billing statement is not (backlog CMA-137). Matches the definition |
+
+### Default market
+
+| Field | Value |
+|---|---|
+| Term | Default market (nl: Standaardmarkt), a setting of a person |
+| Key | SQL `cma.app_user.default_hours_market_code` and `cma_read.app_user.default_hours_market_code` (last column), `cma.set_person_default_hours_market`; API `defaultHoursMarket` on `GET /api/v1/team/directory`, `PUT /api/v1/team/directory/{userId}/default-market`; copy `team.defaultMarket` and `team.noDefaultMarket` |
+| Definition | An optional Hours market of a person, set on People. Clock-in opens the day in the default status with that market; without a Default market, with the market of the person's last day; otherwise with none. Clocking in again on a day that already has events continues under that day's own market (the one in force at its last event) and uses the Default market only when the day has none. It is never a market change on its own: it applies at clock-in only. |
+| Source | The CMA: `cma.app_user`, written by `cma.set_person_default_hours_market` for whoever may manage the person (the other People writes' rule) |
+| Counts / does not count | Counts only an active hours market of the tenant; one that was remapped or deactivated since is skipped at clock-in, which then falls back to the market of the last day or none. Changes no figure |
+| Unit and display | A market code with its name, or "No default market", in the People dialog (nl "Geen standaardmarkt") |
+| Time rule | Read at clock-in; changing it does not change a day already open |
+| Scope | Per person and tenant |
+| Equivalent in the source system | None |
+| Not to use | "Home market" or "country of the person" for it: a person's zone and employer are other fields, and Market keeps its meaning, the country |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "People gets a Default market per person …" and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo) |
+| Used by | No catalog key. People, clock-in (Welcome, My day); `GET /api/v1/team/directory`, `PUT /api/v1/team/directory/{userId}/default-market`, `POST /api/v1/me/day/start` |
+| As built today | `230`: a trigger checks an active hours market when the column is set or changed, a market that a person's Default market names keeps mapping to itself (the conflict a market change answers with 409), `cma.clock_in_hours_market(person)` applies the rule when a day opens, and `cma.open_workday` takes the day's own market first when clocking in again. Matches the definition |
+
+### No market
+
+| Field | Value |
+|---|---|
+| Term | No market (nl: Geen markt), the label of time without an Hours market |
+| Key | `hours_market_code` null on `cma.time_event`, `cma_read.time_interval` and the reads built on them; `hoursMarket` null in the API; a null element of `hoursMarkets` on a day of the hours export; copy `myDay.noMarket`, `dayEditor.noMarket`, `live.noMarket`, `exports.noMarket` |
+| Definition | The label shown where an event or a stretch has no Hours market, for example before anyone chose one on a day of a person without a Default market. Such time is counted under the label, never dropped. |
+| Source | The CMA: a start or status event booked without a market, and every stretch it opens |
+| Counts / does not count | Counts all time without a market in worked, paid, billable and productive time as any other time; it is its own row in a split per market. A day's end and a void carry no market and are not time under No market |
+| Unit and display | The words "No market" (nl "Geen markt"), in the Hours market select, the Hours market column of Correct day, the Live board's table and the CSVs' last columns; the hours CSV's cell lists the day's markets in order and "No market" for time without one, joined by " + " |
+| Time rule | None: the market of the event that opened the stretch |
+| Scope | Per event and stretch |
+| Equivalent in the source system | None |
+| Not to use | "Unknown market", "Other" or "None" for it; an empty cell where a label is shown; a stretch without a market is never left out of a sum |
+| Status | Decided |
+| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "People gets a Default market per person …" and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo) |
+| Used by | No catalog key. My day, Correct day, the Live board, the Team hours and status-changes CSVs |
+| As built today | `web/src/lib/copy.ts` (`noMarket` in the myDay, dayEditor, live and exports groups), `web/src/lib/csv.ts` (`hoursMarketsCell`). Matches the definition |
 
 ## Retired words
 

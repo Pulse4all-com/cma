@@ -12,7 +12,7 @@ import type {
   LiveBoardData, DataQualityReport,
   AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MessageStat, MessageTarget, MyMessage, MyMessages, MyProfile, MyRosterDay, SentMessage, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
   SkillInfo, SkillInput, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow,
-  TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
+  TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday, HoursMarket,
   CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus,
   AlertRule, LinkedAccount, MarketConfig, MarketHoliday, OfficeHours, SourceCallOutcome, SourceConnection, SourceDetail, SourceRead, SourceForm, SourceKind,
   SourceLine, SourcePipeline, SourceStore, SourceTag,
@@ -1580,6 +1580,8 @@ type MockState = {
    * The time between two sessions is no stretch, so it never lands here (addition 0008zp)
    */
   ownPauses?: Map<Key, number>;
+  /** The market an own day was last booked under (addition 0009zo), kept past its end for the next clock-in (D4) */
+  ownLastMarket?: Map<Key, string | null>;
 };
 const g = globalThis as unknown as { __cmaMock?: MockState };
 const state: MockState = (g.__cmaMock ??= {
@@ -1593,15 +1595,17 @@ const store = state.store;
  * (the default ladder of the seed). The screens never branch on these keys or names.
  */
 const MOCK_STATUSES: WorkStatus[] = [
-  { key: "available", name: "Available", isWorking: true, isProductive: true, isDefault: true },
-  { key: "training", name: "Training", isWorking: true, isProductive: false, isDefault: false },
-  { key: "meeting", name: "Meeting", isWorking: true, isProductive: false, isDefault: false },
-  { key: "break", name: "Break", isWorking: false, isProductive: false, isDefault: false },
-  { key: "lunch", name: "Lunch", isWorking: false, isProductive: false, isDefault: false },
+  // Work areas (addition 0009zn) so both working colours show: tenant configuration in the database, fixture here
+  { key: "available", name: "Available", isWorking: true, isProductive: true, workArea: "sales", isDefault: true },
+  { key: "back_office", name: "Back office", isWorking: true, isProductive: true, workArea: "operations", isDefault: false },
+  { key: "training", name: "Training", isWorking: true, isProductive: false, workArea: null, isDefault: false },
+  { key: "meeting", name: "Meeting", isWorking: true, isProductive: false, workArea: null, isDefault: false },
+  { key: "break", name: "Break", isWorking: false, isProductive: false, workArea: null, isDefault: false },
+  { key: "lunch", name: "Lunch", isWorking: false, isProductive: false, workArea: null, isDefault: false },
 ];
 const DEFAULT_STATUS = MOCK_STATUSES.find((s) => s.isDefault)!;
 /** Fixture pay flags (the seed's proposal: paid break, unpaid lunch); never shown to an agent */
-const MOCK_PAID = new Set(["available", "training", "meeting", "break"]);
+const MOCK_PAID = new Set(["available", "back_office", "training", "meeting", "break"]);
 
 function secondsBetween(a: Instant, b: Instant): number {
   return Math.max(0, Math.floor((Date.parse(b) - Date.parse(a)) / 1000));
@@ -1666,6 +1670,25 @@ function closePause(k: Key, w: Workday, now: Instant): void {
   pauses.set(k, pauseSecondsOf(k, w, now));
 }
 
+/**
+ * D4 for an own day (addition 0009zo), as cma.clock_in_hours_market: the person's Default market when it is an active
+ * hours market, else the market of their latest day when it still is one, else none
+ */
+function ownClockInMarket(me: Principal, before: DateKey): string | null {
+  const ok = (code: string | null | undefined) => {
+    if (!code) return null;
+    const m = seedIntakeConfig(me).markets.find((x) => x.code === code);
+    return m && m.isActive && m.hoursMarketCode === m.code ? m.code : null;
+  };
+  const own = ok(seedPeople().get(me.userId)?.defaultHoursMarket);
+  if (own) return own;
+  const mine = owner(me);
+  const last = [...(state.ownLastMarket ?? new Map<Key, string | null>()).entries()]
+    .filter(([k]) => k.startsWith(mine) && k.slice(mine.length) <= before)
+    .sort(([a], [b]) => (a < b ? 1 : -1))[0];
+  return ok(last?.[1] ?? null);
+}
+
 /** A fortnight of fictional history so the hours screen has something to show */
 function seedHistory(me: Principal, today: DateKey) {
   const base = new Date(`${today}T00:00:00Z`);
@@ -1696,7 +1719,10 @@ function seedHistory(me: Principal, today: DateKey) {
       sessionStartedAt: at(startMin),
       clockInAgain: false,
       canClockInAgain: false,
+      // An ended day shows no market (as statusKey); the day's last market is kept beside it for the next clock-in (D4)
+      hoursMarket: null,
     });
+    (state.ownLastMarket ??= new Map()).set(k, "NL");
   }
 }
 
@@ -1727,7 +1753,7 @@ function localMs(date: DateKey, time: string, timeZone: string): number {
 
 function mockEvent(
   kind: TimeEvent["kind"], at: Instant, statusKey: string | null, source: TimeEvent["source"],
-  extra: Partial<Pick<TimeEvent, "supersedes" | "reason" | "approvedByName" | "importBatchKey">> = {},
+  extra: Partial<Pick<TimeEvent, "supersedes" | "reason" | "approvedByName" | "importBatchKey" | "hoursMarket">> = {},
 ): MockEvent {
   return {
     id: crypto.randomUUID(),
@@ -1742,8 +1768,34 @@ function mockEvent(
     approvedByName: extra.approvedByName ?? null,
     importBatchKey: extra.importBatchKey ?? null,
     isEffective: true,
+    // Only a start or status carries a market (addition 0009zo)
+    hoursMarket: kind === "start" || kind === "status" ? extra.hoursMarket ?? null : null,
   };
 }
+
+/**
+ * The tenant's hours markets (addition 0009zo): its markets that map to themselves, active ones first, then by order, as
+ * cma.hours_markets answers them
+ */
+function mockHoursMarkets(me: Principal): HoursMarket[] {
+  return seedIntakeConfig(me).markets
+    .filter((m) => m.hoursMarketCode === m.code)
+    .sort((a, b) => Number(!a.isActive) - Number(!b.isActive) || a.sortOrder - b.sortOrder || (a.code < b.code ? -1 : 1))
+    .map((m) => ({ code: m.code, name: m.name, isActive: m.isActive }));
+}
+
+/** cma.assert_hours_market's answer: CMA04 for no code or no (active) hours market, CMA02 for a market the tenant lacks */
+function assertMockHoursMarket(me: Principal, code: string, allowInactive = false): string {
+  if (!/^[A-Z]{2}$/.test(code)) throw new CmaDbError("CMA04", "an hours market is a market code of two upper-case letters");
+  const m = seedIntakeConfig(me).markets.find((x) => x.code === code);
+  if (!m) throw new CmaDbError("CMA02", `no market ${code} in the current tenant`);
+  if (m.hoursMarketCode !== m.code) throw new CmaDbError("CMA04", `market ${code} is no hours market`);
+  if (!m.isActive && !allowInactive) throw new CmaDbError("CMA04", `hours market ${code} is not active`);
+  return m.code;
+}
+
+/** The fixture's market per person: a Default market for two, the market of their days for the others (one none) */
+const TEAM_MARKETS: (string | null)[] = ["NL", "DE", "NL", "GB", null];
 
 /** Effective events in time order: not a void, not replaced by a later correction */
 function effective(events: MockEvent[]): MockEvent[] {
@@ -1845,10 +1897,10 @@ function teamDay(p: TeamPerson, date: DateKey, events: MockEvent[]): TeamDay {
   };
 }
 
-function readTeamDay(userId: string, date: DateKey): TeamDayDetail {
+function readTeamDay(me: Principal, userId: string, date: DateKey): TeamDayDetail {
   const p = TEAM.find((x) => x.userId === userId);
   const events = p ? teamStore.get(userId)?.get(date) ?? [] : [];
-  return { day: p && hasDay(events) ? teamDay(p, date, events) : null, events: withEffective(events) };
+  return { day: p && hasDay(events) ? teamDay(p, date, events) : null, events: withEffective(events), hoursMarkets: mockHoursMarkets(me) };
 }
 
 /** One day's status stretches, the way cma.time_interval derives them (billable = paid in the fixture) */
@@ -1869,14 +1921,22 @@ function statusRows(p: TeamPerson, date: DateKey, events: MockEvent[]): StatusCh
       isProductive: !!status?.isProductive,
       isPaid: paid,
       isBillable: paid,
+      workArea: status?.workArea ?? null,
       from: e.at,
       to: next === null ? null : new Date(next).toISOString(),
       isOpen: next === null,
       isCapped,
       seconds,
       source: e.source,
+      hoursMarket: e.hoursMarket,
     };
   });
+}
+
+/** A day's hours markets as cma.export_hours lists them: distinct, sorted, a null (no market) last */
+function hoursMarketsOf(markets: (string | null)[]): (string | null)[] {
+  const codes = [...new Set(markets.filter((m): m is string => m !== null))].sort();
+  return markets.some((m) => m === null) ? [...codes, null] : codes;
 }
 
 /**
@@ -1908,7 +1968,9 @@ function seedTeam() {
           [["start", ago(300), "available"], ["status", ago(120), "lunch"], ["status", ago(90), "available"], ["end", ago(30), null]],
           [],
         ];
-        const events = (todayPlan[n] ?? []).map(([k, t, s]) => mockEvent(k, t, s, "user"));
+        // Ana books the time after her break under DE (a market change, addition 0009zo); the others keep theirs
+        const events = (todayPlan[n] ?? []).map(([k, t, s], x) =>
+          mockEvent(k, t, s, "user", { hoursMarket: n === 0 && x === 2 ? "DE" : TEAM_MARKETS[n] ?? null }));
         if (events.length) days.set(date, events);
         continue;
       }
@@ -1928,6 +1990,8 @@ function seedTeam() {
       // Working time that is not productive, so every group of the Dashboard has something to show
       if ((weekday + n) % 3 === 0) plan.push(["status", at("15:30"), "meeting"], ["status", at("16:15"), "available"]);
       if (n === 2 && weekday % 4 === 1) plan.push(["status", at("09:30"), "training"], ["status", at("10:30"), "available"]);
+      // Productive time in the other work area (addition 0009zn), so Sales and Operations both show
+      if ((weekday + n) % 2 === 0) plan.push(["status", at("16:30"), "back_office"], ["status", at("17:00"), "available"]);
       const forgot = n === 3 && weekday === 2;  // Lucas: forgot to clock out
       // Ana: a split shift (0008zp), out at 13:00 and in again from 17:00 to 21:00; the gap counts nothing
       const split = n === 0 && weekday === 2;
@@ -1935,7 +1999,10 @@ function seedTeam() {
         plan.splice(3, plan.length - 3, ["end", at("13:00"), null], ["start", at("17:00"), "available"], ["end", at("21:00"), null]);
       } else if (!forgot) plan.push(["end", at("17:30", j), null]);
       plan.sort((a, b) => Date.parse(a[1]) - Date.parse(b[1]));
-      const events = plan.filter(([, t]) => Date.parse(t) <= now).map(([k, t, s]) => mockEvent(k, t, s, "user"));
+      // Sanne books her afternoon under DE on every other weekday, so a day with two markets shows in the files
+      const events = plan.filter(([, t]) => Date.parse(t) <= now).map(([k, t, s]) => mockEvent(k, t, s, "user", {
+        hoursMarket: n === 2 && weekday % 2 === 0 && Date.parse(t) >= Date.parse(at("14:00")) ? "DE" : TEAM_MARKETS[n] ?? null,
+      }));
       if (events.length === 0) continue;
       // ...and the hourly sweep closed it at the default time, as the database does without a
       // planned shift (0008b): never before his last event
@@ -2028,6 +2095,8 @@ function seedPeople(): Map<string, DirectoryPerson> {
       teams: (p.teams ?? []).map(mockTeam),
       skills: (p.skills ?? []).map(([k, l]) => mockSkill(k, l)),
       mayEdit: false,
+      // Ana and Jordi have a Default market (addition 0009zo); the others clock in under their last day's
+      defaultHoursMarket: p.userId === TEAM[0]!.userId ? "NL" : p.userId === TEAM[1]!.userId ? "DE" : null,
     };
   };
   const list: DirectoryPerson[] = [
@@ -2527,8 +2596,10 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
         firstSeenAt: new Date(Date.now() - 40 * 86_400_000).toISOString(), deletedAt: null, reviews: 0, lastSubmittedAt: null })),
     }, { client_id: "test-client-id", crm_connection_id: crm.connection.id, record_url_review: "https://reviews.example.com/{account}/reviews/{id}" }));
   }
-  const market = (code: string, name: string, timeZone: string, languageCode: string, currency: string, sortOrder: number, aliases: string[], active = true): MarketConfig =>
-    ({ code, name, timeZone, languageCode, languageSkillKey: active ? languageCode : null, minLanguageLevel: active ? 3 : null, currency, isActive: active, sortOrder, aliases });
+  const market = (code: string, name: string, timeZone: string, languageCode: string, currency: string, sortOrder: number, aliases: string[], active = true,
+    hoursMarketCode = code): MarketConfig =>
+    ({ code, name, timeZone, languageCode, languageSkillKey: active ? languageCode : null, minLanguageLevel: active ? 3 : null, currency, isActive: active, sortOrder, aliases,
+      hoursMarketCode });
   const category = (code: string, name: string, sortOrder: number, isActive = true) => ({ code, name, sortOrder, isActive });
   const cfg: MockIntakeConfig = {
     sources,
@@ -2536,7 +2607,8 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
       category("cancellation", "Cancellation (test)", 40), category("replacement", "Replacement (test)", 50), category("support", "Support (test)", 60),
       category("legacy", "Legacy (test)", 90, false)],
     markets: [market("NL", "Netherlands", "Europe/Amsterdam", "nl", "EUR", 10, ["holland", "nederland", "the netherlands"]),
-      market("BE", "Belgium", "Europe/Brussels", "nl", "EUR", 20, ["belgie", "belgique"]),
+      // Belgium's time is booked under NL (addition 0009zo): the fixture's mapping, tenant configuration as in Configuration → Markets
+      market("BE", "Belgium", "Europe/Brussels", "nl", "EUR", 20, ["belgie", "belgique"], true, "NL"),
       market("GB", "United Kingdom", "Europe/London", "en", "GBP", 30, ["england", "great britain", "uk", "united kingdom"]),
       market("DE", "Germany", "Europe/Berlin", "de", "EUR", 40, ["deutschland"]),
       market("ES", "Spain", "Europe/Madrid", "es", "EUR", 90, [], false)],
@@ -2637,6 +2709,9 @@ function mockMaintenance(me: Principal): { devices: MaintenanceDevice[]; catalog
       { key: "stolen_missing", name: "Stolen/Missing", isInField: false, isInStock: false, isTracked: false }],
     markets: seedIntakeConfig(me).markets.map((m) => ({ code: m.code, sortOrder: m.sortOrder })),
     windowDays: 90,
+    // addition 0009zm: two debt statuses, both pausing maintenance (test labels)
+    debtStatuses: [{ key: "in_debt_collection", name: "In debt collection (test)", pausesMaintenance: true, sortOrder: 10 },
+      { key: "check_first", name: "Check first (test)", pausesMaintenance: true, sortOrder: 40 }],
   };
   if (me.tenantId === MOCK_TENANT_2) return { devices: [], catalog };
   const today = mockToday(me);
@@ -2658,6 +2733,8 @@ function mockMaintenance(me: Principal): { devices: MaintenanceDevice[]; catalog
       components: withComponents ? [{ kind: "pads", serial: `TEST-PAD-${n}`, expiresOn: addDays(today, padsIn) },
         { kind: "battery", serial: `TEST-BAT-${n}`, expiresOn: addDays(today, batteryIn) }] : [],
       crmContactId: status === "active_customer" && n % 2 === 0 ? `9000${n}` : null,
+      // every eighth device under a debt status (one in storage keeps its label and is not paused); n 23 to be checked first
+      debtStatus: n === 23 ? "check_first" : n % 8 === 0 ? "in_debt_collection" : null,
     };
   });
   return { devices, catalog };
@@ -3153,8 +3230,15 @@ export const mockData: CmaData = {
           clock: { closedSeconds: existing.clock.closedSeconds, runningSince: DEFAULT_STATUS.isWorking ? now : null },
           sessions: existing.sessions + 1,
           sessionStartedAt: now,
+          // Clocking in again continues the day under its own market (Martin, 23 November 2026), else D4's order
+          hoursMarket: (() => {
+            const own = state.ownLastMarket?.get(k) ?? null;
+            const m = own ? seedIntakeConfig(me).markets.find((x) => x.code === own) : undefined;
+            return m ? m.hoursMarketCode : ownClockInMarket(me, date);
+          })(),
         };
         store.set(k, again);
+        state.ownLastMarket!.set(k, again.hoursMarket);
         return ownDay(me, again, now);
       }
       return ownDay(me, existing, now);
@@ -3180,8 +3264,10 @@ export const mockData: CmaData = {
       sessionStartedAt: now,
       clockInAgain: false,
       canClockInAgain: false,
+      hoursMarket: ownClockInMarket(me, date),
     };
     store.set(k, fresh);
+    (state.ownLastMarket ??= new Map()).set(k, fresh.hoursMarket);
     return ownDay(me, fresh, now);
   },
 
@@ -3207,6 +3293,7 @@ export const mockData: CmaData = {
       statusName: null,
       statusSince: null,
       clock: closeStretch(current, now),
+      hoursMarket: null,
     };
     store.set(key(me, date), ended);
     return ownDay(me, ended, now);
@@ -3216,14 +3303,25 @@ export const mockData: CmaData = {
     return MOCK_STATUSES;
   },
 
-  async setStatus(me, statusKey, now) {
+  async listMyDayChoices(me) {
+    return { statuses: MOCK_STATUSES, hoursMarkets: mockHoursMarkets(me).filter((m) => m.isActive) };
+  },
+
+  async setStatus(me, change, now) {
     const date = dateKeyInZone(now, me.timeZone);
     const current = store.get(key(me, date));
-    // Same contract as cma.set_status: CMA02 no day or unknown key, CMA03 ended day
+    // Same contract as cma.set_status (addition 0009zo): CMA04 neither, CMA02 no day or unknown key, CMA03 ended day,
+    // CMA02 or CMA04 for a market that is no active hours market of the tenant
+    if (change.key === null && change.hoursMarket === null) throw new CmaDbError("CMA04", "a change needs a status, a market or both");
     if (!current) throw new CmaDbError("CMA02", "no workday today");
     if (current.status === "ended") throw new CmaDbError("CMA03", "workday already ended");
-    const next = MOCK_STATUSES.find((s) => s.key === statusKey);
+    const next = MOCK_STATUSES.find((s) => s.key === (change.key ?? current.statusKey));
     if (!next) throw new CmaDbError("CMA02", "unknown work status");
+    // A kept market books as it books now (the tenant may have mapped it elsewhere since)
+    const kept = current.hoursMarket ? seedIntakeConfig(me).markets.find((m) => m.code === current.hoursMarket)?.hoursMarketCode ?? null : null;
+    const market = change.hoursMarket === null ? kept : assertMockHoursMarket(me, change.hoursMarket);
+    // A market change alone to the market in force books nothing
+    if (change.key === null && market === current.hoursMarket) return ownDay(me, current, now);
     closePause(key(me, date), current, now);
     const closed = closeStretch(current, now);
     const updated: Workday = {
@@ -3232,8 +3330,10 @@ export const mockData: CmaData = {
       statusName: next.name,
       statusSince: now,
       clock: { closedSeconds: closed.closedSeconds, runningSince: next.isWorking ? now : null },
+      hoursMarket: market,
     };
     store.set(key(me, date), updated);
+    (state.ownLastMarket ??= new Map()).set(key(me, date), market);
     return ownDay(me, updated, now);
   },
 
@@ -3288,7 +3388,7 @@ export const mockData: CmaData = {
   async getTeamDay(me, userId, date) {
     assertTeam(me);
     seedTeam();
-    return readTeamDay(userId, date);
+    return readTeamDay(me, userId, date);
   },
 
   async correctWorkday(me, userId, date, correction) {
@@ -3320,9 +3420,24 @@ export const mockData: CmaData = {
         throw new CmaDbError("CMA04", "time outside the day or in the future");
       }
       const status = c.statusKey ? MOCK_STATUSES.find((s) => s.key === c.statusKey) : undefined;
-      if ((c.kind === "start" || c.kind === "status") && !status) throw new CmaDbError("CMA02", "unknown work status");
+      const carries = c.kind === "start" || c.kind === "status";
+      if (carries && !status) throw new CmaDbError("CMA02", "unknown work status");
+      // The market (addition 0009zo, D5): given, it is an hours market (an inactive one allowed); left out, a replaced
+      // start or status keeps its market; never on an end or a void
+      if (!carries && c.hoursMarket) throw new CmaDbError("CMA04", `change ${i + 1}: only a start or a status carries an hours market`);
+      const replaced = c.supersedes ? events.find((e) => e.id === c.supersedes) : undefined;
+      // A kept market books as it books now (cma.resolve_hours_market): the replaced event's own market, given again or
+      // left out, follows the tenant's mapping; any other code must be an hours market
+      const resolve = (code: string | null) => (code ? seedIntakeConfig(me).markets.find((m) => m.code === code)?.hoursMarketCode ?? null : null);
+      const replacedMarket = replaced && (replaced.kind === "start" || replaced.kind === "status") ? replaced.hoursMarket : null;
+      const market = !carries ? null
+        : c.hoursMarket !== undefined
+          ? (!c.hoursMarket ? null : c.hoursMarket === replacedMarket ? resolve(c.hoursMarket) : assertMockHoursMarket(me, c.hoursMarket, true))
+          : replaced ? resolve(replacedMarket)
+          // an added row keeps the market in force at its time, as a status change does (D3)
+          : resolve(effective(events).filter((e) => (e.kind === "start" || e.kind === "status") && Date.parse(e.at) <= ms).at(-1)?.hoursMarket ?? null);
       events.push(mockEvent(c.kind, new Date(ms).toISOString(), status?.key ?? null, "correction", {
-        supersedes: c.supersedes ?? null, reason, approvedByName: me.displayName,
+        supersedes: c.supersedes ?? null, reason, approvedByName: me.displayName, hoursMarket: market,
       }));
     });
 
@@ -3330,7 +3445,7 @@ export const mockData: CmaData = {
     const problem = shapeProblem(effective(events));
     if (problem) throw new CmaDbError("CMA04", `the day has ${problem}`);
     days.set(date, events);
-    return readTeamDay(userId, date);
+    return readTeamDay(me, userId, date);
   },
 
   // Remove day (0009g): every effective event voided by one correction, as cma.remove_workday does
@@ -3353,7 +3468,7 @@ export const mockData: CmaData = {
       events.push({ ...mockEvent("void", at, null, "correction", { supersedes: e.id, reason: text, approvedByName: me.displayName }), recordedAt: at });
     }
     days.set(date, events);
-    return readTeamDay(userId, date);
+    return readTeamDay(me, userId, date);
   },
 
   async listSettings() {
@@ -3376,6 +3491,7 @@ export const mockData: CmaData = {
           productiveSeconds: statusRows(p, date, events).filter((r) => r.isProductive).reduce((n, r) => n + r.seconds, 0),
           paidSeconds: d.paidMinutes * 60, billableSeconds: d.paidMinutes * 60,
           isCapped: d.isCapped, needsCorrection: d.needsCorrection, hasCorrection: d.hasCorrection,
+          hoursMarkets: hoursMarketsOf(statusRows(p, date, events).map((r) => r.hoursMarket)),
         });
       }
     }
@@ -3407,7 +3523,8 @@ export const mockData: CmaData = {
       for (const [date, events] of teamStore.get(p.userId) ?? []) {
         if (date < range.from || date > range.to || !hasDay(events)) continue;
         for (const s of statusRows(p, date, events)) {
-          const k = `${s.userId}:${s.date}:${s.statusKey}`;
+          // One row per status and hours market (addition 0009zo)
+          const k = `${s.userId}:${s.date}:${s.statusKey}:${s.hoursMarket ?? ""}`;
           const row = sums.get(k);
           if (row) {
             row.seconds += s.seconds;
@@ -3420,16 +3537,17 @@ export const mockData: CmaData = {
             userId: s.userId, displayName: s.displayName, organisationName: s.organisationName, date: s.date,
             timeZone: s.timeZone, statusKey: s.statusKey, statusName: s.statusName,
             sortOrder: (order < 0 ? MOCK_STATUSES.length : order) * 10 + 10, statusActive: true,
-            isWorking: s.isWorking, isProductive: s.isProductive, isPaid: s.isPaid, isBillable: s.isBillable,
-            seconds: s.seconds, stretches: 1, isCapped: s.isCapped,
+            isWorking: s.isWorking, isProductive: s.isProductive, isPaid: s.isPaid, isBillable: s.isBillable, workArea: s.workArea,
+            seconds: s.seconds, stretches: 1, isCapped: s.isCapped, hoursMarket: s.hoursMarket,
           });
         }
       }
     }
     const rows = [...sums.values()].sort((a, b) =>
       a.date.localeCompare(b.date) || a.displayName.localeCompare(b.displayName) || a.userId.localeCompare(b.userId) ||
-      a.sortOrder - b.sortOrder || a.statusKey.localeCompare(b.statusKey));
-    return { ...range, rows };
+      a.sortOrder - b.sortOrder || a.statusKey.localeCompare(b.statusKey) ||
+      Number(a.hoursMarket === null) - Number(b.hoursMarket === null) || (a.hoursMarket ?? "").localeCompare(b.hoursMarket ?? ""));
+    return { ...range, rows, tenantHasWorkArea: MOCK_STATUSES.some((x) => x.workArea !== null) };
   },
 
   /**
@@ -3498,17 +3616,20 @@ export const mockData: CmaData = {
         sessionStartedAt: starts[starts.length - 1]!.at,
         clockInAgain: mockSetting("workday.clock_in_again") === "true",
         canClockInAgain: !!end && againAllowed(date, p.timeZone, end.at, end.source, Date.now()),
+        // The current market (addition 0009zo): the last stretch's, none once the day has ended
+        hoursMarket: end ? null : last.hoursMarket,
       };
       const status = !end && current
         ? { key: current.key, name: current.name, isActive: true, isWorking: current.isWorking,
-            isProductive: current.isProductive, isPaid: MOCK_PAID.has(current.key), isBillable: MOCK_PAID.has(current.key) }
+            isProductive: current.isProductive, isPaid: MOCK_PAID.has(current.key), isBillable: MOCK_PAID.has(current.key), workArea: current.workArea }
         : null;
       return { userId: p.userId, displayName: p.displayName, organisationKey: p.organisationName.toLowerCase(),
         organisationName: p.organisationName, timeZone: p.timeZone, date, day, status };
     });
     return {
       people,
-      statusFlags: MOCK_STATUSES.map((x) => ({ isWorking: x.isWorking, isProductive: x.isProductive, isPaid: MOCK_PAID.has(x.key) })),
+      statusFlags: MOCK_STATUSES.map((x) => ({ isWorking: x.isWorking, isProductive: x.isProductive, isPaid: MOCK_PAID.has(x.key), workArea: x.workArea })),
+      tenantHasWorkArea: MOCK_STATUSES.some((x) => x.workArea !== null),
     };
   },
 
@@ -3530,6 +3651,17 @@ export const mockData: CmaData = {
   async listDirectory(me) {
     assertManage(me);
     return directoryFor(me);
+  },
+
+  async getPeopleDirectory(me) {
+    assertManage(me);
+    return { people: directoryFor(me), hoursMarkets: mockHoursMarkets(me) };
+  },
+
+  async setPersonDefaultHoursMarket(me, userId, hoursMarket) {
+    const p = editable(me, userId);
+    if (hoursMarket !== null) assertMockHoursMarket(me, hoursMarket);
+    seedPeople().set(userId, { ...p, defaultHoursMarket: hoursMarket });
   },
 
   async listRoles(me): Promise<RoleInfo[]> {
@@ -3569,7 +3701,7 @@ export const mockData: CmaData = {
       userId, email, displayName: input.displayName.trim(), isActive: true,
       organisationKey: org.key, organisationName: org.name, timeZone: input.timeZone ?? org.timeZone,
       roleKey: role.key, roleName: role.name, isManaging: role.isManaging, timeKept: role.permissions.includes("workday.own"),
-      teams: [], skills: [], mayEdit: false,
+      teams: [], skills: [], mayEdit: false, defaultHoursMarket: null,
     });
     return userId;
   },
@@ -3743,7 +3875,7 @@ export const mockData: CmaData = {
       seedPeople().set(userId, {
         userId, email: i.email, displayName: i.displayName, isActive: true, organisationKey: org.key, organisationName: org.name,
         timeZone: org.timeZone, roleKey: role.key, roleName: role.name, isManaging: role.isManaging, timeKept: role.permissions.includes("workday.own"),
-        teams: i.teams, skills: i.skills, mayEdit: false,
+        teams: i.teams, skills: i.skills, mayEdit: false, defaultHoursMarket: null,
       });
     }
     Object.assign(i, { acceptedAt: new Date().toISOString(), acceptedUserId: userId, acceptedName: i.displayName });
@@ -3758,12 +3890,15 @@ export const mockData: CmaData = {
   async upsertConfigStatus(me, input) {
     assertConfigure(me);
     if (!/^[a-z0-9_]+$/.test(input.key)) throw new CmaDbError("CMA04", "bad key");
+    // The table's check (addition 0009zn): a work area only on a working, productive status
+    if (input.workArea !== null && !(input.isWorking && input.isProductive)) throw new CmaDbError("CMA04", "a work area needs a working, productive status");
     const c = seedConfig();
     const cur = c.statuses.find((x) => x.key === input.key);
     if (!cur) {
       c.statuses.push({ ...input, isDefault: false, isActive: true, usageCount: 0 });
       return;
     }
+    // The work area is not a flag: it is never frozen (decision of 23 November 2026, D4)
     const flagsChange = cur.isWorking !== input.isWorking || cur.isProductive !== input.isProductive || cur.isPaid !== input.isPaid || cur.isBillable !== input.isBillable;
     if (flagsChange && cur.usageCount > 0) throw new CmaDbError("CMA03", "flags frozen");
     if (cur.isDefault && !input.isWorking) throw new CmaDbError("CMA03", "default must work");
@@ -4309,7 +4444,20 @@ export const mockData: CmaData = {
     if (input.code === "UK" || !/^[A-Z]{2}$/.test(input.code)) throw new CmaDbError("CMA04", "use GB");
     const c = seedIntakeConfig(me);
     const cur = c.markets.find((m) => m.code === input.code);
-    const next: MarketConfig = { ...input, isActive: active, aliases: cur?.aliases ?? [] };
+    // The hours market (addition 0009zo), with the rules of cma.market_hours_market_rules
+    const hoursMarketCode = input.hoursMarketCode ?? cur?.hoursMarketCode ?? input.code;
+    if (hoursMarketCode !== input.code) {
+      assertMockHoursMarket(me, hoursMarketCode);
+      if (c.markets.some((m) => m.code !== input.code && m.hoursMarketCode === input.code)) {
+        throw new CmaDbError("CMA03", `market ${input.code} is the hours market of other markets; map those first`);
+      }
+      if ([...seedPeople().values()].some((x) => x.defaultHoursMarket === input.code)) {
+        throw new CmaDbError("CMA03", `market ${input.code} is a person's Default market; change that on People first`);
+      }
+    } else if (!active && c.markets.some((m) => m.code !== input.code && m.hoursMarketCode === input.code && m.isActive)) {
+      throw new CmaDbError("CMA03", `hours market ${input.code} books the time of active markets`);
+    }
+    const next: MarketConfig = { ...input, isActive: active, aliases: cur?.aliases ?? [], hoursMarketCode };
     if (cur) Object.assign(cur, next);
     else c.markets.push(next);
   },

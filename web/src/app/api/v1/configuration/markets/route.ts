@@ -12,7 +12,12 @@ export async function GET() {
   });
 }
 
-/** { code, name, timeZone, languageCode, currency, languageSkillKey, minLanguageLevel, sortOrder, active }: upsert_market and set_market_status; UK 400 (use GB), an unknown zone 400, an unknown skill 404 */
+/**
+ * { code, name, timeZone, languageCode, currency, languageSkillKey, minLanguageLevel, sortOrder, active, hoursMarketCode? }:
+ * upsert_market, set_market_hours_market (addition 0009zo: left out keeps the mapping; null or the market's own code makes
+ * it an hours market) and set_market_status, in one transaction; UK 400 (use GB), an unknown zone 400, an unknown skill or
+ * market 404, a target that is no active hours market 400, a market others book under or a person's Default market 409
+ */
 export async function PUT(request: Request) {
   return forPrincipal(async (me) => {
     assertSameSiteWrite(request);
