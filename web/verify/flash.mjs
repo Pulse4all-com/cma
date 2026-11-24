@@ -1119,7 +1119,10 @@ expect("CMA-104 (4): a market whose In the field is 0 keeps its bar and total, a
 // on Today (Customers → Subscriptions' "{n} churned in {month}" opened Today and showed 0). Every flashHref("/reports/flash",
 // { … }) and `/reports/flash?${new URLSearchParams({ … })}` in web/src is read: each object literal in its query (a
 // spread's own included) that holds a from or a to key holds range: "custom" beside it. The provoked run adds a link
-// written as the Subscriptions churn link was before the fix
+// written as the Subscriptions churn link was before the fix. The scan reads literal queries only: a query passed as a
+// variable, or a link on a variable path (FlashParts, FlashOverview, FlashControls: they spread the page's own st.base,
+// which carries the period bar's range), is not read. The second check pins the files whose links name a period, as a
+// tripwire: a new one is added to its list on purpose
 /** The object literals of a query's source, innermost first, each with only its own text (nested literals left out) */
 function objectLiterals(text) {
   const out = [];

@@ -4120,7 +4120,7 @@ Expected: 225's A5 `pulse4all-subscriptions 2026-06: 0 starts and 0 complete row
 The PR changes files under `web/**` outside `web/verify/**`, so the merge starts Cloud Build `cma-web-main` and deploys `cma-web`. No ingest deploy, no `cloudbuild.yaml` and no environment change.
 
 ## 22.6 Browser: the page and the card
-**Browser**: `/reports/subscriptions?market=GB`, then `?market=NL`. Compare Total subscriptions and Paused with Flash's Subscriptions overview for the same market: equal as of the take's Refreshed at. Follow the churn count's link to Flash's Churn. Then open `/reports/active` for the same markets.
+**Browser**: `/reports/subscriptions?market=GB`, then `?market=NL`. Compare Total subscriptions and Paused with Flash's Subscriptions overview for the same market: equal as of the take's Refreshed at. Follow the churn count's link: it opens Flash → Churn on Custom range, from the first to the last day of the month the tile names, with the same churned count as the tile. Then open `/reports/active` for the same markets; its "Churned, last 30 days" link opens Flash → Churn on Custom range from the take's business date minus 29 days to that date, for the market filter, with the same count as of the take.
 
 Then compare each tile's source line (Total subscriptions, Paused and the amounts) with Reports → Data quality's Source figure gaps: the "Source figure gaps: {n}" of a tile is a count among the figures Data quality lists, which also lists canceled and the flows, so a tile's n is never above the matching findings and the link opens that check for `reports.view` or `tenant.configure` (plain text for `performance.team`).
 

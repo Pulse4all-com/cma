@@ -1967,7 +1967,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Cancellation" for it (another term, still to define); "lost" |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Churn in Flash (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: Churn's ended statuses …" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214) |
-| Used by | `cma.flash_churn_of`, the overview `churn`; Data quality's check `field_device_on_ended_subscription` (the same setting); `flash.churn.churned`; Reports → Flash (`/reports/flash`) (Churn) and its files; Customers → Active (`active.churned_30d`, Churned, last 30 days, linked to Flash's Churn overview) |
+| Used by | `cma.flash_churn_of`, the overview `churn`; Data quality's check `field_device_on_ended_subscription` (the same setting); `flash.churn.churned`; Reports → Flash (`/reports/flash`) (Churn) and its files; Customers → Active (`active.churned_30d`, Churned, last 30 days, linked to Flash's Churn overview on Custom range, the 30 business dates the figure counts, for the market filter) |
 | As built today | `cma.flash_churn_of` (`122`). Matches the definition |
 
 ### Flash snapshot
@@ -2712,7 +2712,7 @@ Proposed on 11 November 2026 (Martin; Kira confirms), addition 0009l, brief B35 
 
 | Field | Value |
 |---|---|
-| Term | Churn rate (nl: Uitvalpercentage; `active.slot_churn_rate`); built in the data layer since addition 0009ze, per market, and shown since addition 0009zh on Customers → Subscriptions (a tile and by month) and on Customers → Active's Churn rate card. The card alone carries one related figure under its figure, the subscriptions churned in the last 30 days, linked to Flash's Churn overview |
+| Term | Churn rate (nl: Uitvalpercentage; `active.slot_churn_rate`); built in the data layer since addition 0009ze, per market, and shown since addition 0009zh on Customers → Subscriptions (a tile and by month) and on Customers → Active's Churn rate card. The card alone carries one related figure under its figure, the subscriptions churned in the last 30 days, linked to Flash's Churn overview over the same 30 days |
 | Key | `churn_rate` (`cma_read.subscription_churn_month`, with `base`, `churned`); catalog `active.churn_rate`; tenant settings `subscriptions.migration_bulk_min_pct` (default 5: the share of a store's migrated events a month needs to count toward its migration) and `subscriptions.rates_start_month` (the floor of every store's start) |
 | Definition | The subscriptions churned in a month (Churn (subscription)) divided by the Total subscriptions at the previous month end, per market. |
 | Source | `cma.subscription_month_take` (kinds `churned` and `start`, from the subscription app's status events, reconstructed) |
