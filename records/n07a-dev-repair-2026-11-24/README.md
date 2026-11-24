@@ -76,5 +76,22 @@ dev seed.
   | 191 (N07a's) | 0009u verified |
   | 235 (N07a's) | PASS 0009zq |
 
-**The dev run.** Martin's results go in this folder from his own run (`dev-run.txt`), checked with
-`node tools/check-records.mjs records/n07a-dev-repair-2026-11-24` before they are committed.
+## The dev run (Martin, cma-dev-pg, 24 November 2026)
+
+Martin ran the repair, 234, N07a's 236, its 237 (normal and provoked) and the readers of N07a's header in dev, with the
+Terminal command given in this session. Each file was taken with `git show` from main, #318's branch or #319's branch.
+
+This section was written down by Claude Code on 24 November 2026 at Martin's request, from his report, and the results are
+his. His run's output files (`dev-run.txt`, `dev-logs/`) are not in this folder.
+
+| Step | Result |
+|---|---|
+| `dev_repair_n07a.sql` | applied, exit 0 |
+| `234_speed_to_lead_one.sql` (main) | applied, exit 0 |
+| N07a's `236_jobs_off_the_vcpu.sql` | applied, exit 0 |
+| N07a's `237_verify_jobs_off_the_vcpu.sql` | 9 OK, 2 FAIL: F2 and F3 (scope 0), as in the local test above |
+| N07a's 237, provoked | 0 OK, 11 FAIL |
+| The readers (211, 213, 217, 219, 221, 223, 225, 41, 73, 75, 81, 95, 151, 155, 179, 99, N07a's 191 and 235) | all PASS or verified, exit 0 |
+
+**99's C2 on the first run.** It failed C2 once: the funnel read took 1.0 to 1.24 s, right after the migrations. On a
+quiet rerun it passed, at 157 to 255 ms.
