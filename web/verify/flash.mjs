@@ -185,7 +185,7 @@ expect("Yesterday with a source last read before midnight shows the open-period 
     !periodComplete("orders", "2026-11-03", tenantToday, zone, { ...readAfterMidnight, commerce: { setUp: true, lastReadAt: "2026-11-03T22:45:00Z" } }), lineNl, fmtNl)],
   ["So far; compared once the period is complete", "Tot nu toe; vergeleken zodra de periode compleet is"],
   ["↑ 11 since Mon 2 November", "↑ 11 sinds ma 2 november"]);
-const periodPageSrc = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8");
+const periodPageSrc = readFileSync(path.join(here, "..", "src", "app", "(shell)", "reports", "flash", "page.tsx"), "utf8");
 const periodControlsSrc = readFileSync(path.join(here, "..", "src", "components", "FlashControls.tsx"), "utf8");
 const periodPartsSrc = readFileSync(path.join(here, "..", "src", "components", "FlashParts.tsx"), "utf8");
 expect("the landing reads it: a live card's open flag from the tenant's today, zone and sources; the live and the stored line through changeLineOf",
@@ -361,7 +361,7 @@ expect("a list's refusal is the page's not-available state (CMA02, CMA04), any o
 // since addition 0008zw an overview renders through components/FlashOverview (Reports → Flash and Assets → Installed base):
 // the page's checks read the page and that module together
 const overviewSrc = readFileSync(path.join(here, "..", "src", "components", "FlashOverview.tsx"), "utf8");
-const pageSrc = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8") + overviewSrc;
+const pageSrc = readFileSync(path.join(here, "..", "src", "app", "(shell)", "reports", "flash", "page.tsx"), "utf8") + overviewSrc;
 expect("the page reads a frozen list with frozenFilters' kept filters, names the dropped ones, and its file asks the same",
   [/frozenFilters\(def, filters\)/.test(pageSrc), /filters: plan\.rowFilters/.test(pageSrc), /Object\.entries\(plan\.rowFilters\)/.test(pageSrc),
     /listUnavailable\(read\.error\.sqlState\)/.test(pageSrc), pageSrc.includes("flash-rows-unavailable") && pageSrc.includes("flash-frozen-filters"),
@@ -630,7 +630,7 @@ walk(srcDir);
 expect("no tenant's meaning in the web's code or copy: seed 02's ten texts appear in no file of src/",
   [seedMeanings.length, seedMeanings.filter((m) => srcTexts.some((t) => t.includes(m)))], [10, []], [0, ["x"]]);
 const partsSrc0008zt = readFileSync(path.join(here, "..", "src", "components", "FlashParts.tsx"), "utf8");
-const pageSrc0008zt = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8") + overviewSrc;
+const pageSrc0008zt = readFileSync(path.join(here, "..", "src", "app", "(shell)", "reports", "flash", "page.tsx"), "utf8") + overviewSrc;
 const hintSrc = readFileSync(path.join(here, "..", "src", "components", "HeaderHint.tsx"), "utf8");
 expect("the page uses them: the tiles' and the headers' hints (MeasureLabel), the cards' and the heading's (cardStatusHint), the band tables, the hint on its lines",
   [(partsSrc0008zt.match(/<MeasureLabel measure=/g) ?? []).length >= 5, /title=\{cardStatusHint\(def\.key, /.test(partsSrc0008zt), /text=\{cardStatusHint\(def\.key, /.test(partsSrc0008zt),
@@ -695,7 +695,7 @@ expect("the copy: Total subscriptions (Totaal abonnementen), the overview Subscr
   ["Total subscriptions", "Totaal abonnementen", "Subscriptions", "Abonnementen", true, true], ["", "", "", "", false, false]);
 const controlsSrc0008zu = readFileSync(path.join(here, "..", "src", "components", "FlashControls.tsx"), "utf8");
 const partsSrc0008zu = readFileSync(path.join(here, "..", "src", "components", "FlashParts.tsx"), "utf8");
-const pageSrc0008zu = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8") + overviewSrc;
+const pageSrc0008zu = readFileSync(path.join(here, "..", "src", "app", "(shell)", "reports", "flash", "page.tsx"), "utf8") + overviewSrc;
 expect("the page uses them: a live card's split and its definition's line, a stored card's split and note, the totals' split under the headline",
   [/splitLine\(read\.split, n, /.test(controlsSrc0008zu), /definitionChanged\(read\.version, previousDefinitionVersion, previous\)/.test(controlsSrc0008zu),
     /previousDefinitionVersion: card\?\.previousDefinitionVersion \?\? null/.test(pageSrc0008zu), /splitLine\(card\?\.split \?\? null/.test(pageSrc0008zu),
@@ -768,8 +768,8 @@ const mockOrders = mockFlashHeadline(reader, "orders", null, null, null);
 expect("the mock answers as the database: the Orders headline split per kind, adding up to the figure",
   [mockOrders.split?.slice(0, 3).map((x) => x.key), (mockOrders.split ?? []).reduce((n, x) => n + x.value, 0) === mockOrders.value],
   [["first", "renewal", "repeat"], true], [["first", "repeat", "renewal"], false]);
-const ibPageSrc = readFileSync(path.join(here, "..", "src", "app", "reports", "installed-base", "page.tsx"), "utf8");
-const flashOnlySrc = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8");
+const ibPageSrc = readFileSync(path.join(here, "..", "src", "app", "(shell)", "reports", "installed-base", "page.tsx"), "utf8");
+const flashOnlySrc = readFileSync(path.join(here, "..", "src", "app", "(shell)", "reports", "flash", "page.tsx"), "utf8");
 expect("Flash renders an overview through components/FlashOverview; Assets → Installed base its own now view (0009f) on its own path, without Flash's strip, o or As of",
   [/<FlashOverview me=\{me\} copy=\{copy\} st=\{st\} def=\{def\} path="\/reports\/flash" active="flash"/.test(flashOnlySrc),
     /installedBaseState\(await searchParams, parseFilters\)/.test(ibPageSrc) && /active="installed-base" wide/.test(ibPageSrc) && !/<FlashOverview|FlashAsOf|flashState/.test(ibPageSrc),
@@ -1179,7 +1179,7 @@ expect("a link into /reports/flash that names from or to says range: \"custom\" 
   periodLinks.filter((l) => !l.custom).map((l) => l.at), [], []);
 expect("the scan sees the links: the churn links of Customers → Subscriptions and Customers → Active name their period",
   [flashLinks.length >= 8, periodLinks.map((l) => l.at.replace(/:\d+$/, "")).filter((f) => !f.startsWith("provoked/")).sort()],
-  [true, ["app/reports/active/page.tsx", "components/SubscriptionsReport.tsx"]], [false, []]);
+  [true, ["app/(shell)/reports/active/page.tsx", "components/SubscriptionsReport.tsx"]], [false, []]);
 const subsChurnQuery = Object.fromEntries(new URL(flashHref("/reports/flash", { o: "churn", market: "GB", range: "custom", from: "2026-10-01", to: "2026-10-31" }), "http://x").searchParams);
 const oldChurnQuery = Object.fromEntries(new URL(flashHref("/reports/flash", { o: "churn", market: "GB", from: "2026-10-01", to: "2026-10-31" }), "http://x").searchParams);
 const active30 = Object.fromEntries(new URL(flashHref("/reports/flash", { o: "churn", range: "custom", from: addDays("2026-11-24", -29), to: "2026-11-24" }), "http://x").searchParams);

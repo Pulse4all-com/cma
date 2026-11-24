@@ -114,6 +114,8 @@ const en = {
     clockedOut: "Clocked out",
     clockInAgain: "Clock in again",
     clockInAgainBody: "You can clock in again today until {time}. Your status will be set to {status}.",
+    /** The card at once after a click on Clock in, while the day opens (night N07, D3) */
+    clockedInNow: "You are clocked in. Your status is {status}.",
     clockedIn: "Clocked in",
     clockedInAt: "Clocked in at",
     workedSoFar: "worked so far",
@@ -4686,6 +4688,7 @@ const nl = {
     clockedOut: "Uitgeklokt",
     clockInAgain: "Opnieuw inklokken",
     clockInAgainBody: "Je kunt vandaag tot {time} opnieuw inklokken. Je status wordt dan {status}.",
+    clockedInNow: "Je bent ingeklokt. Je status is {status}.",
     clockedIn: "Ingeklokt",
     clockedInAt: "Ingeklokt om",
     workedSoFar: "tot nu toe gewerkt",

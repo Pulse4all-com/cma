@@ -14,7 +14,7 @@
  * and the server's rows stay equal between two reads of an unchanged team.
  */
 import type { Copy } from "./copy";
-import type { DateKey, Instant, InboundToday, MissedCallback, MissedReason, OutboundNow, TeamMembership, TeamNowPerson, WorkdayClock } from "./data/types";
+import type { DateKey, Instant, InboundToday, MissedCallback, MissedReason, OutboundNow, TeamMembership, TeamNowPerson, WorkStatus, Workday, WorkdayClock } from "./data/types";
 // With its extension, so verify/live.mjs can run this module under Node's type stripping, which
 // resolves no extensionless path (tsconfig: allowImportingTsExtensions)
 import { GROUPS, groupOf, type Group, type StatusFlags } from "./dashboard.ts";
@@ -163,6 +163,31 @@ export function secondsSince(since: Instant, nowMs: number): number {
 export function workedSeconds(clock: WorkdayClock, nowMs: number, dayEndsAt: Instant | null = null): number {
   const until = dayEndsAt === null ? nowMs : Math.min(nowMs, Date.parse(dayEndsAt));
   return clock.closedSeconds + (clock.runningSince ? secondsSince(clock.runningSince, until) : 0);
+}
+
+/**
+ * The day as My day shows it at once after a status change (night N07, decision D3), before the server's answer: the new
+ * status from `nowMs`, its name, and the clock as the database will count it: a working status keeps a running stretch
+ * running (or starts one after a pause), a pause closes the running stretch at that moment (stopped at the day's end, as
+ * workedSeconds). The server's answer replaces it; a refusal drops it. `hoursMarket` undefined keeps the market in force
+ */
+export function dayWithStatus(day: Workday, status: Pick<WorkStatus, "key" | "name" | "isWorking"> | null, nowMs: number, hoursMarket?: string | null): Workday {
+  const now = new Date(nowMs).toISOString();
+  const next: Workday = { ...day, hoursMarket: hoursMarket === undefined ? day.hoursMarket : hoursMarket };
+  if (status === null) return next;
+  const running = day.clock.runningSince;
+  const clock: WorkdayClock = status.isWorking
+    ? { ...day.clock, runningSince: running ?? now }
+    : { ...day.clock, closedSeconds: workedSeconds(day.clock, nowMs, day.dayEndsAt), runningSince: null };
+  return { ...next, statusKey: status.key, statusName: status.name, statusSince: now, clock };
+}
+
+/** The day as My day shows it at once after End workday (D3): ended now, the clock stopped, no status */
+export function dayEnded(day: Workday, nowMs: number): Workday {
+  return {
+    ...day, status: "ended", endedAt: new Date(nowMs).toISOString(), statusKey: null, statusName: null, statusSince: null,
+    clock: { ...day.clock, closedSeconds: workedSeconds(day.clock, nowMs, day.dayEndsAt), runningSince: null },
+  };
 }
 
 /**

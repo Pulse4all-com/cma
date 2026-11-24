@@ -19,13 +19,23 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { Copy } from "@/lib/copy";
 import type { MyMessage, MyMessages } from "@/lib/data";
 import { arrivals, POLL_HIDDEN_MS, POLL_VISIBLE_MS, titleWithUnread, TOAST_MS } from "@/lib/messages";
-import { useCloseNavGroup } from "./NavGroup";
+import { useCloseNavGroup, usePathUnder } from "./NavGroup";
 import { Button } from "./primitives";
 
 /** Fired by the inbox after it changed something, so the centre polls right away */
 export const MESSAGES_CHANGED_EVENT = "cma-messages-changed";
 /** Fired by the centre when a poll brought new messages, so an open inbox refreshes */
 export const MESSAGES_ARRIVED_EVENT = "cma-messages-arrived";
+/**
+ * The unread count after a write in the inbox (night N07, D3): at once when a message is read or acknowledged, then the
+ * count the write's answer carries, so the badge follows the click without a poll
+ */
+export const MESSAGES_UNREAD_EVENT = "cma-messages-unread";
+
+/** Tells the top bar's badge the unread count now (MESSAGES_UNREAD_EVENT) */
+export function announceUnread(n: number) {
+  window.dispatchEvent(new CustomEvent<number>(MESSAGES_UNREAD_EVENT, { detail: Math.max(0, n) }));
+}
 
 const HEADERS = { "content-type": "application/json", "x-cma-request": "1" } as const;
 
@@ -77,13 +87,17 @@ function notify(m: MyMessage, onOpen: (m: MyMessage) => void) {
   }
 }
 
-export function MessageCenter({ copy, active }: { copy: Copy["messages"]; active: boolean }) {
+export function MessageCenter({ copy }: { copy: Copy["messages"] }) {
+  // Messages and Send a message: the inbox link is the current page (the frame persists, so from the address, D2)
+  const active = usePathUnder("/messages");
   const router = useRouter();
   const closeNavGroup = useCloseNavGroup();
   const [unread, setUnread] = useState<number | null>(null);
   const [toasts, setToasts] = useState<MyMessage[]>([]);
   const [urgent, setUrgent] = useState<MyMessage[]>([]);
   const [acking, setAcking] = useState(false);
+  /** The last confirmation was refused or lost: the message is back with the inbox's problem line (D3) */
+  const [ackFailed, setAckFailed] = useState(false);
   const known = useRef<Set<string>>(new Set());
   const since = useRef<string | null>(null);
   const first = useRef(true);
@@ -161,6 +175,13 @@ export function MessageCenter({ copy, active }: { copy: Copy["messages"]; active
     };
   }, [poll]);
 
+  // The inbox's writes tell the badge the count at once and then the write's answer (D3)
+  useEffect(() => {
+    const onUnread = (e: Event) => setUnread((e as CustomEvent<number>).detail);
+    window.addEventListener(MESSAGES_UNREAD_EVENT, onUnread);
+    return () => window.removeEventListener(MESSAGES_UNREAD_EVENT, onUnread);
+  }, []);
+
   // The browser title carries the unread count (README, Features 1)
   useEffect(() => {
     if (unread === null) return;
@@ -182,9 +203,13 @@ export function MessageCenter({ copy, active }: { copy: Copy["messages"]; active
     if (!urgent.length && d.open) d.close();
   }, [urgent]);
 
+  /** Reads messages: the badge counts them read at once, then takes the write's answer; a refusal reads the inbox again */
   async function markRead(ids: string[]) {
-    await fetch("/api/v1/me/messages/read", { method: "POST", headers: HEADERS, body: JSON.stringify({ ids }) });
-    window.dispatchEvent(new Event(MESSAGES_CHANGED_EVENT));
+    setUnread((u) => (u === null ? u : Math.max(0, u - ids.length)));
+    const res = await fetch("/api/v1/me/messages/read", { method: "POST", headers: HEADERS, body: JSON.stringify({ ids }) }).catch(() => null);
+    const n = res?.ok ? ((await res.json().catch(() => null)) as { data?: { unreadCount?: number } } | null)?.data?.unreadCount : undefined;
+    if (typeof n === "number") setUnread(n);
+    else window.dispatchEvent(new Event(MESSAGES_CHANGED_EVENT));
   }
 
   /** Opening a toast reads the message and follows its link in a new window, or goes to the inbox */
@@ -198,12 +223,24 @@ export function MessageCenter({ copy, active }: { copy: Copy["messages"]; active
     }
   }
 
+  /**
+   * Confirms the urgent message: the pop-up moves on at once (D3) and the badge takes the write's answer; a refusal or a
+   * lost request brings the message back with the problem line, so it is never confirmed silently
+   */
   async function acknowledge(m: MyMessage) {
     setAcking(true);
+    setAckFailed(false);
+    setUrgent((u) => u.filter((x) => x.id !== m.id));
     try {
-      const res = await fetch(`/api/v1/me/messages/${m.id}/ack`, { method: "POST", headers: HEADERS });
-      if (res.ok || res.status === 404) setUrgent((u) => u.filter((x) => x.id !== m.id));
-      window.dispatchEvent(new Event(MESSAGES_CHANGED_EVENT));
+      const res = await fetch(`/api/v1/me/messages/${m.id}/ack`, { method: "POST", headers: HEADERS }).catch(() => null);
+      if (res?.ok) {
+        const n = ((await res.json().catch(() => null)) as { data?: { unreadCount?: number } } | null)?.data?.unreadCount;
+        if (typeof n === "number") setUnread(n);
+      } else if (res?.status !== 404) {
+        setUrgent((u) => (u.some((x) => x.id === m.id) ? u : [m, ...u]));
+        setAckFailed(true);
+        window.dispatchEvent(new Event(MESSAGES_CHANGED_EVENT));
+      }
     } finally {
       setAcking(false);
     }
@@ -271,6 +308,7 @@ export function MessageCenter({ copy, active }: { copy: Copy["messages"]; active
             <h2 id={titleId} className="mt-1 text-panel font-semibold text-p4a-heading">{current.title}</h2>
             {current.body ? <p className="mt-2 text-body">{current.body}</p> : null}
             <p className="mt-4 text-small text-p4a-muted">{copy.urgentBody}</p>
+            {ackFailed ? <p role="alert" className="mt-2 text-small text-p4a-body" data-testid="urgent-ack-failed">{copy.writeFailed}</p> : null}
             <div className="mt-6 flex items-center gap-3">
               <Button variant="primary" size="md" onClick={() => void acknowledge(current)} disabled={acking} autoFocus data-shortcut="a" shortcut="A">
                 {copy.acknowledge}

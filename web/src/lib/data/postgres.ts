@@ -5,7 +5,7 @@ import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantCo
 import { tenantCache } from "@/lib/cache";
 import type {
   ActiveList, ActiveNow, ActiveReport, SubscriptionRowsList, SubscriptionsPage,
-  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MessageStat, MyMessage, MyMessages, MyProfile, MyRosterDay, OrganisationInfo,
+  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MessageStat, MessagesWritten, MyMessage, MyMessages, MyProfile, MyRosterDay, OrganisationInfo,
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkArea, WorkStatus, PermissionInfo, SentMessage, HoursMarket, MyDayChoices,
@@ -2488,15 +2488,22 @@ export const postgresData: CmaData = {
     });
   },
 
-  async markMessagesRead(me, ids): Promise<number> {
+  async markMessagesRead(me, ids): Promise<MessagesWritten> {
     return withTenant(ctx(me), async (q) => {
       const r = await q.query<{ n: number }>(`select cma.mark_messages_read($1::uuid[]) as n`, [ids]);
-      return Number(one(r.rows, "mark_messages_read").n);
+      // The new unread count from the same transaction, after the write (its own statement: a stable function in the
+      // write's statement would read the snapshot before it), so the screen takes it without another read (N07, D3)
+      const c = await q.query<{ n: number }>(`select cma.my_unread_count() as n`);
+      return { changed: Number(one(r.rows, "mark_messages_read").n), unreadCount: Number(one(c.rows, "my_unread_count").n) };
     });
   },
 
-  async acknowledgeMessage(me, id): Promise<void> {
-    await withTenant(ctx(me), (q) => q.query(`select cma.acknowledge_message($1::uuid)`, [id]));
+  async acknowledgeMessage(me, id): Promise<MessagesWritten> {
+    return withTenant(ctx(me), async (q) => {
+      await q.query(`select cma.acknowledge_message($1::uuid)`, [id]);
+      const c = await q.query<{ n: number }>(`select cma.my_unread_count() as n`);
+      return { changed: 1, unreadCount: Number(one(c.rows, "my_unread_count").n) };
+    });
   },
 
   async sendMessage(me, input): Promise<SentMessage> {

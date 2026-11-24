@@ -95,7 +95,7 @@ function files(dir) {
 const root = new URL("../src/", import.meta.url).pathname;
 const branching = files(root).filter((f) => /\brange\s*[!=]==?\s*"(yesterday|today|week|month)"|"(yesterday|today|week|month)"\s*[!=]==?\s*range\b/.test(readFileSync(f, "utf8")))
   .map((f) => f.slice(root.length));
-expect("no page or component branches on a range but custom", branching, [], ["app/hours/page.tsx"]);
+expect("no page or component branches on a range but custom", branching, [], ["app/(shell)/hours/page.tsx"]);
 // Y reaches Yesterday on every page: no other control in the app binds it, inside main or in the shell
 const otherY = files(root).filter((f) => /data-shortcut=(?:"y"|\{[^}]*"y"[^}]*\})/.test(readFileSync(f, "utf8"))).map((f) => f.slice(root.length));
 expect("no other control in the app binds Y", otherY, [], ["components/FormsFilters.tsx"]);
@@ -134,7 +134,7 @@ expect("Calls, range=yesterday: a late call on the day before counts whatever th
   [callsFigures(previousCalls(calls, prevY, NOW)).calls, callsFigures(previousCalls(calls, prevT, NOW)).calls], [2, 1], [1, 1]);
 
 // ---- Reports → Forms: no letter twice ---------------------------------------------------------
-const formsPage = src("../src/app/reports/forms/page.tsx");
+const formsPage = src("../src/app/(shell)/reports/forms/page.tsx");
 const lettersIn = (text) => [...text.matchAll(/data-shortcut=(?:"([^"]+)"|\{([^}]*)\})/g)]
   .flatMap((m) => (m[1] !== undefined ? [m[1]] : [...m[2].matchAll(/"([^"]+)"/g)].map((x) => x[1])));
 // The body of one exported function, up to the next export
@@ -179,7 +179,7 @@ expect("Forms: the filters, grouping and download clear of the shell's letters",
 expect("Forms: the period bar meets the shell only on W and C, which the page wins",
   barLetters.filter((k) => shellLetters.includes(k)).sort(), ["c", "w"], ["c", "w", "y"]);
 // Reviews' All (addition 0008zw): A meets no letter of the shell, nor one of Reviews' own controls (the market K, the group G)
-const reviewsLetters = lettersIn(src("../src/app/reports/reviews/page.tsx") + src("../src/components/FunnelFilters.tsx"));
+const reviewsLetters = lettersIn(src("../src/app/(shell)/reports/reviews/page.tsx") + src("../src/components/FunnelFilters.tsx"));
 expect("Reviews: All's A meets no letter of the shell nor of the page's own controls",
   [shellLetters.includes(ALL_RANGE_KEY.toLowerCase()), reviewsLetters.includes(ALL_RANGE_KEY.toLowerCase())], [false, false], [true, true]);
 

@@ -860,6 +860,12 @@ export interface MyMessages {
   unreadCount: number;
 }
 
+/** A mark read or an acknowledgement (night N07, D3): how many deliveries changed, and the unread count after the write */
+export interface MessagesWritten {
+  changed: number;
+  unreadCount: number;
+}
+
 /**
  * The target of a manual message, exactly one group (cma.send_message): everyone, teams by key, a
  * language skill with a minimum level, or named people; optionally only those clocked in now
@@ -4521,10 +4527,16 @@ export interface CmaData {
    * after that instant. The first return of a message sets its delivered time. Any active person.
    */
   listMyMessages(me: Principal, since: Instant | null, limit: number): Promise<MyMessages>;
-  /** Marks the caller's own deliveries read; other people's ids and rows already read are left alone. Answers how many changed */
-  markMessagesRead(me: Principal, ids: string[]): Promise<number>;
-  /** Acknowledges one of the caller's own messages (reads it too); a message not delivered to the caller is CMA02 */
-  acknowledgeMessage(me: Principal, id: string): Promise<void>;
+  /**
+   * Marks the caller's own deliveries read; other people's ids and rows already read are left alone. Answers how many
+   * changed and the caller's unread count after the write, from the same transaction (night N07, D3)
+   */
+  markMessagesRead(me: Principal, ids: string[]): Promise<MessagesWritten>;
+  /**
+   * Acknowledges one of the caller's own messages (reads it too); a message not delivered to the caller is CMA02. Answers
+   * the caller's unread count after it, from the same transaction (N07, D3)
+   */
+  acknowledgeMessage(me: Principal, id: string): Promise<MessagesWritten>;
   /** A manager's message to a target resolved now (cma.send_message). Nobody reached CMA04, an unknown team, skill or person CMA02 */
   sendMessage(me: Principal, input: SendMessageInput): Promise<SentMessage>;
   /** Per message of a business-date range of at most 92 days: recipients, delivered, read, acknowledged. Needs messages.send or performance.team */

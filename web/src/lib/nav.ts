@@ -488,3 +488,55 @@ export function breadcrumbs(me: Principal, copy: Copy, active: ShellPage, trail:
   const all: Crumb[] = [{ label: copy.nav.welcome, href: "/" }, ...own, ...trail];
   return all.map((c, i) => (i === all.length - 1 ? { label: c.label } : c));
 }
+
+/**
+ * The rail item a path stands under (night N07, decision D2): the persistent frame renders the rail once, so the current
+ * item follows the address on the client. The item whose href is the path, else the one whose href is the longest prefix
+ * of it at a segment boundary (Send a message under Messages, a source's page under Sources, a journey under
+ * Campaigns); Welcome ("/") only on "/" itself. A path under no item (My account, Waiting for you, Log out) has none.
+ */
+export function currentHrefOf(pathname: string, hrefs: readonly string[]): string | null {
+  const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  let best: string | null = null;
+  for (const href of hrefs) {
+    const hit = href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
+    if (hit && (best === null || href.length > best.length)) best = href;
+  }
+  return best;
+}
+
+/**
+ * The routes a full prefetch may reach (night N07, decision D5): the pages whose reads are all in the agent class of
+ * db/131_time_all.sql (Welcome, My day, My hours, My schedule, Messages, My account, Waiting for you, a contact center's
+ * Live board, Team, Team hours, the roster planner). A full prefetch renders the page with its data, so it costs the
+ * page's reads: the agent class's 50 ms each, never a report's. Reports and Log out never get one; every other link keeps
+ * Next's default (the route's loading boundary only).
+ */
+const FULL_PREFETCH = new Set<string>(["/", "/day", "/hours", "/schedule", "/messages", "/account", "/me/follow-up", "/team/people", "/team/hours", "/roster/planner"]);
+export function mayFullPrefetch(href: string): boolean {
+  if (FULL_PREFETCH.has(href)) return true;
+  return /^\/live\/[a-z0-9-]+$/i.test(href);
+}
+
+/** How long a pointer or the focus rests on a link before its full prefetch starts (D5): a pass over the rail costs nothing */
+export const HOVER_PREFETCH_MS = 100;
+
+/**
+ * The head start after Welcome (D5): once Welcome's blocks have settled and the browser is idle, the role's top
+ * destinations are prefetched in full, so the next click finds the page with its data. A person with a clock: My day,
+ * Messages, My schedule; a supervisor or manager (monitoring.live or workday.team): their contact center's Live board
+ * (the first board the rail shows) and Team hours. Only pages the person sees, and only routes mayFullPrefetch allows.
+ */
+export function headStartHrefs(me: Principal, copy: Copy): string[] {
+  const visible = visibleNav(me, copy).flatMap((e) => (e.kind === "page" ? [e.item] : e.items)).map((i) => i.href as string);
+  const out: string[] = [];
+  const add = (href: string | undefined) => {
+    if (href && visible.includes(href) && mayFullPrefetch(href) && !out.includes(href)) out.push(href);
+  };
+  if (me.permissions.includes("workday.own")) ["/day", "/messages", "/schedule"].forEach(add);
+  if (me.permissions.includes("monitoring.live") || me.permissions.includes("workday.team")) {
+    add(visible.find((h) => h.startsWith("/live/")));
+    add("/team/hours");
+  }
+  return out;
+}

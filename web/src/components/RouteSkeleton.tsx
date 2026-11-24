@@ -1,15 +1,11 @@
-import { cookies } from "next/headers";
-import { RAIL_COOKIE } from "@/lib/nav";
-
 /**
  * The route skeleton (night N06, 5 November 2026): what a click shows within 100 ms, before the destination's data
- * is there. The page's frame as Shell draws it (the white top bar, the rail on Background Blue, the Sand content area)
- * with placeholder blocks where the title and the cards go, in the style guide's colours and radii (7.1, 7.3); no
+ * is there: placeholder blocks where the title and the cards go, in the style guide's colours and radii (7.1, 7.3); no
  * spinner. Every route segment's loading.tsx renders it (except a page that must answer a real 404: a loading boundary
  * sends 200 before the page decides; the Live board keeps its boundary and accepts a soft 404, Decision log, 5 November
- * 2026), and the rail's links prefetch it, so the frame is on screen
- * while the page's reads run. It reads the rail's cookie, as the Shell does, so the frame comes up folded or expanded
- * in the person's state and nothing jumps when the page replaces it; no data.
+ * 2026), and the rail's links prefetch it. Since night N07 (decision D2) it is the content area only: the frame (top bar,
+ * rail, main) belongs to the route group's layout and stays on the screen, so a click shows the destination's skeleton
+ * inside main with the header and the rail unchanged; no data, no cookie.
  *
  * shape "liveBoard" (the Live board's UX pass, 10 November 2026): the board's own outline, the freshness line, four
  * panels of six figures (Inbound today, Outbound today, Follow-up now, the team's groups) and the people's rows, so the
@@ -19,27 +15,10 @@ import { RAIL_COOKIE } from "@/lib/nav";
  * tiles, six placeholder slots, the wide chart, two half-width charts and the tables, so a click shows where the
  * figures will stand.
  */
-export async function RouteSkeleton({ shape = "page" }: { shape?: "page" | "liveBoard" | "active" } = {}) {
-  const collapsed = (await cookies()).get(RAIL_COOKIE)?.value === "collapsed";
+export function RouteSkeleton({ shape = "page" }: { shape?: "page" | "liveBoard" | "active" } = {}) {
   const bar = (w: string, h = "h-4") => <div className={`${h} ${w} animate-pulse rounded-input bg-p4a-border`} aria-hidden="true" />;
   return (
-    <div
-      data-route-skeleton
-      data-rail={collapsed ? "collapsed" : "expanded"}
-      className="cma-frame grid h-full grid-cols-[var(--rail-width)_1fr] grid-rows-[var(--spacing-topbar)_minmax(0,1fr)] overflow-hidden"
-      aria-busy="true"
-    >
-      <header className="col-span-2 flex items-center justify-between border-b border-p4a-border bg-white px-6">
-        <div className="flex items-center gap-4">{bar("w-36", "h-7")}{bar("w-24")}</div>
-        <div className="flex items-center gap-5">{bar("w-40")}{bar("w-20", "h-8")}</div>
-      </header>
-      <nav aria-hidden="true" className="flex min-h-0 flex-col gap-2 overflow-hidden border-r border-p4a-border bg-p4a-bgblue px-4 py-6">
-        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-          <div key={i} className="flex h-10 items-center gap-3 px-3">{bar("w-5", "h-5")}{bar(i % 3 === 0 ? "w-24" : "w-32")}</div>
-        ))}
-      </nav>
-      <main className="min-h-0 overflow-hidden bg-p4a-sand px-10 py-8">
-        <div className="max-w-screen-2xl">
+    <div data-route-skeleton className="max-w-screen-2xl" aria-busy="true">
           {shape === "liveBoard" ? (
             // the board's own title row (the freshness on it, as LiveBoardLive draws it) and its two-line intro, then the
             // panels at their heights: a title line of 25px, labels of 18px, figures of 31px
@@ -82,8 +61,6 @@ export async function RouteSkeleton({ shape = "page" }: { shape?: "page" | "live
             </div>
           </div>
           )}
-        </div>
-      </main>
     </div>
   );
 }

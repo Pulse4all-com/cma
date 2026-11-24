@@ -118,7 +118,7 @@ expect("content types: csv and markdown as downloads", [documentContentType("FIN
 const srcFile = (rel) => readFileSync(new URL(`../src/${rel}`, import.meta.url), "utf8");
 const configDocs = srcFile("app/api/v1/configuration/documents/[name]/route.ts");
 const docsLib = srcFile("lib/documents.ts");
-const welcome = srcFile("app/(welcome)/page.tsx");
+const welcome = srcFile("app/(shell)/(welcome)/page.tsx");
 const documentsTxt = readFileSync(new URL("../../docs/system-health/documents.txt", import.meta.url), "utf8");
 const apiRoutes = (dir) => readdirSync(new URL(`../src/app/api/${dir}`, import.meta.url), { recursive: true }).map(String);
 const noCode = (text) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
