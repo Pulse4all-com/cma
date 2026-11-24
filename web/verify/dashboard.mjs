@@ -232,12 +232,14 @@ expect("parts are held back for the test data only; every part's boundary is key
 const pgSrc = src("lib/data/postgres.ts");
 expect("two connections: the time handed over before the counts in one transaction; the speed beside them, after the database is asked for performance.team",
   [/counts = withTenant\(ctx\(me\), async \(q\) => \{\s*timeOk\(await readTeamStatusTime\(q, range, null\)\);\s*return \{ intake: await readIntake\(q, range\)/.test(pgSrc),
-    /speed = withTenant\(ctx\(me\), async \(q\) => \{\s*await q\.query\(`select cma\.assert_permission\('performance\.team'\)`\);\s*return readSpeedToLeadRows\(q, range, false\);/.test(pgSrc),
+    /speed = withTenant\(ctx\(me\), async \(q\) => \{\s*await q\.query\(`select cma\.assert_permission\('performance\.team'\)`\);\s*const r = await q\.query<SummaryDbRow>\(`select \* from cma\.speed_to_lead_summary\(\$1::date, \$2::date, 'total'\)`/.test(pgSrc),
     /infoWaits=\{\/\\\{\[a-z\]\+\\\}\/\.test\(text\.replaceAll\("\{hours\}", ""\)\)\}/.test(rowSrc), /className="absolute left-0 top-full mt-2 text-caption text-p4a-grey" data-testid="intake-start-note"/.test(rowSrc)],
   [true, true, true, true], [false, false, false, false]);
-expect("a tile that waits keeps its label and its hint's words; the speed tile reads no record link; a click on a period or a person shows a mark",
+// since addition 0009zq the speed tile reads cma.speed_to_lead_summary's one-row total: no row, so no record link, and no
+// figure computed in the web
+expect("a tile that waits keeps its label and its hint's words; the speed tile reads the database's total, no rows; a click on a period or a person shows a mark",
   [/value=\{<TileWait \/>\} hint=\{hint\} waiting \/>;/.test(rowSrc),
-    /: `select r\.\*, null::text as record_url from cma\.speed_to_lead_rows\(\$1::date, \$2::date\) r`/.test(src("lib/data/postgres.ts")),
+    !/speedFigures/.test(rowSrc) && /speed: Head<SpeedToLeadSummaryRow>/.test(rowSrc),
     /<LinkPending \/>\s*<\/Link>/.test(src("components/PeriodBar.tsx")), /useLinkStatus\(\)/.test(src("components/PendingMark.tsx")),
     /startTransition\(\(\) => \{ router\.push\(/.test(src("components/DashboardFilter.tsx")), /aria-busy=\{pending \|\| undefined\}/.test(src("components/DashboardFilter.tsx"))],
   [true, true, true, true, true, true], [false, false, false, false, false, false]);

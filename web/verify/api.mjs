@@ -1505,21 +1505,26 @@ async function reportChecks() {
   walk(rowsBody);
   expect("reports: no field named email, phone, name or firstname in the rows",
     ["email", "phone", "name", "firstname"].filter((k) => keys.has(k)), [], ["name"]);
-  expect("reports: statuses are called, not called open or closed",
-    rows.every((r) => ["called", "not_called_open", "not_called_closed"].includes(r.status)), true, false);
+  expect("reports: statuses are called, not called yet or closed before the first call",
+    rows.every((r) => ["called", "not_called_open", "closed_before_first_call"].includes(r.status)), true, false);
   expect("reports: every record link is https or empty",
     rows.every((r) => r.recordUrl === null || /^https:\/\/\S+$/.test(r.recordUrl)), true, false);
   const byDay = (await get(ANALYST, `/api/v1/reports/speed-to-lead?${range}&group=day`)).body?.data?.rows ?? [];
   const sum = (xs, f) => xs.reduce((n, x) => n + f(x), 0);
   expect("reports: the summary by day adds up to the rows",
-    [sum(byDay, (g) => g.deals), sum(byDay, (g) => g.called), sum(byDay, (g) => g.openNotCalled)],
-    [rows.length, rows.filter((r) => r.status === "called").length, rows.filter((r) => r.status === "not_called_open").length],
-    [rows.length + 1, -1, -1]);
+    [sum(byDay, (g) => g.deals), sum(byDay, (g) => g.called), sum(byDay, (g) => g.openNotCalled), sum(byDay, (g) => g.closedBeforeFirstCall)],
+    [rows.length, rows.filter((r) => r.status === "called").length, rows.filter((r) => r.status === "not_called_open").length,
+      rows.filter((r) => r.status === "closed_before_first_call").length],
+    [rows.length + 1, -1, -1, -1]);
   const byAgent = (await get(ANALYST, `/api/v1/reports/speed-to-lead?${range}&group=agent`)).body?.data?.rows ?? [];
   const unmapped = byAgent.filter((g) => g.groupKey === "unknown");
-  expect("reports: agents not mapped are one group without a label, never an owner id",
-    [unmapped.every((g) => g.groupLabel === null), sum(unmapped, (g) => g.deals), byAgent.every((g) => g.groupKey === "unknown" || /^[0-9a-f-]{36}$/.test(g.groupKey))],
-    [true, rows.filter((r) => r.agentUserId === null).length, true], [false, -1, false]);
+  const noAttempt = byAgent.filter((g) => g.groupKey === "no_attempt");
+  // since addition 0009zq the agent is the first attempt's person: deals without an attempt are one group of their own
+  expect("reports: agents not mapped and deals without an attempt are groups without a label, never an owner id",
+    [unmapped.every((g) => g.groupLabel === null), sum(unmapped, (g) => g.deals), noAttempt.every((g) => g.groupLabel === null), sum(noAttempt, (g) => g.deals),
+      byAgent.every((g) => g.groupKey === "unknown" || g.groupKey === "no_attempt" || /^[0-9a-f-]{36}$/.test(g.groupKey))],
+    [true, rows.filter((r) => r.agentUserId === null && r.firstAttemptAt !== null).length, true, rows.filter((r) => r.firstAttemptAt === null).length, true],
+    [false, -1, false, -1, false]);
 
   // Not connected: a telephony or shop figure is null exactly when that source is not connected
   const consistent = (data) => {

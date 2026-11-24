@@ -69,7 +69,9 @@ export function round1(x: number): number {
 
 /**
  * One group's figures from its rows, as cma.speed_to_lead_summary computes them: business minutes
- * over the called deals, the percentages over the deals whose outcome is known (null while none is).
+ * over the called deals, the percentages over the deals whose outcome is known (null while none is;
+ * a deal closed before its first attempt never is), the open deals not called yet and the deals
+ * closed before the first call apart. The mock data's summary; the screens read the database's
  */
 export function speedFigures(rows: SpeedToLeadRow[]): Omit<SpeedToLeadSummaryRow, "groupKey" | "groupLabel"> {
   const seconds = rows.map((r) => r.businessSeconds).filter((s): s is number => s !== null);
@@ -87,12 +89,14 @@ export function speedFigures(rows: SpeedToLeadRow[]): Omit<SpeedToLeadSummaryRow
     withinTargetPct: pct(rows.map((r) => r.withinTarget)),
     beforeNextNoonPct: pct(rows.map((r) => r.beforeNextNoon)),
     openNotCalled: rows.filter((r) => r.status === "not_called_open").length,
+    closedBeforeFirstCall: rows.filter((r) => r.status === "closed_before_first_call").length,
   };
 }
 
 /**
  * The rows grouped as cma.speed_to_lead_summary groups them, ordered by key. `agentName` gives a
- * mapped agent's display name; an agent who is not mapped is the key "unknown" with no label.
+ * mapped agent's display name; a deal without an attempt is the key "no_attempt" and an attempt by an
+ * agent who is not mapped the key "unknown", both with no label (addition 0009zq).
  */
 export function groupSpeedToLead(
   rows: SpeedToLeadRow[], group: SpeedToLeadGroup, agentName: (userId: string) => string | null,
@@ -102,7 +106,8 @@ export function groupSpeedToLead(
     const [key, label] =
       group === "day" ? [r.date, r.date]
       : group === "market" ? [r.market, r.market]
-      : group === "agent" ? (r.agentUserId ? [r.agentUserId, agentName(r.agentUserId) ?? "unknown"] : ["unknown", null])
+      : group === "agent" ? (r.firstAttemptAt === null ? ["no_attempt", null]
+        : r.agentUserId ? [r.agentUserId, agentName(r.agentUserId) ?? "unknown"] : ["unknown", null])
       : [`${r.connectionId}:${r.pipelineId ?? ""}`, r.pipelineLabel ?? "unknown"];
     const g = groups.get(key) ?? { label, rows: [] };
     g.rows.push(r);
@@ -118,10 +123,11 @@ export type GroupDisplay =
   | { kind: "date"; date: string }
   | { kind: "text"; text: string }
   | { kind: "notMapped" }
+  | { kind: "noAttempt" }
   | { kind: "unknownMarket" }
   | { kind: "unknownPipeline" };
 
-/** An agent without a mapping is "Not mapped", never an owner id; an unknown market or pipeline says so */
+/** An agent without a mapping is "Not mapped", never a phone user's id; deals without an attempt "No attempt yet"; an unknown market or pipeline says so */
 export function groupDisplay(row: Pick<SpeedToLeadSummaryRow, "groupKey" | "groupLabel">, group: SpeedToLeadGroup): GroupDisplay {
   switch (group) {
     case "day":
@@ -129,6 +135,7 @@ export function groupDisplay(row: Pick<SpeedToLeadSummaryRow, "groupKey" | "grou
     case "market":
       return row.groupKey === "unknown" ? { kind: "unknownMarket" } : { kind: "text", text: row.groupKey };
     case "agent":
+      if (row.groupKey === "no_attempt") return { kind: "noAttempt" };
       return row.groupKey === "unknown" || !row.groupLabel ? { kind: "notMapped" } : { kind: "text", text: row.groupLabel };
     case "pipeline":
       return !row.groupLabel || row.groupLabel === "unknown" ? { kind: "unknownPipeline" } : { kind: "text", text: row.groupLabel };
@@ -136,12 +143,14 @@ export function groupDisplay(row: Pick<SpeedToLeadSummaryRow, "groupKey" | "grou
 }
 
 /** The summary's totals over its groups: counts add up, medians and percentages do not, so those are left out */
-export function summaryTotals(rows: SpeedToLeadSummaryRow[]): { deals: number; called: number; openNotCalled: number } {
-  return rows.reduce((t, r) => ({ deals: t.deals + r.deals, called: t.called + r.called, openNotCalled: t.openNotCalled + r.openNotCalled }),
-    { deals: 0, called: 0, openNotCalled: 0 });
+export function summaryTotals(rows: SpeedToLeadSummaryRow[]): { deals: number; called: number; openNotCalled: number; closedBeforeFirstCall: number } {
+  return rows.reduce((t, r) => ({
+    deals: t.deals + r.deals, called: t.called + r.called, openNotCalled: t.openNotCalled + r.openNotCalled,
+    closedBeforeFirstCall: t.closedBeforeFirstCall + r.closedBeforeFirstCall,
+  }), { deals: 0, called: 0, openNotCalled: 0, closedBeforeFirstCall: 0 });
 }
 
-/** Open deals not called, the longest waiting first (a deal without business time last), then by id */
+/** Open deals not called yet, the longest waiting first (a deal without business time last), then by id */
 export function openNotCalled(rows: SpeedToLeadRow[]): SpeedToLeadRow[] {
   return rows
     .filter((r) => r.status === "not_called_open")
@@ -1254,14 +1263,16 @@ export function targetMinutesOf(rows: Pick<SpeedToLeadRow, "targetSeconds">[]): 
  */
 export function fillHint(
   text: string,
-  values: { hours: string; target?: number | null; seconds?: number | null; days?: number | null; minutes?: number | null; threshold?: number | null; warning?: number | null },
+  values: { hours: string; target?: number | null; seconds?: number | null; days?: number | null; minutes?: number | null; threshold?: number | null; warning?: number | null; cutoff?: string | null },
   locale: string,
 ): string {
   const num = (x: number | null | undefined) => (x === null || x === undefined ? "–" : fmtCount(x, locale));
   // {warning}: the share of the response time from which a ticket is at risk (Follow-up, 0008o)
   return text.replaceAll("{hours}", values.hours).replaceAll("{target}", num(values.target))
     .replaceAll("{seconds}", num(values.seconds)).replaceAll("{days}", num(values.days)).replaceAll("{minutes}", num(values.minutes))
-    .replaceAll("{threshold}", num(values.threshold)).replaceAll("{warning}", num(values.warning));
+    .replaceAll("{threshold}", num(values.threshold)).replaceAll("{warning}", num(values.warning))
+    // {cutoff}: speed_to_lead.next_day_cutoff as the tenant set it, HH:MM (0009zq)
+    .replaceAll("{cutoff}", values.cutoff || "–");
 }
 
 // ---- Forms (addition 0008p; brief B17d, 16 October 2026) -------------------------------------------

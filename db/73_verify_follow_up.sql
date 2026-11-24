@@ -27,6 +27,9 @@
 -- Since addition 0008s (80_follow_up_snapshot.sql) the application's reads come from a snapshot the refresh
 -- job computes once a minute (the first read computes it when there is none): block B refreshes it after the
 -- two changes it makes before reading again (the bucket setting, the pipeline override); its checks are the same.
+-- Amended for addition 0009zq (234, 24 November 2026; brief B40a, D10): speed to lead ends at the first Attempt, under
+-- telephony an outbound Aircall call; d5's call is a CRM call without one, so tenant one takes attempts.source crm and
+-- d5 stays called by it. The follow-up's checks pin what they pinned before.
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says
 -- PROVOKED instead of PASS.
 -- =============================================================================================
@@ -261,6 +264,8 @@ begin
     perform cma.set_business_hours('*', d::smallint, '00:00-24:00') from generate_series(1, 7) d;
     perform cma.set_tenant_setting('intake.start_date', '2026-09-01');
     perform cma.set_tenant_setting('speed_to_lead.target_minutes', '60');
+    -- 0009zq: d5's outbound CRM call is its attempt (it has no telephony call)
+    perform cma.set_tenant_setting('attempts.source', 'crm');
     perform cma.set_user_external_id(v_agent1, 'verifycrm_owner', 'o-1');
     perform cma.set_user_external_id(v_agent2, 'verifycrm_owner', 'o-2');
     select c.connection_id into v_crm from cma.upsert_connection('verifycrm', 'Verify CRM one', 'portal-1', null, null) c;

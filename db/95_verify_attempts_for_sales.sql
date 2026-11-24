@@ -55,6 +55,15 @@
 --   B21 the copy of 0007d's calls of a deal reads connected as Connected (the linked telephony call outbound and answered),
 --       as cma.deal_calls_of does since 0008zc
 -- Every other check pins what it pinned before.
+-- Amended for addition 0009zq (234, 24 November 2026; brief B40a, D27 and D29): Attempts per deal takes its speed to lead
+-- and its called-before-the-cutoff answer from cma.speed_to_lead_of, which ends at the first Attempt and keeps a deal
+-- closed before its first call out of both shares. These checks pin the new answers, each for the reason named:
+--   A5  cma.attempts_per_deal_of reads cma.speed_to_lead_of in place of cma.business_seconds_of and
+--       cma.next_business_noon_of (one function)
+--   B8  dT, whose first CRM call was logged without the telephony call, now measures 5390 s on both sides (the first
+--       Attempt), where 0007d's measured 120 s to the CRM call
+--   B12 lost: dL2, lost and never attempted, is no longer a known answer of called before the cutoff (1of2 becomes 1of1)
+--   B14 the same deal out of the known answers of the period (8of11 becomes 8of10)
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead of PASS.
 -- =============================================================================================
 
@@ -293,8 +302,7 @@ begin
     'cma.deal_attempts_of(uuid,uuid,text,text,text[],timestamptz,timestamptz,text,integer)|cma\.deal_calls_of\(',
     'cma.attempts_per_deal_of(uuid,timestamptz,timestamptz,timestamptz)|cma\.sales_deals_of\(',
     'cma.attempts_per_deal_of(uuid,timestamptz,timestamptz,timestamptz)|cma\.deal_attempts_of\(',
-    'cma.attempts_per_deal_of(uuid,timestamptz,timestamptz,timestamptz)|cma\.business_seconds_of\(',
-    'cma.attempts_per_deal_of(uuid,timestamptz,timestamptz,timestamptz)|cma\.next_business_noon_of\(',
+    'cma.attempts_per_deal_of(uuid,timestamptz,timestamptz,timestamptz)|cma\.speed_to_lead_of\(',
     'cma.attempts_of_deal(uuid)|cma\.sales_deals_of\(', 'cma.attempts_of_deal(uuid)|cma\.deal_attempts_of\('] loop
     if (select p.prosrc from pg_proc p where p.oid = to_regprocedure(split_part(v_fn, '|', 1))) !~ split_part(v_fn, '|', 2) then
       v_bad := v_bad || split_part(v_fn, '|', 1) || ' does not read ' || split_part(v_fn, '|', 2) || '; ';
@@ -652,7 +660,7 @@ begin
 
     -- B8. the speed to lead equals cma.speed_to_lead_of's business seconds and next-noon answer for every deal whose first
     --     outbound CRM call is the first attempt's (the same telephony call); dT differs: its first CRM call was logged without
-    --     the telephony call (0007d measures 120 s to it, the attempts 5390 s to the telephony call)
+    --     the telephony call (0007d measured 120 s to it; since 0009zq both measure 5390 s, to the first Attempt)
     select format('%s equal of %s; differ: %s', count(*) filter (where e.same and e.equal), count(*) filter (where e.same),
                   coalesce(string_agg(format('%s %s<>%s', e.src, e.ours, e.theirs), ' ' order by e.src) filter (where not e.same), '-'))
       into v_txt
@@ -663,8 +671,8 @@ begin
           from cma.attempts_per_deal_of(v_t1, v_from, v_to, v_now) x
           join cma.speed_to_lead_of(v_t1, v_from, v_to) sl on sl.deal_id = x.deal_id
           where x.first_attempt_at is not null) e;
-    v_rows := v_rows || array['18', 'B8 the speed to lead is 0007d''s for the same first call; a first CRM call without the telephony call differs',
-      case when v_txt = '8 equal of 8; differ: dT 5390<>120' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+    v_rows := v_rows || array['18', 'B8 the speed to lead is cma.speed_to_lead_of''s for every attempted deal, dT (a first CRM call without the telephony call) included',
+      case when v_txt = '8 equal of 8; differ: dT 5390<>5390' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B9. one deal's attempts in time order with their fields: the start, connected, talk, conversation, the outcome's
     --     catalog label, the agent's name (the telephony user's person, else the CRM call's owner's) for performance.team while
@@ -726,7 +734,7 @@ begin
                      j -> 'outcomes' ->> 'ordered', j -> 'outcomes' ->> 'unknown')
       into v_txt from jsonb_array_elements(j -> 'outcomes' -> 'rows') o;
     v_rows := v_rows || array['22', 'B12 won against lost, the deals not decided counted apart',
-      case when v_txt = 'won:2/2.50/2.5/6440/2of2/2/165 lost:2/1.00/1.0/3590/1of2/1/90 not_decided:7 open:4 ordered:2 unknown:1'
+      case when v_txt = 'won:2/2.50/2.5/6440/2of2/2/165 lost:2/1.00/1.0/3590/1of1/1/90 not_decided:7 open:4 ordered:2 unknown:1'
             and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B13. the win rate by attempts (0 to 5+) and by speed to lead (the business-minute buckets, the deals never attempted and
@@ -746,7 +754,7 @@ begin
              || (select string_agg(format('%s:%s', b ->> 'label', b ->> 'first_conversation'), ' ' order by (b ->> 'bucket')::int)
                  from jsonb_array_elements(j -> 'buckets') b where (b ->> 'bucket')::int > 0);
     v_rows := v_rows || array['24', 'B14 the figures, the previous period and the first conversation per attempt',
-      case when v_txt = '11/9/13/1.18/1.0/6/5/5390/8of11/4/1/2/2/2/1/689/645/6/2 | 1/1/1/1.00/1.0/1/1/590/1of1/0/0/1/0/0/0/60/60/0/0 | 1:5 2:0 3:1 4:0 5+:0'
+      case when v_txt = '11/9/13/1.18/1.0/6/5/5390/8of10/4/1/2/2/2/1/689/645/6/2 | 1/1/1/1.00/1.0/1/1/590/1of1/0/0/1/0/0/0/60/60/0/0 | 1:5 2:0 3:1 4:0 5+:0'
             and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B15. the list: open first, the longest since the last attempt first (then the earlier last attempt or creation); then the

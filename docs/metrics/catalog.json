@@ -6103,8 +6103,8 @@
         "en": "Speed to lead",
         "nl": "Snelheid tot lead"
       },
-      "definition": "The period's median business minutes to the first outbound call over ALL the period's lead deals (one group), with '% within target' and 'open not called' in the tile's hint. Tile links to /reports/speed-to-lead.",
-      "formula": "value = round1(percentileCont(businessSeconds of the rows, 0.5) / 60) over getSpeedToLeadRows(period) - computed CLIENT-SIDE by speedFigures, mirroring cma.speed_to_lead_summary for one whole-period group; hint = '{pct} within target * {open} open not called' from the same rows (withinTargetPct = round1(100 * true / non-null withinTarget flags), openNotCalled = count(status = 'not_called_open')).",
+      "definition": "The period's median business minutes to the first Attempt over ALL the period's lead deals (one group), with '% within target' and 'Not called yet' in the tile's hint. Tile links to /reports/speed-to-lead.",
+      "formula": "value = median_business_minutes of cma.speed_to_lead_summary(from, to, 'total'), the one-row total read by getDashboardReads; hint = '{pct} within target * {open} not called yet' from the same row (within_target_pct, open_not_called). Nothing is computed in the browser.",
       "sources": [
         {
           "table": "cma.crm_record",
@@ -6156,22 +6156,18 @@
       "computed_in": {
         "sql": [
           {
-            "object": "cma.speed_to_lead_rows",
-            "migration": "0007d"
+            "object": "cma.speed_to_lead_summary",
+            "migration": "0009zq"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0007d"
+            "migration": "0009zq"
           }
         ],
         "ts": [
           {
-            "file": "src/lib/reports.ts",
-            "export": "speedFigures"
-          },
-          {
-            "file": "src/lib/reports.ts",
-            "export": "percentileCont"
+            "file": "src/lib/data/postgres.ts",
+            "export": "getDashboardReads"
           },
           {
             "file": "src/components/IntakeRow.tsx",
@@ -6179,8 +6175,8 @@
           }
         ]
       },
-      "verify_sql": "-- the day-grouped query of speed_to_lead.median_business_minutes with its GROUP BY dropped gives the tile's three figures;\n-- shortest standalone form:\nwith s as (\n  select t.timezone as zone, cma.setting_of(:tenant_id, 'intake.start_date')::date as start_date,\n         greatest(0, cma.setting_of(:tenant_id, 'speed_to_lead.pre_window_minutes')::integer) as pre_min,\n         cma.setting_of(:tenant_id, 'speed_to_lead.target_minutes')::integer * 60 as target_s\n  from cma.tenant t where t.id = :tenant_id),\nd as (\n  select d.id, d.connection_id, d.source_id, d.source_created_at, coalesce(d.is_closed, false) as is_closed, rm.code as market,\n         array(select x from (select d.contact_source_id as x where d.contact_source_id is not null\n                              union\n                              select a.to_id from cma.crm_association a\n                              where a.tenant_id = :tenant_id and a.connection_id = d.connection_id\n                                and a.from_type = 'deal' and a.from_id = d.source_id\n                                and a.to_type = 'contact' and a.removed_at is null) c) as contacts\n  from cma.crm_record d cross join s\n  left join cma.connection_pipeline p\n    on p.tenant_id = :tenant_id and p.connection_id = d.connection_id\n   and p.record_type = 'deal' and p.source_pipeline_id = d.pipeline_id\n  cross join lateral cma.record_market_of(:tenant_id, d.connection_id, d.market, d.contact_source_id) rm\n  where d.tenant_id = :tenant_id and d.record_type = 'deal' and d.source_deleted_at is null\n    and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)\n    and d.source_created_at >= (s.start_date::timestamp at time zone s.zone)\n    and d.source_created_at >= ((:from)::date::timestamp at time zone s.zone)\n    and d.source_created_at < (((:to)::date + 1)::timestamp at time zone s.zone)),\nfo as (\n  select d.id as deal_id, min(coalesce(tc.started_at, c.occurred_at)) as fo_at\n  from d cross join s\n  join cma.crm_call c on c.tenant_id = :tenant_id and c.connection_id = d.connection_id\n   and c.source_deleted_at is null and c.direction = 'outbound'\n  left join cma.call_link l on l.tenant_id = :tenant_id and l.crm_call_id = c.id and l.unlinked_at is null\n  left join cma.telephony_call tc on tc.tenant_id = :tenant_id and tc.id = l.telephony_call_id and tc.source_deleted_at is null\n  where coalesce(tc.started_at, c.occurred_at) >= d.source_created_at - make_interval(mins => s.pre_min)\n    and exists (select 1 from cma.crm_association a\n                where a.tenant_id = :tenant_id and a.connection_id = c.connection_id\n                  and a.from_type = 'crm_call' and a.from_id = c.source_id and a.removed_at is null\n                  and ((a.to_type = 'deal' and a.to_id = d.source_id)\n                       or (a.to_type = 'contact' and a.to_id = any (d.contacts))))\n  group by d.id),\nm as (\n  select d.*, fo.fo_at, s.target_s,\n         case when fo.fo_at is not null then cma.business_seconds_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at, fo.fo_at) end as bs,\n         case when fo.fo_at is null then cma.business_seconds_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at, now()) end as bs_now\n  from d cross join s left join fo on fo.deal_id = d.id)\nselect round((percentile_cont(0.5) within group (order by m.bs))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where case when m.bs is not null then m.bs <= m.target_s when m.bs_now > m.target_s then false end)\n             / nullif(count(case when m.bs is not null then m.bs <= m.target_s when m.bs_now > m.target_s then false end), 0), 1) as within_target_pct,\n       count(*) filter (where m.fo_at is null and not m.is_closed) as open_not_called\nfrom m",
-      "notes": "VERIFIED the api.md claim ('computed from speed_to_lead_rows exactly as speed_to_lead_summary computes a group'): TS percentileCont (reports.ts:54-61) is PostgreSQL's percentile_cont (sorted, pos = p*(n-1), linear interpolation, SQL aggregates skip nulls = TS filters null businessSeconds first) and round1 (reports.ts:63-66) is numeric round half-away-from-zero (with a 1e-9 float epsilon); pct denominators both count non-null flags. No drift found beyond float-vs-numeric arithmetic on exact .x5 ties (not reproducible with integer seconds / 60 at one decimal in practice). Whole-period median can legitimately differ from any aggregate of the report's per-group medians (medians do not add) - documented on the report's total row. Tile shows a dash when no called deal with a known market exists."
+      "verify_sql": "select\n       count(*) as deals,\n       count(*) filter (where r.status = 'called') as called,\n       round((percentile_cont(0.5) within group (order by r.business_seconds))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1) as before_next_noon_pct,\n       count(*) filter (where r.status = 'not_called_open') as open_not_called,\n       count(*) filter (where r.status = 'closed_before_first_call') as closed_before_first_call\nfrom cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r",
+      "notes": "Since addition 0009zq the tile reads the summary's total row: the figures of Sales -> Speed to lead's total group, by the one function. Tile shows a dash when no called deal with a known market exists."
     },
     {
       "surface": "dashboard",
@@ -8065,11 +8061,15 @@
         "sql": [
           {
             "object": "cma.speed_to_lead_summary",
-            "migration": "0007d"
+            "migration": "0009zq"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0007d"
+            "migration": "0009zq"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008z"
           },
           {
             "object": "cma.lead_deals_of",
@@ -8091,7 +8091,7 @@
           }
         ]
       },
-      "fixture_check": "Ran against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and matched the page's own function for the last 30 days (107 over the day groups).",
+      "fixture_check": "Not run against a fixture since addition 0009zq; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -8242,7 +8242,7 @@
         "nl": "Deals"
       },
       "definition": "How many new lead deals were created in the period, per group (day, market, agent or pipeline).",
-      "formula": "deals = count(*) over cma.speed_to_lead_of rows of the group: deals of counted lead pipelines, not deleted, created on or after intake.start_date and inside the period (business dates, tenant zone). Grouping: day = business_date; market = resolved market ('unknown' when neither the deal's mapped market nor the primary contact's country names a catalog market); agent = mapped person of the first outbound call's owner, else the deal's owner, key 'unknown' when unmapped; pipeline = connection_id:pipeline_id labelled by the pipeline's label.",
+      "formula": "deals = count(*) over cma.speed_to_lead_of rows of the group: deals of counted lead pipelines, not deleted, created on or after intake.start_date and inside the period (business dates, tenant zone). Grouping: day = business_date; market = resolved market ('unknown' when neither the deal's mapped market nor the primary contact's country names a catalog market), narrowed by the optional market filter; agent = the person mapped from the first attempt's telephony user ('unknown' when that user has no person, 'no_attempt' for a deal without an attempt, no fallback to the deal's owner); pipeline = connection_id:pipeline_id labelled by the pipeline's label.",
       "unit": "count",
       "grain": [
         "period",
@@ -8251,7 +8251,7 @@
         "per_person",
         "per_pipeline"
       ],
-      "verify_sql": "with s as (\n  select t.timezone as zone, cma.setting_of(:tenant_id, 'intake.start_date')::date as start_date,\n         greatest(0, cma.setting_of(:tenant_id, 'speed_to_lead.pre_window_minutes')::integer) as pre_min,\n         cma.setting_of(:tenant_id, 'speed_to_lead.target_minutes')::integer * 60 as target_s\n  from cma.tenant t where t.id = :tenant_id),\nd as (\n  select d.id, d.connection_id, d.source_id, d.source_created_at, coalesce(d.is_closed, false) as is_closed,\n         rm.code as market, (d.source_created_at at time zone s.zone)::date as business_date,\n         array(select x from (select d.contact_source_id as x where d.contact_source_id is not null\n                              union\n                              select a.to_id from cma.crm_association a\n                              where a.tenant_id = :tenant_id and a.connection_id = d.connection_id\n                                and a.from_type = 'deal' and a.from_id = d.source_id\n                                and a.to_type = 'contact' and a.removed_at is null) c) as contacts\n  from cma.crm_record d\n  cross join s\n  left join cma.connection_pipeline p\n    on p.tenant_id = :tenant_id and p.connection_id = d.connection_id\n   and p.record_type = 'deal' and p.source_pipeline_id = d.pipeline_id\n  cross join lateral cma.record_market_of(:tenant_id, d.connection_id, d.market, d.contact_source_id) rm\n  where d.tenant_id = :tenant_id and d.record_type = 'deal' and d.source_deleted_at is null\n    and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)\n    and d.source_created_at >= (s.start_date::timestamp at time zone s.zone)\n    and d.source_created_at >= ((:from)::date::timestamp at time zone s.zone)\n    and d.source_created_at < (((:to)::date + 1)::timestamp at time zone s.zone)),\nfo as (\n  select d.id as deal_id, min(coalesce(tc.started_at, c.occurred_at)) as fo_at\n  from d cross join s\n  join cma.crm_call c\n    on c.tenant_id = :tenant_id and c.connection_id = d.connection_id\n   and c.source_deleted_at is null and c.direction = 'outbound'\n  left join cma.call_link l on l.tenant_id = :tenant_id and l.crm_call_id = c.id and l.unlinked_at is null\n  left join cma.telephony_call tc on tc.tenant_id = :tenant_id and tc.id = l.telephony_call_id and tc.source_deleted_at is null\n  where coalesce(tc.started_at, c.occurred_at) >= d.source_created_at - make_interval(mins => s.pre_min)\n    and exists (select 1 from cma.crm_association a\n                where a.tenant_id = :tenant_id and a.connection_id = c.connection_id\n                  and a.from_type = 'crm_call' and a.from_id = c.source_id and a.removed_at is null\n                  and ((a.to_type = 'deal' and a.to_id = d.source_id)\n                       or (a.to_type = 'contact' and a.to_id = any (d.contacts))))\n  group by d.id),\nm as (\n  select d.*, fo.fo_at, s.target_s,\n         case when fo.fo_at is not null then cma.business_seconds_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at, fo.fo_at) end as bs,\n         case when fo.fo_at is null then cma.business_seconds_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at, now()) end as bs_now,\n         cma.next_business_noon_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at) as noon\n  from d cross join s left join fo on fo.deal_id = d.id)\nselect m.business_date,\n       count(*) as deals,\n       count(m.fo_at) as called,\n       round((percentile_cont(0.5) within group (order by m.bs))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where case when m.bs is not null then m.bs <= m.target_s when m.bs_now > m.target_s then false end)\n             / nullif(count(case when m.bs is not null then m.bs <= m.target_s when m.bs_now > m.target_s then false end), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where case when m.fo_at is not null and m.noon is not null then m.fo_at < m.noon\n                                                 when m.fo_at is null and m.noon is not null and now() >= m.noon then false end)\n             / nullif(count(case when m.fo_at is not null and m.noon is not null then m.fo_at < m.noon\n                                 when m.fo_at is null and m.noon is not null and now() >= m.noon then false end), 0), 1) as before_next_noon_pct,\n       count(*) filter (where m.fo_at is null and not m.is_closed) as open_not_called\nfrom m group by m.business_date order by m.business_date",
+      "verify_sql": "select r.business_date,\n       count(*) as deals,\n       count(*) filter (where r.status = 'called') as called,\n       round((percentile_cont(0.5) within group (order by r.business_seconds))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1) as before_next_noon_pct,\n       count(*) filter (where r.status = 'not_called_open') as open_not_called,\n       count(*) filter (where r.status = 'closed_before_first_call') as closed_before_first_call\nfrom cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r\ngroup by r.business_date order by r.business_date",
       "notes": "db/40_lead_metrics.sql:799-844 (summary), :310-357 (population). One query recomputes the whole day-grouped summary (cma.business_seconds_of, next_business_noon_of, record_market_of and setting_of are 0007d helpers, not the figure's own functions); compare the column this entry names. Swap the final GROUP BY for market/agent/pipeline to verify the other groupings. Market fallback chain verified: deal's own mapped market -> primary contact's country -> 'unknown', each through the tenant's market aliases and only when a catalog market (cma.record_market_of, db/40:100-114; Decision log 10 Oct 2026). Grouped by agent the figures are per person yet need only reports.view, unlike every other per-person report (performance.team) - see findings. Empty state: 'No lead deals in this period' (copy.speedToLead.empty)."
     },
     {
@@ -8287,11 +8287,15 @@
         "sql": [
           {
             "object": "cma.speed_to_lead_summary",
-            "migration": "0007d"
+            "migration": "0009zq"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0007d"
+            "migration": "0009zq"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008z"
           },
           {
             "object": "cma.lead_deals_of",
@@ -8313,7 +8317,7 @@
           }
         ]
       },
-      "fixture_check": "Ran against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and matched the page's own function for the last 30 days (5 over the day groups).",
+      "fixture_check": "Not run against a fixture since addition 0009zq; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -8463,8 +8467,8 @@
         "en": "Called",
         "nl": "Gebeld"
       },
-      "definition": "Of the group's lead deals, how many got at least one outbound call on the deal or one of its contacts.",
-      "formula": "called = count(*) filter (where status = 'called'); status = 'called' when a first outbound call exists: the earliest not-deleted outbound crm_call currently associated with the deal or one of its contacts whose effective start (linked telephony call's started_at, else occurred_at) >= created_at - pre_window_minutes.",
+      "definition": "Of the group's lead deals, how many got a first Attempt before the deal closed.",
+      "formula": "called = count(*) filter (where status = 'called'); status = 'called' when a first Attempt exists: the earliest attempt of cma.deal_attempts_of under attempts.source (telephony: an outbound Aircall call linked to a CRM call of the deal or its contacts, on a counted line) from created_at - pre_window_minutes to the earliest of the deal's close and its contacts' first order (cma.sales_deals_of's window; open deal without one: now).",
       "unit": "count",
       "grain": [
         "period",
@@ -8473,8 +8477,8 @@
         "per_person",
         "per_pipeline"
       ],
-      "verify_sql": "with s as (\n  select t.timezone as zone, cma.setting_of(:tenant_id, 'intake.start_date')::date as start_date,\n         greatest(0, cma.setting_of(:tenant_id, 'speed_to_lead.pre_window_minutes')::integer) as pre_min,\n         cma.setting_of(:tenant_id, 'speed_to_lead.target_minutes')::integer * 60 as target_s\n  from cma.tenant t where t.id = :tenant_id),\nd as (\n  select d.id, d.connection_id, d.source_id, d.source_created_at, coalesce(d.is_closed, false) as is_closed,\n         rm.code as market, (d.source_created_at at time zone s.zone)::date as business_date,\n         array(select x from (select d.contact_source_id as x where d.contact_source_id is not null\n                              union\n                              select a.to_id from cma.crm_association a\n                              where a.tenant_id = :tenant_id and a.connection_id = d.connection_id\n                                and a.from_type = 'deal' and a.from_id = d.source_id\n                                and a.to_type = 'contact' and a.removed_at is null) c) as contacts\n  from cma.crm_record d\n  cross join s\n  left join cma.connection_pipeline p\n    on p.tenant_id = :tenant_id and p.connection_id = d.connection_id\n   and p.record_type = 'deal' and p.source_pipeline_id = d.pipeline_id\n  cross join lateral cma.record_market_of(:tenant_id, d.connection_id, d.market, d.contact_source_id) rm\n  where d.tenant_id = :tenant_id and d.record_type = 'deal' and d.source_deleted_at is null\n    and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)\n    and d.source_created_at >= (s.start_date::timestamp at time zone s.zone)\n    and d.source_created_at >= ((:from)::date::timestamp at time zone s.zone)\n    and d.source_created_at < (((:to)::date + 1)::timestamp at time zone s.zone)),\nfo as (\n  select d.id as deal_id, min(coalesce(tc.started_at, c.occurred_at)) as fo_at\n  from d cross join s\n  join cma.crm_call c\n    on c.tenant_id = :tenant_id and c.connection_id = d.connection_id\n   and c.source_deleted_at is null and c.direction = 'outbound'\n  left join cma.call_link l on l.tenant_id = :tenant_id and l.crm_call_id = c.id and l.unlinked_at is null\n  left join cma.telephony_call tc on tc.tenant_id = :tenant_id and tc.id = l.telephony_call_id and tc.source_deleted_at is null\n  where coalesce(tc.started_at, c.occurred_at) >= d.source_created_at - make_interval(mins => s.pre_min)\n    and exists (select 1 from cma.crm_association a\n                where a.tenant_id = :tenant_id and a.connection_id = c.connection_id\n                  and a.from_type = 'crm_call' and a.from_id = c.source_id and a.removed_at is null\n                  and ((a.to_type = 'deal' and a.to_id = d.source_id)\n                       or (a.to_type = 'contact' and a.to_id = any (d.contacts))))\n  group by d.id),\nm as (\n  select d.*, fo.fo_at, s.target_s,\n         case when fo.fo_at is not null then cma.business_seconds_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at, fo.fo_at) end as bs,\n         case when fo.fo_at is null then cma.business_seconds_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at, now()) end as bs_now,\n         cma.next_business_noon_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at) as noon\n  from d cross join s left join fo on fo.deal_id = d.id)\nselect m.business_date,\n       count(*) as deals,\n       count(m.fo_at) as called,\n       round((percentile_cont(0.5) within group (order by m.bs))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where case when m.bs is not null then m.bs <= m.target_s when m.bs_now > m.target_s then false end)\n             / nullif(count(case when m.bs is not null then m.bs <= m.target_s when m.bs_now > m.target_s then false end), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where case when m.fo_at is not null and m.noon is not null then m.fo_at < m.noon\n                                                 when m.fo_at is null and m.noon is not null and now() >= m.noon then false end)\n             / nullif(count(case when m.fo_at is not null and m.noon is not null then m.fo_at < m.noon\n                                 when m.fo_at is null and m.noon is not null and now() >= m.noon then false end), 0), 1) as before_next_noon_pct,\n       count(*) filter (where m.fo_at is null and not m.is_closed) as open_not_called\nfrom m group by m.business_date order by m.business_date",
-      "notes": "db/40:426 (first outbound = distinct on ordered by effective_at, call_id), :462-463 (status). A call in the pre-window (before creation) still makes the deal called, with elapsed/business time clamped to 0. 'connected' is not required: any outbound call counts as called (first_connected_at is reported separately in the rows and shown nowhere). One query recomputes the whole day-grouped summary (cma.business_seconds_of, next_business_noon_of, record_market_of and setting_of are 0007d helpers, not the figure's own functions); compare the column this entry names. Swap the final GROUP BY for market/agent/pipeline to verify the other groupings."
+      "verify_sql": "select r.business_date,\n       count(*) as deals,\n       count(*) filter (where r.status = 'called') as called,\n       round((percentile_cont(0.5) within group (order by r.business_seconds))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1) as before_next_noon_pct,\n       count(*) filter (where r.status = 'not_called_open') as open_not_called,\n       count(*) filter (where r.status = 'closed_before_first_call') as closed_before_first_call\nfrom cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r\ngroup by r.business_date order by r.business_date",
+      "notes": "A CRM call without a telephony call never makes a deal called under attempts.source telephony. An attempt in the pre-window counts as 0 business seconds. 'Connected' is not required. One query over cma.speed_to_lead_of (the one function since addition 0009zq) recomputes the day-grouped summary; compare the column this entry names. Swap the final group by for market, agent or pipeline to verify the other groupings."
     },
     {
       "surface": "report",
@@ -8509,11 +8513,15 @@
         "sql": [
           {
             "object": "cma.speed_to_lead_summary",
-            "migration": "0007d"
+            "migration": "0009zq"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0007d"
+            "migration": "0009zq"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008z"
           },
           {
             "object": "cma.lead_deals_of",
@@ -8535,7 +8543,7 @@
           }
         ]
       },
-      "fixture_check": "The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 20 row(s); Martin compares the value with the page in Studio.",
+      "fixture_check": "Not run against a fixture since addition 0009zq; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -8685,8 +8693,8 @@
         "en": "Median",
         "nl": "Mediaan"
       },
-      "definition": "The typical wait from a lead deal's creation to its first outbound call, in office minutes of the deal's market: half of the called deals were called faster.",
-      "formula": "median = round(percentile_cont(0.5) within group (order by business_seconds)::numeric / 60, 1); business_seconds = cma.business_seconds_of(market, created_at, first_outbound_at), computed only for called deals, null for market 'unknown' (SQL aggregates skip nulls), 0 when the call predates creation (pre-window). So the median runs over called deals with a known market only.",
+      "definition": "The typical wait from a lead deal's creation to its first Attempt, in office minutes of the deal's market: half of the called deals were called faster.",
+      "formula": "median = round(percentile_cont(0.5) within group (order by business_seconds)::numeric / 60, 1); business_seconds = cma.business_seconds_of(market, created_at, first_attempt_at), only for called deals, null for market 'unknown' (SQL aggregates skip nulls), 0 for an attempt in the pre-window. Deals closed before their first call have no business_seconds and stay out.",
       "unit": "business_minutes",
       "grain": [
         "period",
@@ -8695,7 +8703,7 @@
         "per_person",
         "per_pipeline"
       ],
-      "verify_sql": "with s as (\n  select t.timezone as zone, cma.setting_of(:tenant_id, 'intake.start_date')::date as start_date,\n         greatest(0, cma.setting_of(:tenant_id, 'speed_to_lead.pre_window_minutes')::integer) as pre_min,\n         cma.setting_of(:tenant_id, 'speed_to_lead.target_minutes')::integer * 60 as target_s\n  from cma.tenant t where t.id = :tenant_id),\nd as (\n  select d.id, d.connection_id, d.source_id, d.source_created_at, coalesce(d.is_closed, false) as is_closed,\n         rm.code as market, (d.source_created_at at time zone s.zone)::date as business_date,\n         array(select x from (select d.contact_source_id as x where d.contact_source_id is not null\n                              union\n                              select a.to_id from cma.crm_association a\n                              where a.tenant_id = :tenant_id and a.connection_id = d.connection_id\n                                and a.from_type = 'deal' and a.from_id = d.source_id\n                                and a.to_type = 'contact' and a.removed_at is null) c) as contacts\n  from cma.crm_record d\n  cross join s\n  left join cma.connection_pipeline p\n    on p.tenant_id = :tenant_id and p.connection_id = d.connection_id\n   and p.record_type = 'deal' and p.source_pipeline_id = d.pipeline_id\n  cross join lateral cma.record_market_of(:tenant_id, d.connection_id, d.market, d.contact_source_id) rm\n  where d.tenant_id = :tenant_id and d.record_type = 'deal' and d.source_deleted_at is null\n    and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)\n    and d.source_created_at >= (s.start_date::timestamp at time zone s.zone)\n    and d.source_created_at >= ((:from)::date::timestamp at time zone s.zone)\n    and d.source_created_at < (((:to)::date + 1)::timestamp at time zone s.zone)),\nfo as (\n  select d.id as deal_id, min(coalesce(tc.started_at, c.occurred_at)) as fo_at\n  from d cross join s\n  join cma.crm_call c\n    on c.tenant_id = :tenant_id and c.connection_id = d.connection_id\n   and c.source_deleted_at is null and c.direction = 'outbound'\n  left join cma.call_link l on l.tenant_id = :tenant_id and l.crm_call_id = c.id and l.unlinked_at is null\n  left join cma.telephony_call tc on tc.tenant_id = :tenant_id and tc.id = l.telephony_call_id and tc.source_deleted_at is null\n  where coalesce(tc.started_at, c.occurred_at) >= d.source_created_at - make_interval(mins => s.pre_min)\n    and exists (select 1 from cma.crm_association a\n                where a.tenant_id = :tenant_id and a.connection_id = c.connection_id\n                  and a.from_type = 'crm_call' and a.from_id = c.source_id and a.removed_at is null\n                  and ((a.to_type = 'deal' and a.to_id = d.source_id)\n                       or (a.to_type = 'contact' and a.to_id = any (d.contacts))))\n  group by d.id),\nm as (\n  select d.*, fo.fo_at, s.target_s,\n         case when fo.fo_at is not null then cma.business_seconds_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at, fo.fo_at) end as bs,\n         case when fo.fo_at is null then cma.business_seconds_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at, now()) end as bs_now,\n         cma.next_business_noon_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at) as noon\n  from d cross join s left join fo on fo.deal_id = d.id)\nselect m.business_date,\n       count(*) as deals,\n       count(m.fo_at) as called,\n       round((percentile_cont(0.5) within group (order by m.bs))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where case when m.bs is not null then m.bs <= m.target_s when m.bs_now > m.target_s then false end)\n             / nullif(count(case when m.bs is not null then m.bs <= m.target_s when m.bs_now > m.target_s then false end), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where case when m.fo_at is not null and m.noon is not null then m.fo_at < m.noon\n                                                 when m.fo_at is null and m.noon is not null and now() >= m.noon then false end)\n             / nullif(count(case when m.fo_at is not null and m.noon is not null then m.fo_at < m.noon\n                                 when m.fo_at is null and m.noon is not null and now() >= m.noon then false end), 0), 1) as before_next_noon_pct,\n       count(*) filter (where m.fo_at is null and not m.is_closed) as open_not_called\nfrom m group by m.business_date order by m.business_date",
+      "verify_sql": "select r.business_date,\n       count(*) as deals,\n       count(*) filter (where r.status = 'called') as called,\n       round((percentile_cont(0.5) within group (order by r.business_seconds))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1) as before_next_noon_pct,\n       count(*) filter (where r.status = 'not_called_open') as open_not_called,\n       count(*) filter (where r.status = 'closed_before_first_call') as closed_before_first_call\nfrom cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r\ngroup by r.business_date order by r.business_date",
       "notes": "True median (percentile_cont 0.5, audit rule 6), not an average: db/40:825. Business minutes use the market's own office hours, else the '*' schedule, holidays of the market and '*' excluded (db/40:119-153); a deal in market 'unknown' contributes nothing here and shows 'No business hours' in the open list. Display: fmtBusinessMinutes ('7,5 min' under an hour, '1h 05m' from one, dash for null). p80BusinessMinutes is still computed and returned by the API but not shown since 15 Oct 2026 (decisions.md; agent api-health owns api.speed_to_lead.p80_business_minutes). One query recomputes the whole day-grouped summary (cma.business_seconds_of, next_business_noon_of, record_market_of and setting_of are 0007d helpers, not the figure's own functions); compare the column this entry names. Swap the final GROUP BY for market/agent/pipeline to verify the other groupings."
     },
     {
@@ -8731,11 +8739,15 @@
         "sql": [
           {
             "object": "cma.speed_to_lead_summary",
-            "migration": "0007d"
+            "migration": "0009zq"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0007d"
+            "migration": "0009zq"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008z"
           },
           {
             "object": "cma.lead_deals_of",
@@ -8757,7 +8769,7 @@
           }
         ]
       },
-      "fixture_check": "The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 20 row(s); Martin compares the value with the page in Studio.",
+      "fixture_check": "Not run against a fixture since addition 0009zq; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -8908,7 +8920,7 @@
         "nl": "Binnen de norm"
       },
       "definition": "Of the deals whose outcome is known, the share called within the speed-to-lead target (business minutes).",
-      "formula": "within_target per deal: business_seconds <= target_minutes*60 when called with a known market; null when called in market 'unknown'; for a not-called deal (open or closed): false once business time from creation to now() exceeds the target, null before that. pct = round(100.0 * count(*) filter (where within_target) / nullif(count(within_target), 0), 1): denominator = deals whose within_target is not null ('outcome known'); null (shown as a dash) while no outcome is known.",
+      "formula": "within_target per deal: business_seconds <= target_minutes*60 when called with a known market; null when called in market 'unknown'; for an open deal not called: false once business time from creation to now() exceeds the target, null before that; null for a deal closed before its first call (out of the share). pct = round(100.0 * count(*) filter (where within_target) / nullif(count(within_target), 0), 1): denominator = deals whose within_target is not null; null (a dash) while no outcome is known.",
       "unit": "share",
       "grain": [
         "period",
@@ -8917,7 +8929,7 @@
         "per_person",
         "per_pipeline"
       ],
-      "verify_sql": "with s as (\n  select t.timezone as zone, cma.setting_of(:tenant_id, 'intake.start_date')::date as start_date,\n         greatest(0, cma.setting_of(:tenant_id, 'speed_to_lead.pre_window_minutes')::integer) as pre_min,\n         cma.setting_of(:tenant_id, 'speed_to_lead.target_minutes')::integer * 60 as target_s\n  from cma.tenant t where t.id = :tenant_id),\nd as (\n  select d.id, d.connection_id, d.source_id, d.source_created_at, coalesce(d.is_closed, false) as is_closed,\n         rm.code as market, (d.source_created_at at time zone s.zone)::date as business_date,\n         array(select x from (select d.contact_source_id as x where d.contact_source_id is not null\n                              union\n                              select a.to_id from cma.crm_association a\n                              where a.tenant_id = :tenant_id and a.connection_id = d.connection_id\n                                and a.from_type = 'deal' and a.from_id = d.source_id\n                                and a.to_type = 'contact' and a.removed_at is null) c) as contacts\n  from cma.crm_record d\n  cross join s\n  left join cma.connection_pipeline p\n    on p.tenant_id = :tenant_id and p.connection_id = d.connection_id\n   and p.record_type = 'deal' and p.source_pipeline_id = d.pipeline_id\n  cross join lateral cma.record_market_of(:tenant_id, d.connection_id, d.market, d.contact_source_id) rm\n  where d.tenant_id = :tenant_id and d.record_type = 'deal' and d.source_deleted_at is null\n    and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)\n    and d.source_created_at >= (s.start_date::timestamp at time zone s.zone)\n    and d.source_created_at >= ((:from)::date::timestamp at time zone s.zone)\n    and d.source_created_at < (((:to)::date + 1)::timestamp at time zone s.zone)),\nfo as (\n  select d.id as deal_id, min(coalesce(tc.started_at, c.occurred_at)) as fo_at\n  from d cross join s\n  join cma.crm_call c\n    on c.tenant_id = :tenant_id and c.connection_id = d.connection_id\n   and c.source_deleted_at is null and c.direction = 'outbound'\n  left join cma.call_link l on l.tenant_id = :tenant_id and l.crm_call_id = c.id and l.unlinked_at is null\n  left join cma.telephony_call tc on tc.tenant_id = :tenant_id and tc.id = l.telephony_call_id and tc.source_deleted_at is null\n  where coalesce(tc.started_at, c.occurred_at) >= d.source_created_at - make_interval(mins => s.pre_min)\n    and exists (select 1 from cma.crm_association a\n                where a.tenant_id = :tenant_id and a.connection_id = c.connection_id\n                  and a.from_type = 'crm_call' and a.from_id = c.source_id and a.removed_at is null\n                  and ((a.to_type = 'deal' and a.to_id = d.source_id)\n                       or (a.to_type = 'contact' and a.to_id = any (d.contacts))))\n  group by d.id),\nm as (\n  select d.*, fo.fo_at, s.target_s,\n         case when fo.fo_at is not null then cma.business_seconds_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at, fo.fo_at) end as bs,\n         case when fo.fo_at is null then cma.business_seconds_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at, now()) end as bs_now,\n         cma.next_business_noon_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at) as noon\n  from d cross join s left join fo on fo.deal_id = d.id)\nselect m.business_date,\n       count(*) as deals,\n       count(m.fo_at) as called,\n       round((percentile_cont(0.5) within group (order by m.bs))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where case when m.bs is not null then m.bs <= m.target_s when m.bs_now > m.target_s then false end)\n             / nullif(count(case when m.bs is not null then m.bs <= m.target_s when m.bs_now > m.target_s then false end), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where case when m.fo_at is not null and m.noon is not null then m.fo_at < m.noon\n                                                 when m.fo_at is null and m.noon is not null and now() >= m.noon then false end)\n             / nullif(count(case when m.fo_at is not null and m.noon is not null then m.fo_at < m.noon\n                                 when m.fo_at is null and m.noon is not null and now() >= m.noon then false end), 0), 1) as before_next_noon_pct,\n       count(*) filter (where m.fo_at is null and not m.is_closed) as open_not_called\nfrom m group by m.business_date order by m.business_date",
+      "verify_sql": "select r.business_date,\n       count(*) as deals,\n       count(*) filter (where r.status = 'called') as called,\n       round((percentile_cont(0.5) within group (order by r.business_seconds))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1) as before_next_noon_pct,\n       count(*) filter (where r.status = 'not_called_open') as open_not_called,\n       count(*) filter (where r.status = 'closed_before_first_call') as closed_before_first_call\nfrom cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r\ngroup by r.business_date order by r.business_date",
       "notes": "db/40:469-472 (flag), :827 (share). Denominator verified against the label's claim ('deals whose outcome is known', copy.speedToLead.minutesNote) - matches. TWO drifts from the header hint (copy.hints.withinTarget: 'Deals closed without a call count as missed; deals still open and not called are left out until they are called or closed'): (1) a deal closed without a call stays null (left out) until wall-clock business time since creation passes the target, only then false; (2) an OPEN not-called deal past the target counts as false (missed), it is not left out. Code matches DESIGN 4.4 ('null while it could still make it, false once it cannot'); the hint matches neither. Also: the flag keeps being evaluated against now(), so a past period's percentage can still change as open/closed uncalled deals cross the target. See findings. fmtPct shows whole percents, '< 1%' for 0<pct<0.5."
     },
     {
@@ -8939,6 +8951,11 @@
           "key": "speed_to_lead.target_minutes",
           "default": "60",
           "pulse4all": "60 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.next_day_cutoff",
+          "default": "12:00",
+          "pulse4all": "12:00 (the default)"
         }
       ],
       "permissions": {
@@ -8953,11 +8970,15 @@
         "sql": [
           {
             "object": "cma.speed_to_lead_summary",
-            "migration": "0007d"
+            "migration": "0009zq"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0007d"
+            "migration": "0009zq"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008z"
           },
           {
             "object": "cma.lead_deals_of",
@@ -8979,7 +9000,7 @@
           }
         ]
       },
-      "fixture_check": "The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 20 row(s); Martin compares the value with the page in Studio.",
+      "fixture_check": "Not run against a fixture since addition 0009zq; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -9124,13 +9145,13 @@
         "verified"
       ],
       "key": "speed_to_lead.before_next_noon_pct",
-      "tile": "Before next noon",
+      "tile": "Before 12:00 next working day",
       "title": {
-        "en": "Before next noon",
-        "nl": "Voor de volgende middag"
+        "en": "Before 12:00 next working day",
+        "nl": "Vóór 12:00 volgende werkdag"
       },
-      "definition": "Of the deals whose outcome is known, the share whose first outbound call started before 12:00 (market local time) on the first working day after the deal came in.",
-      "formula": "noon = cma.next_business_noon_of(market, created_at): 12:00 local on the first working day after the creation's local date (market's own weekday schedule else '*', holidays excluded; null for market 'unknown' or no working day within 31 days). before_next_noon per deal: first_outbound_at < noon when called and noon known; false when not called, noon known and now() >= noon; null otherwise. pct = round(100.0 * count(*) filter (where before_next_noon) / nullif(count(before_next_noon), 0), 1).",
+      "definition": "Of the deals whose outcome is known, the share whose first Attempt started before the cutoff (speed_to_lead.next_day_cutoff, 12:00 by default, market local time) on the first working day after the deal came in. The label names the tenant's time in place of 12:00 (Martin, 24 Nov 2026).",
+      "formula": "cutoff = cma.next_business_noon_of(market, created_at): the tenant setting speed_to_lead.next_day_cutoff (HH:MM, default 12:00) local on the first working day after the creation's local date (market's own weekday schedule else '*', holidays excluded; null for market 'unknown' or no working day within 31 days). before_next_noon per deal: first_attempt_at < cutoff when called and the cutoff known; false when an open deal is not called, the cutoff known and now() >= cutoff; null otherwise, and null for a deal closed before its first call. pct = round(100.0 * count(*) filter (where before_next_noon) / nullif(count(before_next_noon), 0), 1).",
       "unit": "share",
       "grain": [
         "period",
@@ -9139,8 +9160,8 @@
         "per_person",
         "per_pipeline"
       ],
-      "verify_sql": "with s as (\n  select t.timezone as zone, cma.setting_of(:tenant_id, 'intake.start_date')::date as start_date,\n         greatest(0, cma.setting_of(:tenant_id, 'speed_to_lead.pre_window_minutes')::integer) as pre_min,\n         cma.setting_of(:tenant_id, 'speed_to_lead.target_minutes')::integer * 60 as target_s\n  from cma.tenant t where t.id = :tenant_id),\nd as (\n  select d.id, d.connection_id, d.source_id, d.source_created_at, coalesce(d.is_closed, false) as is_closed,\n         rm.code as market, (d.source_created_at at time zone s.zone)::date as business_date,\n         array(select x from (select d.contact_source_id as x where d.contact_source_id is not null\n                              union\n                              select a.to_id from cma.crm_association a\n                              where a.tenant_id = :tenant_id and a.connection_id = d.connection_id\n                                and a.from_type = 'deal' and a.from_id = d.source_id\n                                and a.to_type = 'contact' and a.removed_at is null) c) as contacts\n  from cma.crm_record d\n  cross join s\n  left join cma.connection_pipeline p\n    on p.tenant_id = :tenant_id and p.connection_id = d.connection_id\n   and p.record_type = 'deal' and p.source_pipeline_id = d.pipeline_id\n  cross join lateral cma.record_market_of(:tenant_id, d.connection_id, d.market, d.contact_source_id) rm\n  where d.tenant_id = :tenant_id and d.record_type = 'deal' and d.source_deleted_at is null\n    and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)\n    and d.source_created_at >= (s.start_date::timestamp at time zone s.zone)\n    and d.source_created_at >= ((:from)::date::timestamp at time zone s.zone)\n    and d.source_created_at < (((:to)::date + 1)::timestamp at time zone s.zone)),\nfo as (\n  select d.id as deal_id, min(coalesce(tc.started_at, c.occurred_at)) as fo_at\n  from d cross join s\n  join cma.crm_call c\n    on c.tenant_id = :tenant_id and c.connection_id = d.connection_id\n   and c.source_deleted_at is null and c.direction = 'outbound'\n  left join cma.call_link l on l.tenant_id = :tenant_id and l.crm_call_id = c.id and l.unlinked_at is null\n  left join cma.telephony_call tc on tc.tenant_id = :tenant_id and tc.id = l.telephony_call_id and tc.source_deleted_at is null\n  where coalesce(tc.started_at, c.occurred_at) >= d.source_created_at - make_interval(mins => s.pre_min)\n    and exists (select 1 from cma.crm_association a\n                where a.tenant_id = :tenant_id and a.connection_id = c.connection_id\n                  and a.from_type = 'crm_call' and a.from_id = c.source_id and a.removed_at is null\n                  and ((a.to_type = 'deal' and a.to_id = d.source_id)\n                       or (a.to_type = 'contact' and a.to_id = any (d.contacts))))\n  group by d.id),\nm as (\n  select d.*, fo.fo_at, s.target_s,\n         case when fo.fo_at is not null then cma.business_seconds_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at, fo.fo_at) end as bs,\n         case when fo.fo_at is null then cma.business_seconds_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at, now()) end as bs_now,\n         cma.next_business_noon_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at) as noon\n  from d cross join s left join fo on fo.deal_id = d.id)\nselect m.business_date,\n       count(*) as deals,\n       count(m.fo_at) as called,\n       round((percentile_cont(0.5) within group (order by m.bs))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where case when m.bs is not null then m.bs <= m.target_s when m.bs_now > m.target_s then false end)\n             / nullif(count(case when m.bs is not null then m.bs <= m.target_s when m.bs_now > m.target_s then false end), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where case when m.fo_at is not null and m.noon is not null then m.fo_at < m.noon\n                                                 when m.fo_at is null and m.noon is not null and now() >= m.noon then false end)\n             / nullif(count(case when m.fo_at is not null and m.noon is not null then m.fo_at < m.noon\n                                 when m.fo_at is null and m.noon is not null and now() >= m.noon then false end), 0), 1) as before_next_noon_pct,\n       count(*) filter (where m.fo_at is null and not m.is_closed) as open_not_called\nfrom m group by m.business_date order by m.business_date",
-      "notes": "db/40:157-186 (noon), :473-475 (flag), :828 (share). The KPI wording 'called before 12:00 the next working day' (kpis.md paragraph 1) is met; the comparison uses the call's instant against the market-local noon. Deals in market 'unknown' are excluded (noon null). As with within_target, a not-called deal flips null->false only when now() crosses noon, so the share of a running day firms up during the morning. One query recomputes the whole day-grouped summary (cma.business_seconds_of, next_business_noon_of, record_market_of and setting_of are 0007d helpers, not the figure's own functions); compare the column this entry names. Swap the final GROUP BY for market/agent/pipeline to verify the other groupings."
+      "verify_sql": "select r.business_date,\n       count(*) as deals,\n       count(*) filter (where r.status = 'called') as called,\n       round((percentile_cont(0.5) within group (order by r.business_seconds))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1) as before_next_noon_pct,\n       count(*) filter (where r.status = 'not_called_open') as open_not_called,\n       count(*) filter (where r.status = 'closed_before_first_call') as closed_before_first_call\nfrom cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r\ngroup by r.business_date order by r.business_date",
+      "notes": "The column label 'Before next noon' does not follow the setting (docs/definitions.md, Gaps W29). One query over cma.speed_to_lead_of (the one function since addition 0009zq) recomputes the day-grouped summary; compare the column this entry names. Swap the final group by for market, agent or pipeline to verify the other groupings."
     },
     {
       "surface": "report",
@@ -9175,11 +9196,15 @@
         "sql": [
           {
             "object": "cma.speed_to_lead_summary",
-            "migration": "0007d"
+            "migration": "0009zq"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0007d"
+            "migration": "0009zq"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008z"
           },
           {
             "object": "cma.lead_deals_of",
@@ -9201,7 +9226,7 @@
           }
         ]
       },
-      "fixture_check": "The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 20 row(s); Martin compares the value with the page in Studio.",
+      "fixture_check": "Not run against a fixture since addition 0009zq; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -9348,11 +9373,11 @@
       "key": "speed_to_lead.open_not_called",
       "tile": "Open, not called",
       "title": {
-        "en": "Open, not called",
-        "nl": "Open, niet gebeld"
+        "en": "Not called yet",
+        "nl": "Nog niet gebeld"
       },
-      "definition": "Lead deals of the group still open with no outbound call yet - the leads the team can still act on.",
-      "formula": "open_not_called = count(*) filter (where status = 'not_called_open'); status = 'not_called_open' when no first outbound call exists and coalesce(is_closed, false) = false; a closed deal without a call is 'not_called_closed' and counts in deals but not here.",
+      "definition": "Lead deals of the group still open with no Attempt yet (\"Not called yet\") - the leads the team can still act on.",
+      "formula": "open_not_called = count(*) filter (where status = 'not_called_open'); status = 'not_called_open' when no first Attempt exists and coalesce(is_closed, false) = false; a closed deal without an attempt is 'closed_before_first_call' and counts in deals but not here.",
       "unit": "count",
       "grain": [
         "period",
@@ -9361,7 +9386,7 @@
         "per_person",
         "per_pipeline"
       ],
-      "verify_sql": "with s as (\n  select t.timezone as zone, cma.setting_of(:tenant_id, 'intake.start_date')::date as start_date,\n         greatest(0, cma.setting_of(:tenant_id, 'speed_to_lead.pre_window_minutes')::integer) as pre_min,\n         cma.setting_of(:tenant_id, 'speed_to_lead.target_minutes')::integer * 60 as target_s\n  from cma.tenant t where t.id = :tenant_id),\nd as (\n  select d.id, d.connection_id, d.source_id, d.source_created_at, coalesce(d.is_closed, false) as is_closed,\n         rm.code as market, (d.source_created_at at time zone s.zone)::date as business_date,\n         array(select x from (select d.contact_source_id as x where d.contact_source_id is not null\n                              union\n                              select a.to_id from cma.crm_association a\n                              where a.tenant_id = :tenant_id and a.connection_id = d.connection_id\n                                and a.from_type = 'deal' and a.from_id = d.source_id\n                                and a.to_type = 'contact' and a.removed_at is null) c) as contacts\n  from cma.crm_record d\n  cross join s\n  left join cma.connection_pipeline p\n    on p.tenant_id = :tenant_id and p.connection_id = d.connection_id\n   and p.record_type = 'deal' and p.source_pipeline_id = d.pipeline_id\n  cross join lateral cma.record_market_of(:tenant_id, d.connection_id, d.market, d.contact_source_id) rm\n  where d.tenant_id = :tenant_id and d.record_type = 'deal' and d.source_deleted_at is null\n    and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)\n    and d.source_created_at >= (s.start_date::timestamp at time zone s.zone)\n    and d.source_created_at >= ((:from)::date::timestamp at time zone s.zone)\n    and d.source_created_at < (((:to)::date + 1)::timestamp at time zone s.zone)),\nfo as (\n  select d.id as deal_id, min(coalesce(tc.started_at, c.occurred_at)) as fo_at\n  from d cross join s\n  join cma.crm_call c\n    on c.tenant_id = :tenant_id and c.connection_id = d.connection_id\n   and c.source_deleted_at is null and c.direction = 'outbound'\n  left join cma.call_link l on l.tenant_id = :tenant_id and l.crm_call_id = c.id and l.unlinked_at is null\n  left join cma.telephony_call tc on tc.tenant_id = :tenant_id and tc.id = l.telephony_call_id and tc.source_deleted_at is null\n  where coalesce(tc.started_at, c.occurred_at) >= d.source_created_at - make_interval(mins => s.pre_min)\n    and exists (select 1 from cma.crm_association a\n                where a.tenant_id = :tenant_id and a.connection_id = c.connection_id\n                  and a.from_type = 'crm_call' and a.from_id = c.source_id and a.removed_at is null\n                  and ((a.to_type = 'deal' and a.to_id = d.source_id)\n                       or (a.to_type = 'contact' and a.to_id = any (d.contacts))))\n  group by d.id),\nm as (\n  select d.*, fo.fo_at, s.target_s,\n         case when fo.fo_at is not null then cma.business_seconds_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at, fo.fo_at) end as bs,\n         case when fo.fo_at is null then cma.business_seconds_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at, now()) end as bs_now,\n         cma.next_business_noon_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at) as noon\n  from d cross join s left join fo on fo.deal_id = d.id)\nselect m.business_date,\n       count(*) as deals,\n       count(m.fo_at) as called,\n       round((percentile_cont(0.5) within group (order by m.bs))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where case when m.bs is not null then m.bs <= m.target_s when m.bs_now > m.target_s then false end)\n             / nullif(count(case when m.bs is not null then m.bs <= m.target_s when m.bs_now > m.target_s then false end), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where case when m.fo_at is not null and m.noon is not null then m.fo_at < m.noon\n                                                 when m.fo_at is null and m.noon is not null and now() >= m.noon then false end)\n             / nullif(count(case when m.fo_at is not null and m.noon is not null then m.fo_at < m.noon\n                                 when m.fo_at is null and m.noon is not null and now() >= m.noon then false end), 0), 1) as before_next_noon_pct,\n       count(*) filter (where m.fo_at is null and not m.is_closed) as open_not_called\nfrom m group by m.business_date order by m.business_date",
+      "verify_sql": "select r.business_date,\n       count(*) as deals,\n       count(*) filter (where r.status = 'called') as called,\n       round((percentile_cont(0.5) within group (order by r.business_seconds))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1) as before_next_noon_pct,\n       count(*) filter (where r.status = 'not_called_open') as open_not_called,\n       count(*) filter (where r.status = 'closed_before_first_call') as closed_before_first_call\nfrom cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r\ngroup by r.business_date order by r.business_date",
       "notes": "db/40:462-463, :829. The same rows feed the 'Open deals not called' list below the table and the Dashboard Intake row's Speed to lead tile hint ({open}). Cross-page: Reports -> Follow-up's 'Leads not called' is a live snapshot over the same lead population (0008o/0008s, another agent's surface); this figure is period-bound (deals CREATED in the period), so the two can differ legitimately. One query recomputes the whole day-grouped summary (cma.business_seconds_of, next_business_noon_of, record_market_of and setting_of are 0007d helpers, not the figure's own functions); compare the column this entry names. Swap the final GROUP BY for market/agent/pipeline to verify the other groupings."
     },
     {
@@ -9397,11 +9422,241 @@
         "sql": [
           {
             "object": "cma.speed_to_lead_summary",
-            "migration": "0007d"
+            "migration": "0009zq"
           },
           {
             "object": "cma.speed_to_lead_of",
+            "migration": "0009zq"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008z"
+          },
+          {
+            "object": "cma.lead_deals_of",
             "migration": "0007d"
+          },
+          {
+            "object": "cma.lead_calls_of",
+            "migration": "0008zc"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/reports.ts",
+            "export": "groupSpeedToLead"
+          },
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadSummary"
+          }
+        ]
+      },
+      "fixture_check": "Not run against a fixture since addition 0009zq; Martin compares the value with the page in Studio.",
+      "prerequisites": [
+        {
+          "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
+          "check": "crm_call_without_contact"
+        },
+        {
+          "item": "Aircall-HubSpot call link so the effective start is the telephony call's",
+          "check": "telephony_call_unlinked"
+        },
+        {
+          "item": "Lead deals carry a contact (speed to lead needs the contact's calls)",
+          "check": "deal_without_contact"
+        },
+        {
+          "item": "Country on the deal or its primary contact, so business time has a market",
+          "check": "market_not_in_catalog"
+        },
+        {
+          "item": "No test deals in the live pipeline",
+          "check": null
+        }
+      ],
+      "docs": [
+        "docs/night-2026-10-10/DESIGN.md paragraph 4.4",
+        "features.md paragraph 4 (Speed to lead)",
+        "kpis.md paragraph 1",
+        "api.md, GET /api/v1/reports/speed-to-lead",
+        "api.md, GET /api/v1/reports/speed-to-lead/rows",
+        "data-model (lead metrics, 0007d)",
+        "decisions.md 10 Oct 2026 (definition), 12 Oct 2026 (Self Serve not a lead pipeline), 15 Oct 2026 (p80 dropped)"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "source_deleted_at",
+            "pipeline_id",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "is_closed",
+            "source_id",
+            "connection_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal creation, property change, association change, deletion) -> ingest service POST /hubspot/<key> -> budgeted read-back -> cma.ingest_upsert_crm_records(); missed or failed events re-read by Cloud Run job ingest-sweep; everything modified in the last 26 h re-read by ingest-reconcile; history by ingest-backfill from intake.start_date",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook association changes -> ingest read-back -> cma.ingest_upsert_crm_records()/associations",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_call",
+          "columns": [
+            "direction",
+            "occurred_at",
+            "source_deleted_at",
+            "outcome_ref",
+            "owner_ref",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (call engagement events) -> ingest service POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_calls(); sweep/reconcile/backfill as for crm_record",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.call_link",
+          "columns": [
+            "crm_call_id",
+            "telephony_call_id",
+            "unlinked_at"
+          ],
+          "owner": "CMA",
+          "fed_by": "the ingest sweep's cma.link_calls(now() - 2 h) pairs telephony calls with CRM calls by the keyed number hash and a 120-second window",
+          "cadence": "every minute (ingest-sweep, docs/ingest/deploy.sh); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.telephony_call",
+          "columns": [
+            "started_at",
+            "answered_at",
+            "source_deleted_at"
+          ],
+          "owner": "Aircall",
+          "fed_by": "Aircall webhook (call.created/answered/ended/tagged/untagged/archived) -> ingest service POST /aircall/<key> -> read-back GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); nightly ingest-reconcile re-lists the look-back's calls",
+          "cadence": "webhook read-back within seconds (the Aircall webhook subscription is created by docs/ingest scripts; its delivery is per event); ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh); Cloud Scheduler itself is outside the repo"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "label"
+          ],
+          "owner": "CMA",
+          "fed_by": "pipeline catalog refreshed by the source's read-back/sweep; is_counted and is_lead set by a person on Configuration -> Sources (cma.set_pipeline_counted / set_pipeline_lead)",
+          "cadence": "catalog with each read-back; flags on demand (configuration)"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "country",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook contact events and on-demand contact reads -> cma.ingest_upsert_crm_contacts(); country slots per 0008m",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant configuration (Configuration -> Markets); market aliases in cma.market_alias",
+          "cadence": "on demand (configuration)"
+        }
+      ],
+      "filters": [
+        "tenant: cma.current_tenant_id() passed explicitly to cma.speed_to_lead_of, under row-level security; the SQL function checks reports.view or performance.team again (CMA06)",
+        "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
+        "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
+        "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
+        "first call: CRM calls of the deal's connection, not deleted, currently associated with the deal or one of its contacts (primary contact plus current deal->contact associations), effective start (linked telephony call's started_at while the link is current and the call not deleted, else crm_call.occurred_at) >= created_at - speed_to_lead.pre_window_minutes",
+        "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
+      ],
+      "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
+      "status": [
+        "verified"
+      ],
+      "key": "speed_to_lead.closed_before_first_call",
+      "tile": "Open, not called",
+      "title": {
+        "en": "Closed before first call",
+        "nl": "Gesloten v\u00f3\u00f3r de eerste poging"
+      },
+      "definition": "Lead deals of the group that closed, won or lost, or whose contact ordered (for example in the shop), before any Attempt. Shown apart and left out of the median and both shares.",
+      "formula": "closed_before_first_call = count(*) filter (where status = 'closed_before_first_call'); status = 'closed_before_first_call' when no first Attempt exists in the deal's window and the deal is closed or its window ended at its contacts' first order (cma.sales_deals_of's window_end_reason 'ordered'); within_target, before_next_noon and waiting_business_seconds are null for such a deal.",
+      "unit": "count",
+      "grain": [
+        "period",
+        "per_day",
+        "per_market",
+        "per_person",
+        "per_pipeline"
+      ],
+      "verify_sql": "select r.business_date,\n       count(*) as deals,\n       count(*) filter (where r.status = 'called') as called,\n       round((percentile_cont(0.5) within group (order by r.business_seconds))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1) as before_next_noon_pct,\n       count(*) filter (where r.status = 'not_called_open') as open_not_called,\n       count(*) filter (where r.status = 'closed_before_first_call') as closed_before_first_call\nfrom cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r\ngroup by r.business_date order by r.business_date",
+      "notes": "Added with the one function (addition 0009zq, Gap D27): was not_called_closed, which counted as late once past the target. Column 'Closed before first call' (nl 'Gesloten v\u00f3\u00f3r de eerste poging') of Sales -> Speed to lead's summary. One query over cma.speed_to_lead_of (the one function since addition 0009zq) recomputes the day-grouped summary; compare the column this entry names. Swap the final group by for market, agent or pipeline to verify the other groupings."
+    },
+    {
+      "surface": "report",
+      "page": "/reports/speed-to-lead",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.pre_window_minutes",
+          "default": "0",
+          "pulse4all": "0 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.target_minutes",
+          "default": "60",
+          "pulse4all": "60 (catalog default; seed 02 sets none)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.speed_to_lead_summary",
+            "migration": "0009zq"
+          },
+          {
+            "object": "cma.speed_to_lead_of",
+            "migration": "0009zq"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008z"
           },
           {
             "object": "cma.lead_deals_of",
@@ -9570,12 +9825,12 @@
         "nl": "Totaal"
       },
       "definition": "The summary table's bottom row: the counts added over the groups. Medians and shares are deliberately blank.",
-      "formula": "totals = sum(deals), sum(called), sum(open_not_called) over the shown groups (TS summaryTotals, src/lib/reports.ts:137-140); the median and the two percentage cells are replaced by one muted cell titled 'Medians and shares do not add up across groups, so the total row shows counts only' (copy.speedToLead.totalNote).",
+      "formula": "totals = sum(deals), sum(called), sum(open_not_called), sum(closed_before_first_call) over the shown groups (TS summaryTotals, src/lib/reports.ts); the median and the two percentage cells are replaced by one muted cell titled 'Medians and shares do not add up across groups, so the total row shows counts only' (copy.speedToLead.totalNote).",
       "unit": "count",
       "grain": [
         "period"
       ],
-      "verify_sql": "with s as (\n  select t.timezone as zone, cma.setting_of(:tenant_id, 'intake.start_date')::date as start_date,\n         greatest(0, cma.setting_of(:tenant_id, 'speed_to_lead.pre_window_minutes')::integer) as pre_min\n  from cma.tenant t where t.id = :tenant_id),\nd as (\n  select d.id, d.connection_id, d.source_id, d.source_created_at, coalesce(d.is_closed, false) as is_closed,\n         array(select x from (select d.contact_source_id as x where d.contact_source_id is not null\n                              union\n                              select a.to_id from cma.crm_association a\n                              where a.tenant_id = :tenant_id and a.connection_id = d.connection_id\n                                and a.from_type = 'deal' and a.from_id = d.source_id\n                                and a.to_type = 'contact' and a.removed_at is null) c) as contacts\n  from cma.crm_record d cross join s\n  left join cma.connection_pipeline p\n    on p.tenant_id = :tenant_id and p.connection_id = d.connection_id\n   and p.record_type = 'deal' and p.source_pipeline_id = d.pipeline_id\n  where d.tenant_id = :tenant_id and d.record_type = 'deal' and d.source_deleted_at is null\n    and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)\n    and d.source_created_at >= (s.start_date::timestamp at time zone s.zone)\n    and d.source_created_at >= ((:from)::date::timestamp at time zone s.zone)\n    and d.source_created_at < (((:to)::date + 1)::timestamp at time zone s.zone)),\nfo as (\n  select d.id as deal_id, min(coalesce(tc.started_at, c.occurred_at)) as fo_at\n  from d cross join s\n  join cma.crm_call c on c.tenant_id = :tenant_id and c.connection_id = d.connection_id\n   and c.source_deleted_at is null and c.direction = 'outbound'\n  left join cma.call_link l on l.tenant_id = :tenant_id and l.crm_call_id = c.id and l.unlinked_at is null\n  left join cma.telephony_call tc on tc.tenant_id = :tenant_id and tc.id = l.telephony_call_id and tc.source_deleted_at is null\n  where coalesce(tc.started_at, c.occurred_at) >= d.source_created_at - make_interval(mins => s.pre_min)\n    and exists (select 1 from cma.crm_association a\n                where a.tenant_id = :tenant_id and a.connection_id = c.connection_id\n                  and a.from_type = 'crm_call' and a.from_id = c.source_id and a.removed_at is null\n                  and ((a.to_type = 'deal' and a.to_id = d.source_id)\n                       or (a.to_type = 'contact' and a.to_id = any (d.contacts))))\n  group by d.id)\nselect count(*) as deals, count(fo.fo_at) as called,\n       count(*) filter (where fo.fo_at is null and not d.is_closed) as open_not_called\nfrom d left join fo on fo.deal_id = d.id",
+      "verify_sql": "select r.business_date,\n       count(*) as deals,\n       count(*) filter (where r.status = 'called') as called,\n       round((percentile_cont(0.5) within group (order by r.business_seconds))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1) as before_next_noon_pct,\n       count(*) filter (where r.status = 'not_called_open') as open_not_called,\n       count(*) filter (where r.status = 'closed_before_first_call') as closed_before_first_call\nfrom cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r\ngroup by r.business_date order by r.business_date",
       "notes": "Pure TS sum over the database's groups; because every deal is in exactly one group, the totals equal the ungrouped counts. Correctly leaves medians and percentages out (they do not aggregate). The muted cell carries the explanation as title and sr-only text (page.tsx:131-141)."
     },
     {
@@ -9611,11 +9866,15 @@
         "sql": [
           {
             "object": "cma.speed_to_lead_rows",
-            "migration": "0007d"
+            "migration": "0009zq"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0007d"
+            "migration": "0009zq"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008z"
           },
           {
             "object": "cma.lead_deals_of",
@@ -9787,13 +10046,13 @@
         "en": "Waiting",
         "nl": "Wacht"
       },
-      "definition": "In the 'Open deals not called' list: how long the open, not-called deal has been waiting, in office minutes of its market, longest first.",
+      "definition": "In the 'Not called yet' list: how long the open deal without an attempt has been waiting, in office minutes of its market, longest first.",
       "formula": "waiting_business_seconds = cma.business_seconds_of(tenant, market, created_at, now()) for rows with status 'not_called_open' (null for market 'unknown'). Screen: fmtBusinessMinutes(floor(waiting_business_seconds / 60)). List = rows filtered to not_called_open, ordered waiting desc (null last, as -1), then created_at, then deal_source_id (TS openNotCalled, src/lib/reports.ts:143-147).",
       "unit": "business_minutes",
       "grain": [
         "per_record"
       ],
-      "verify_sql": "with s as (\n  select t.timezone as zone, cma.setting_of(:tenant_id, 'intake.start_date')::date as start_date,\n         greatest(0, cma.setting_of(:tenant_id, 'speed_to_lead.pre_window_minutes')::integer) as pre_min\n  from cma.tenant t where t.id = :tenant_id),\nd as (\n  select d.id, d.connection_id, d.source_id, d.source_created_at, coalesce(d.is_closed, false) as is_closed,\n         rm.code as market,\n         array(select x from (select d.contact_source_id as x where d.contact_source_id is not null\n                              union\n                              select a.to_id from cma.crm_association a\n                              where a.tenant_id = :tenant_id and a.connection_id = d.connection_id\n                                and a.from_type = 'deal' and a.from_id = d.source_id\n                                and a.to_type = 'contact' and a.removed_at is null) c) as contacts\n  from cma.crm_record d cross join s\n  left join cma.connection_pipeline p\n    on p.tenant_id = :tenant_id and p.connection_id = d.connection_id\n   and p.record_type = 'deal' and p.source_pipeline_id = d.pipeline_id\n  cross join lateral cma.record_market_of(:tenant_id, d.connection_id, d.market, d.contact_source_id) rm\n  where d.tenant_id = :tenant_id and d.record_type = 'deal' and d.source_deleted_at is null\n    and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)\n    and d.source_created_at >= (s.start_date::timestamp at time zone s.zone)\n    and d.source_created_at >= ((:from)::date::timestamp at time zone s.zone)\n    and d.source_created_at < (((:to)::date + 1)::timestamp at time zone s.zone))\nselect d.source_id,\n       cma.business_seconds_of(:tenant_id, nullif(d.market, 'unknown'), d.source_created_at, now()) as waiting_business_seconds\nfrom d\nwhere not d.is_closed\n  and not exists (\n    select 1 from d x cross join s\n    join cma.crm_call c on c.tenant_id = :tenant_id and c.connection_id = x.connection_id\n     and c.source_deleted_at is null and c.direction = 'outbound'\n    left join cma.call_link l on l.tenant_id = :tenant_id and l.crm_call_id = c.id and l.unlinked_at is null\n    left join cma.telephony_call tc on tc.tenant_id = :tenant_id and tc.id = l.telephony_call_id and tc.source_deleted_at is null\n    where x.id = d.id\n      and coalesce(tc.started_at, c.occurred_at) >= d.source_created_at - make_interval(mins => s.pre_min)\n      and exists (select 1 from cma.crm_association a\n                  where a.tenant_id = :tenant_id and a.connection_id = c.connection_id\n                    and a.from_type = 'crm_call' and a.from_id = c.source_id and a.removed_at is null\n                    and ((a.to_type = 'deal' and a.to_id = d.source_id)\n                         or (a.to_type = 'contact' and a.to_id = any (d.contacts)))))\norder by waiting_business_seconds desc nulls last, d.source_created_at, d.source_id",
+      "verify_sql": "select r.deal_source_id, r.waiting_business_seconds from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r where r.status = 'not_called_open' order by r.waiting_business_seconds desc nulls last, r.created_at, r.deal_source_id",
       "notes": "db/40:476 (waiting only for open uncalled deals), page.tsx:166-187. Recomputed at every page load against now(), so it grows between loads. The row shows ids, created (date in tenant zone + time in the VIEWER's zone, me.timeZone - page.tsx:170-172), market code, pipeline label and a record link built from the connection's own template (cma.record_url, 0008); no customer data (audit rule 15 holds). The identity columns (Deal id, Created, Market, Pipeline, record link) are not separate catalog entries (not a CSV)."
     },
     {
@@ -10001,7 +10260,7 @@
         "en": "No business hours",
         "nl": "Geen kantoortijden"
       },
-      "definition": "The waiting cell's state for an open, not-called deal whose market is unknown: there is no office-hours calendar to count waiting time in.",
+      "definition": "The waiting cell's state for an open deal not called yet whose market is unknown: there is no office-hours calendar to count waiting time in.",
       "formula": "shown when waiting_business_seconds is null, i.e. market = 'unknown' (cma.business_seconds_of returns null for a market not in the catalog). The row sorts after every row with a waiting time (null as -1 in the TS sort). Hover title: 'The deal's market is unknown, so there is no office time to count'.",
       "unit": "flag",
       "grain": [
@@ -26569,7 +26828,7 @@
         "nl": "Mediane speed to lead"
       },
       "definition": "Median business time from the deal's creation to its FIRST ATTEMPT, over the attempted deals of a market with office hours; shown in business minutes.",
-      "formula": "speed per deal = cma.business_seconds_of(market, created_at, first_attempt_at) (0 for a pre-window attempt; null for market 'unknown' or no attempt); median_speed_seconds = round(percentile_cont(0.5) within group (order by speed_to_lead_seconds)) over speed_deals = count(speed not null); shown as minutes: round(seconds/6)/10, fmtBusinessMinutes.",
+      "formula": "speed per deal = cma.business_seconds_of(market, created_at, first_attempt_at) (0 for a pre-window attempt; null for market 'unknown' or no attempt); median_speed_seconds = round(percentile_cont(0.5) within group (order by speed_to_lead_seconds)) over speed_deals = count(speed not null); shown as minutes: round(seconds/6)/10, fmtBusinessMinutes. Since addition 0009zq the speed is cma.speed_to_lead_of's business_seconds of the same deal, whose window ends where the attempts' window does (the close, the first order or now), so both reads answer the same for every deal.",
       "unit": "median",
       "grain": [
         "period"
@@ -26850,7 +27109,7 @@
       "status": [
         "discrepancy"
       ],
-      "notes": "CROSS-PAGE (required check): differs from Reports \u2192 Speed to lead's median. There (cma.speed_to_lead_of, 0007d/0008x) the first call is the first OUTBOUND CRM CALL - linked to telephony or not, any line, and with NO window end (a call after the close counts); here, under attempts.source=telephony (Pulse4all), only an outbound Aircall call on a counted line linked to the CRM call counts, and only inside the window that ends at won/lost/first order. Populations: lead deals (is_lead) vs sales deals (is_lead AND NOT is_order) - equal in prod today (0 order-marked-lead pipelines, Decision log 20 Oct 2026). Both are true medians over called/attempted deals with office hours; both show business minutes. See finding F1. Delta better='down'."
+      "notes": "CROSS-PAGE: equals Reports -> Speed to lead's median for the same deals since addition 0009zq (one function, first Attempt); the populations differ only in the deals outside the attempts' window. Delta better='down'."
     },
     {
       "key": "attempts.open_never_attempted",
@@ -28785,7 +29044,7 @@
         "nl": "Gebeld voor de volgende middag"
       },
       "definition": "Won against lost: share called before the next business noon, one value for the won and one for the lost deals of the period.",
-      "formula": "called_before_noon / noon_known; called_before_next_noon per deal = first attempt < cma.next_business_noon_of(market, creation) (false once that noon passed without one; null while open before noon or market unknown); noon_known = count(called_before_next_noon not null)",
+      "formula": "called_before_noon / noon_known; called_before_next_noon per deal = first attempt < cma.next_business_noon_of(market, creation) (false once that noon passed without one; null while open before noon or market unknown); noon_known = count(called_before_next_noon not null) before_next_noon is cma.speed_to_lead_of's (cutoff = speed_to_lead.next_day_cutoff).",
       "unit": "share",
       "grain": [
         "period",
@@ -33326,7 +33585,7 @@
         "nl": "Speed to lead"
       },
       "definition": "Deal-list column: business time to the first attempt, one value per deal.",
-      "formula": "speed_to_lead_seconds = cma.business_seconds_of(market, created_at, first_attempt_at); shown as business minutes (round(s/6)/10); dash for no attempt or unknown market",
+      "formula": "speed_to_lead_seconds = cma.business_seconds_of(market, created_at, first_attempt_at); shown as business minutes (round(s/6)/10); dash for no attempt or unknown market Since addition 0009zq the speed is cma.speed_to_lead_of's business_seconds of the same deal, whose window ends where the attempts' window does (the close, the first order or now), so both reads answer the same for every deal.",
       "unit": "business_minutes",
       "grain": [
         "per_record"
@@ -84174,8 +84433,8 @@
         "en": "Speed to lead, 80th percentile (business minutes)",
         "nl": null
       },
-      "definition": "The 80th percentile of the business minutes from a lead deal's creation to its first outbound call, over the called deals of the group. Returned by the API; the screen dropped the column on 15 October 2026.",
-      "formula": "p80_business_minutes = round(percentile_cont(0.8) within group (order by business_seconds) / 60, 1) over the group's rows of cma.speed_to_lead_of (one row per lead deal created in the period; business_seconds from creation to the first outbound call's effective start, in the deal's market office hours; null business measures for market 'unknown', and percentile_cont ignores nulls so uncalled and no-hours deals fall out) (db/40_lead_metrics.sql, cma.speed_to_lead_summary, line 826).",
+      "definition": "The 80th percentile of the business minutes from a lead deal's creation to its first Attempt, over the called deals of the group. Returned by the API; the screen dropped the column on 15 October 2026.",
+      "formula": "p80_business_minutes = round(percentile_cont(0.8) within group (order by business_seconds) / 60, 1) over the group's rows of cma.speed_to_lead_of (one row per lead deal created in the period; business_seconds from creation to the first Attempt's start, in the deal's market office hours; null business measures for market 'unknown', and percentile_cont ignores nulls so uncalled and no-hours deals fall out) (db/40_lead_metrics.sql, cma.speed_to_lead_summary, line 826).",
       "unit": "percentile",
       "grain": [
         "period",
@@ -84244,7 +84503,7 @@
         "sql": [
           {
             "object": "cma.speed_to_lead_summary",
-            "migration": "0007d"
+            "migration": "0009zq"
           }
         ],
         "ts": [
@@ -84290,8 +84549,8 @@
         "en": "Speed to lead, per-deal measures",
         "nl": null
       },
-      "definition": "One row per lead deal created in the period with its own measures: business minutes to the first outbound call, within target, called before the next business noon, status (called / not_called_open / not_called_closed) and the first call's time. The screens show only the open-not-called rows (Reports \u2192 Speed to lead) and aggregates computed from the rows (Dashboard Intake tile); the per-deal measures of called deals reach no screen.",
-      "formula": "cma.speed_to_lead_rows(from, to) = cma.speed_to_lead_of(tenant, range): per deal, business_seconds from the deal's creation to the first outbound call's effective start (telephony start when linked, else the CRM call's occurred_at; a call in the pre-window counts as 0), within_target = business_seconds <= speed_to_lead.target_minutes * 60 (null while not called and still possible, false once it cannot), before_next_noon per DESIGN \u00a74.4; business measures null for market 'unknown'; ordered by created_at, deal_source_id.",
+      "definition": "One row per lead deal created in the period with its own measures: business minutes to the first Attempt, within target, called before the next business cutoff, status (called / not_called_open / closed_before_first_call), the first attempt's call id and time, the attempts so far, the first outbound CRM call (shown, not measured), the agent (the first attempt's telephony user) and the deal's owner apart. The screen shows the 'Not called yet' rows; the per-deal measures of called deals are API-only.",
+      "formula": "cma.speed_to_lead_rows(from, to) = cma.speed_to_lead_of(tenant, range): per deal, business_seconds from the deal's creation to the first Attempt's start (cma.deal_attempts_of under attempts.source; a pre-window attempt counts as 0), within_target = business_seconds <= speed_to_lead.target_minutes * 60 (null while open, not called and still possible, false once it cannot; null for closed_before_first_call), before_next_noon against speed_to_lead.next_day_cutoff; business measures null for market 'unknown'; ordered by created_at, deal_source_id.",
       "unit": "business_minutes",
       "grain": [
         "period",
@@ -84394,7 +84653,7 @@
       "status": [
         "verified"
       ],
-      "notes": "Partially consumed: /reports/speed-to-lead renders only the not_called_open rows (openNotCalled in lib/reports), and the Dashboard's Intake tile recomputes the median/shares from all rows exactly as the summary does; the per-deal measures of called and closed deals are API-only. recordUrl comes from the connection's record_url_deal template, null without one. verify_sql shares the row builder (see the p80 entry's note)."
+      "notes": "Breaking for API consumers since addition 0009zq: status not_called_closed is now closed_before_first_call; firstAttemptCallId, firstAttemptAt, attemptsSoFar and dealOwnerUserId are new. recordUrl comes from the connection's record_url_deal template, null without one. verify_sql shares the row builder."
     },
     {
       "key": "api.team_status_time.is_billable",

@@ -21,21 +21,25 @@ function groupLabel(row: SpeedToLeadSummaryRow, group: SpeedToLeadGroup, copy: C
     case "date": return fmtDate(d.date, locale, "compact");
     case "text": return d.text;
     case "notMapped": return copy.speedToLead.notMapped;
+    case "noAttempt": return copy.speedToLead.noAttempt;
     case "unknownMarket": return copy.reports.unknownMarket;
     case "unknownPipeline": return copy.speedToLead.unknownPipeline;
   }
 }
 
 /**
- * Speed to lead (Report, B11): how fast new lead deals got their first outbound call, in office time of
- * the deal's market (cma.speed_to_lead_summary and cma.speed_to_lead_rows, migration 0007d), grouped
- * by day, market, agent or pipeline (G cycles), then the open deals not called with a link to the
- * record. The 80th percentile left the table on 15 October 2026 (Martin): the API still returns
- * p80BusinessMinutes; the screen shows the median, % within target, % before next noon and the open
- * deals. Shown to people holding reports.view or performance.team; the database checks again on
- * every read. Deal ids, codes and counts only: no customer name, email or phone number. An agent
- * whose owner is not mapped shows as Not mapped, never as an owner id. Every header explains itself in
- * a hint (copy.hints), the target and office hours filled in from the tenant's settings.
+ * Speed to lead (Report, B11): how fast new lead deals got their first Attempt (an outbound call on the
+ * phone system linked to the deal or its contacts), in office time of the deal's market
+ * (cma.speed_to_lead_summary and cma.speed_to_lead_rows, migration 0007d; one function since 0009zq),
+ * grouped by day, market, agent or pipeline (G cycles), then the deals not called yet with a link to
+ * the record. The 80th percentile left the table on 15 October 2026 (Martin): the API still returns
+ * p80BusinessMinutes; the screen shows the median, % within target, % before the next day's cutoff,
+ * the deals not called yet and, apart, the deals closed before the first call (out of the median and
+ * both shares). Shown to people holding reports.view or performance.team; the database checks again
+ * on every read. Deal ids, codes and counts only: no customer name, email or phone number. The agent is
+ * the person who made the first attempt; a caller whose phone user is not mapped shows as Not mapped,
+ * deals without an attempt as No attempt yet. Every header explains itself in a hint (copy.hints), the
+ * target and office hours filled in from the tenant's settings.
  */
 export default async function SpeedToLeadPage({ searchParams }: PageProps<"/reports/speed-to-lead">) {
   const r = await resolve();
@@ -66,8 +70,10 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
   const targetMinutes = targetMinutesOf(rows);
   const h = copy.hints;
   const hint = (label: string, text: string) => (
-    <HeaderHint label={h.about.replace("{label}", label)} text={fillHint(text, { hours: h.officeHours, target: targetMinutes }, me.locale)} />
+    <HeaderHint label={h.about.replace("{label}", label)} text={fillHint(text, { hours: h.officeHours, target: targetMinutes, cutoff: summary.nextDayCutoff }, me.locale)} />
   );
+  // the next working day's cutoff as the tenant set it (speed_to_lead.next_day_cutoff, read with the summary)
+  const beforeLabel = t.beforeNoon.replace("{time}", summary.nextDayCutoff || "–");
   const groupHint: Record<SpeedToLeadGroup, string> = { day: h.day, market: h.market, agent: h.agent, pipeline: h.pipeline };
   const periodQuery: Record<string, string> =
     range === "custom" && !invalid ? { range, from: period.from, to: period.to } : { range };
@@ -111,8 +117,9 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
                     <th className={`${th} text-right`}><HintLabel label={t.called}>{hint(t.called, h.called)}</HintLabel></th>
                     <th className={`${th} text-right`}><HintLabel label={t.median}>{hint(t.median, h.median)}</HintLabel></th>
                     <th className={`${th} text-right`}><HintLabel label={t.withinTarget}>{hint(t.withinTarget, h.withinTarget)}</HintLabel></th>
-                    <th className={`${th} text-right`}><HintLabel label={t.beforeNoon}>{hint(t.beforeNoon, h.beforeNoon)}</HintLabel></th>
-                    <th className={`${th} text-right`}><HintLabel label={t.openNotCalled}>{hint(t.openNotCalled, h.openNotCalled)}</HintLabel></th>
+                    <th className={`${th} text-right`}><HintLabel label={beforeLabel}>{hint(beforeLabel, h.beforeNoon)}</HintLabel></th>
+                    <th className={`${th} text-right`}><HintLabel label={t.notCalledYet}>{hint(t.notCalledYet, h.notCalledYet)}</HintLabel></th>
+                    <th className={`${th} text-right`}><HintLabel label={t.closedBeforeFirstCall}>{hint(t.closedBeforeFirstCall, h.closedBeforeFirstCall)}</HintLabel></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -125,6 +132,7 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
                       <td className={`${td} tabular text-right`}>{fmtPct(x.withinTargetPct, me.locale)}</td>
                       <td className={`${td} tabular text-right`}>{fmtPct(x.beforeNextNoonPct, me.locale)}</td>
                       <td className={`${td} tabular text-right`}>{n(x.openNotCalled)}</td>
+                      <td className={`${td} tabular text-right`}>{n(x.closedBeforeFirstCall)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -137,6 +145,7 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
                       <span className="sr-only">{t.totalNote}</span>
                     </td>
                     <td className={`${td} tabular text-right`}>{n(totals.openNotCalled)}</td>
+                    <td className={`${td} tabular text-right`}>{n(totals.closedBeforeFirstCall)}</td>
                   </tr>
                 </tfoot>
               </table>

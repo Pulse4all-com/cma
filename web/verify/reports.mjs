@@ -160,14 +160,18 @@ expect("92 days pass, 93 and a backwards range do not",
   [null, "length", "order", null], [null, null, "order", null]);
 
 // ---- speed to lead -----------------------------------------------------------------------------
-// Fixture rows: invented ids; owner refs never appear in a row, the agent is a person id or null
+// Fixture rows: invented ids; owner refs never appear in a row, the agent is a person id or null. Since addition 0009zq
+// the agent is the person who made the first attempt (none without one), and a deal closed before its first attempt
+// (closed_before_first_call) is in neither share
 const base = { connectionId: "c1", pipelineId: "p1", pipelineLabel: "Sales", marketSource: "record", isClosed: false, firstCallSourceId: null,
   firstCallLinked: null, firstAnyCallAt: null, firstAnyDirection: null, inboundFirst: false, firstConnectedAt: null, agentFrom: null,
-  elapsedSeconds: null, targetSeconds: 3600, nextBusinessNoon: null, waitingBusinessSeconds: null, recordUrl: null };
+  elapsedSeconds: null, targetSeconds: 3600, nextBusinessNoon: null, waitingBusinessSeconds: null, firstAttemptCallId: null,
+  attemptsSoFar: 0, dealOwnerUserId: null, recordUrl: null };
 let seq = 0;
 const deal = (date, market, status, businessSeconds, withinTarget, beforeNextNoon, agentUserId, extra = {}) => ({
   ...base, dealId: `d${++seq}`, dealSourceId: String(1000 + seq), date, createdAt: `${date}T09:0${seq % 10}:00Z`, market, status,
-  businessSeconds, withinTarget, beforeNextNoon, agentUserId, ...extra,
+  businessSeconds, withinTarget, beforeNextNoon, agentUserId, firstAttemptAt: status === "called" ? `${date}T10:00:00Z` : null,
+  isClosed: status === "closed_before_first_call", ...extra,
 });
 const rows = [
   deal("2026-10-05", "NL", "called", 420, true, true, "u-ana"),            // 7 business minutes
@@ -175,19 +179,22 @@ const rows = [
   deal("2026-10-05", "GB", "called", 7200, false, true, null),             // 120, owner not mapped
   deal("2026-10-06", "GB", "not_called_open", null, null, null, null, { waitingBusinessSeconds: 1800 }),
   deal("2026-10-06", "unknown", "called", null, null, null, "u-bo"),      // no business hours: measures empty
-  deal("2026-10-06", "NL", "not_called_closed", null, false, false, "u-bo", { pipelineId: null, pipelineLabel: null }),
-  deal("2026-10-06", "NL", "not_called_open", null, false, null, "u-bo", { waitingBusinessSeconds: 5400 }),
+  deal("2026-10-06", "NL", "closed_before_first_call", null, null, null, null, { pipelineId: null, pipelineLabel: null, dealOwnerUserId: "u-bo" }),
+  deal("2026-10-06", "NL", "not_called_open", null, false, null, null, { waitingBusinessSeconds: 5400, dealOwnerUserId: "u-bo" }),
   deal("2026-10-06", "unknown", "not_called_open", null, null, null, null),
 ];
 expect("percentile_cont: median and 80th percentile interpolate",
   [percentileCont([420, 900, 7200], 0.5), percentileCont([420, 900, 7200], 0.8), percentileCont([10, 20, 30, 40], 0.5), percentileCont([], 0.5)],
   [900, 4680, 25, null], [900, 7200, 20, null]);
-expect("period figures as the summary computes them", speedFigures(rows),
-  { deals: 8, called: 4, medianBusinessMinutes: 15, p80BusinessMinutes: 78, withinTargetPct: 40, beforeNextNoonPct: 75, openNotCalled: 3 },
-  { deals: 8, called: 4, medianBusinessMinutes: 7, p80BusinessMinutes: 78, withinTargetPct: 37.5, beforeNextNoonPct: 75, openNotCalled: 3 });
+expect("period figures as the summary computes them (closed before the first call apart)", speedFigures(rows),
+  { deals: 8, called: 4, medianBusinessMinutes: 15, p80BusinessMinutes: 78, withinTargetPct: 50, beforeNextNoonPct: 100, openNotCalled: 3, closedBeforeFirstCall: 1 },
+  { deals: 8, called: 4, medianBusinessMinutes: 15, p80BusinessMinutes: 78, withinTargetPct: 40, beforeNextNoonPct: 75, openNotCalled: 3, closedBeforeFirstCall: 0 });
 expect("nothing known yet: shares and minutes are empty, not 0",
-  speedFigures([rows[3]]), { deals: 1, called: 0, medianBusinessMinutes: null, p80BusinessMinutes: null, withinTargetPct: null, beforeNextNoonPct: null, openNotCalled: 1 },
-  { deals: 1, called: 0, medianBusinessMinutes: 0, p80BusinessMinutes: 0, withinTargetPct: 0, beforeNextNoonPct: 0, openNotCalled: 1 });
+  speedFigures([rows[3]]), { deals: 1, called: 0, medianBusinessMinutes: null, p80BusinessMinutes: null, withinTargetPct: null, beforeNextNoonPct: null, openNotCalled: 1, closedBeforeFirstCall: 0 },
+  { deals: 1, called: 0, medianBusinessMinutes: 0, p80BusinessMinutes: 0, withinTargetPct: 0, beforeNextNoonPct: 0, openNotCalled: 1, closedBeforeFirstCall: 0 });
+expect("a deal closed before its first call: counted apart, in no share",
+  speedFigures([rows[5]]), { deals: 1, called: 0, medianBusinessMinutes: null, p80BusinessMinutes: null, withinTargetPct: null, beforeNextNoonPct: null, openNotCalled: 0, closedBeforeFirstCall: 1 },
+  { deals: 1, called: 0, medianBusinessMinutes: null, p80BusinessMinutes: null, withinTargetPct: 0, beforeNextNoonPct: 0, openNotCalled: 0, closedBeforeFirstCall: 1 });
 
 const names = { "u-ana": "Ana", "u-bo": "Bo" };
 const byDay = groupSpeedToLead(rows, "day", (id) => names[id] ?? null);
@@ -195,11 +202,11 @@ expect("by day: one group per business date, in order",
   byDay.map((g) => [g.groupKey, g.deals, g.called, g.openNotCalled]), [["2026-10-05", 3, 3, 0], ["2026-10-06", 5, 1, 3]],
   [["2026-10-06", 5, 1, 3], ["2026-10-05", 3, 3, 0]]);
 const byAgent = groupSpeedToLead(rows, "agent", (id) => names[id] ?? null);
-expect("by agent: the person's id as key, not mapped under unknown",
-  byAgent.map((g) => [g.groupKey, g.groupLabel, g.deals]), [["u-ana", "Ana", 2], ["u-bo", "Bo", 3], ["unknown", null, 3]],
-  [["u-ana", "Ana", 2], ["u-bo", "Bo", 3], ["unknown", "unknown", 3]]);
-expect("an agent who is not mapped shows as Not mapped",
-  byAgent.map((g) => groupDisplay(g, "agent").kind), ["text", "text", "notMapped"], ["text", "text", "text"]);
+expect("by agent: the first attempt's person as key, not mapped under unknown, no attempt apart",
+  byAgent.map((g) => [g.groupKey, g.groupLabel, g.deals]), [["no_attempt", null, 4], ["u-ana", "Ana", 2], ["u-bo", "Bo", 1], ["unknown", null, 1]],
+  [["u-ana", "Ana", 2], ["u-bo", "Bo", 3], ["unknown", null, 3]]);
+expect("an agent who is not mapped shows as Not mapped, deals without an attempt as No attempt yet",
+  byAgent.map((g) => groupDisplay(g, "agent").kind), ["noAttempt", "text", "text", "notMapped"], ["notMapped", "text", "text", "notMapped"]);
 const byMarket = groupSpeedToLead(rows, "market", () => null);
 expect("by market: codes, and unknown said in words",
   byMarket.map((g) => [g.groupKey, groupDisplay(g, "market").kind]), [["GB", "text"], ["NL", "text"], ["unknown", "unknownMarket"]],
@@ -208,7 +215,8 @@ const byPipeline = groupSpeedToLead(rows, "pipeline", () => null);
 expect("by pipeline: connection and pipeline as key, a missing label unknown",
   byPipeline.map((g) => [g.groupKey, groupDisplay(g, "pipeline").kind]), [["c1:", "unknownPipeline"], ["c1:p1", "text"]],
   [["c1:p1", "text"], ["c1:", "unknownPipeline"]]);
-expect("totals add counts only", summaryTotals(byDay), { deals: 8, called: 4, openNotCalled: 3 }, { deals: 8, called: 4, openNotCalled: 0 });
+expect("totals add counts only", summaryTotals(byDay), { deals: 8, called: 4, openNotCalled: 3, closedBeforeFirstCall: 1 },
+  { deals: 8, called: 4, openNotCalled: 0, closedBeforeFirstCall: 0 });
 expect("open deals not called: longest waiting first, no business time last",
   openNotCalled(rows).map((r) => r.dealSourceId), ["1007", "1004", "1008"], ["1004", "1007", "1008"]);
 expect("no row carries an owner id or a personal field",
@@ -1254,7 +1262,8 @@ const atOc = attemptOutcomes(atWeek());
 expect("attempts: won against lost, the deals not decided counted apart, as 95's B12",
   `${atOc.rows.map((o) => `${o.outcome}:${o.deals}/${o.avgAttempts.toFixed(2)}/${o.medianAttempts.toFixed(1)}/${o.medianSpeedSeconds ?? "-"}/${o.calledBeforeNoon}of${o.noonKnown}/${o.conversationDeals}/${o.avgTalkConversationSeconds ?? "-"}`).join(" ")}`
     + ` not_decided:${atOc.notDecided} open:${atOc.open} ordered:${atOc.ordered} unknown:${atOc.unknown}`,
-  "won:2/2.50/2.5/6440/2of2/2/165 lost:2/1.00/1.0/3590/1of2/1/90 not_decided:7 open:4 ordered:2 unknown:1",
+  // since addition 0009zq the lost deal closed before its first attempt (dL2) has no known noon: 1 of 1, not 1 of 2
+  "won:2/2.50/2.5/6440/2of2/2/165 lost:2/1.00/1.0/3590/1of1/1/90 not_decided:7 open:4 ordered:2 unknown:1",
   "won:2/2.50/2.5/6440/2of2/2/335 lost:2/1.00/1.0/3590/1of1/0/- not_decided:7 open:4 ordered:2 unknown:1");
 const atSp = attemptSpeedBuckets(atWeek(), "5,15,60,240,1440");
 expect("attempts: the win rate by attempts and by speed to lead with their buckets, as 95's B13",
@@ -1265,7 +1274,8 @@ expect("attempts: the win rate by attempts and by speed to lead with their bucke
 const atPrev = attemptsInPeriod(attemptRecords(atDeals, atOptions()), "2026-09-28", "2026-10-04", AT_ALL, null, AMS_AT);
 expect("attempts: the figures, the previous period and the first conversation per attempt, as 95's B14",
   `${atFig(attemptFigures(atWeek()))} | ${atFig(attemptFigures(atPrev))} | ${attemptBuckets(atWeek(), 5).filter((b) => b.bucket > 0).map((b) => `${b.label}:${b.firstConversation}`).join(" ")}`,
-  "11/9/13/1.18/1.0/6/5/5390/8of11/4/1/2/2/2/1/689/645/6/2 | 1/1/1/1.00/1.0/1/1/590/1of1/0/0/1/0/0/0/60/60/0/0 | 1:5 2:0 3:1 4:0 5+:0",
+  // 8 of 10 since addition 0009zq: the deal closed before its first attempt is in no share
+  "11/9/13/1.18/1.0/6/5/5390/8of10/4/1/2/2/2/1/689/645/6/2 | 1/1/1/1.00/1.0/1/1/590/1of1/0/0/1/0/0/0/60/60/0/0 | 1:5 2:0 3:1 4:0 5+:0",
   "11/9/13/1.18/1.0/5/4/5390/8of11/4/1/2/2/2/1/689/560/6/2 | 0/0/0/-/-/0/0/-/0of0/0/0/0/0/0/0/0/0/0/0 | 1:4 2:0 3:1 4:0 5+:0");
 const atList = attemptList(atWeek(), 100);
 const atCapped = attemptList(atWeek(), 4);
@@ -1297,7 +1307,7 @@ const atCur = attemptFigures(atWeek());
 expect("attempts: the shares (attempted, a conversation, the first a conversation, noon, without an outcome, won), none without a base; one decimal",
   [attemptedShare(atCur), conversationShare(atCur), firstConversationShare(atCur), noonShare(atCur), withoutOutcomeShare(atCur), firstConversationOnShare({ firstConversation: 1 }, 0),
     wonRate({ won: 1, lost: 0 }), wonRate({ won: 0, lost: 0 }), fmtAttempts(1.55, "en"), fmtAttempts(1.55, "nl"), fmtAttempts(null, "en"), speedMinutes(290), speedMinutes(null)],
-  [9 / 11, 6 / 11, 5 / 9, 8 / 11, 6 / 13, null, 1, null, "1.6", "1,6", "–", 4.8, null],
+  [9 / 11, 6 / 11, 5 / 9, 8 / 10, 6 / 13, null, 1, null, "1.6", "1,6", "–", 4.8, null],
   [9 / 11, 5 / 11, 4 / 9, 8 / 11, 6 / 13, 0, 1, 0, "1.55", "1,6", "0", 4.8, null]);
 expect("attempts: the bars in the series' colours, never a red",
   [ATTEMPTS_BAR_CLASS, SINCE_LAST_CLASS, /red|error|rose/.test(ATTEMPTS_BAR_CLASS + SINCE_LAST_CLASS)], ["bg-p4a-deepblue", "bg-p4a-lightblue", false], ["bg-p4a-error", "bg-p4a-lightblue", false]);

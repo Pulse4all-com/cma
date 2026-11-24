@@ -18,6 +18,21 @@
 -- (210's subscription_variant_unmapped and subscription_device_units_mismatch, 214's source_figure_gap), so E5 compares the
 -- new function on the check keys the old copy names (the catalog's keys quoted in its text) and names the keys it leaves
 -- out in its row; provoked it still fails.
+-- Edited by 0009zq (234, 24 November 2026; brief B40a): speed to lead ends at the first Attempt and the next working
+-- day's cutoff is a setting, on purpose, so where 0009zq has run E2 (open_leads_of: its population changes) reads skip
+-- and names 235_verify_speed_to_lead_one.sql, which verifies the new definitions, and E3 and E4 compare the columns
+-- 0009zq leaves as they were (the deals, the first outbound CRM call, the first call, the first connected call, the
+-- target, and the cutoff moment where the tenant's cutoff is 12:00); E7 and A1 compare
+-- cma.next_business_noon_in in its cutoff form (the tenant's speed_to_lead.next_day_cutoff) with the _of function, which
+-- reads the same setting; S5 names the cutoff form. Before 0009zq the script runs as it did.
+-- Edited after 0009zq (24 November 2026; prod's run of 179 after 234: E6 read "8230 rows now against 8230 before: 3 only
+-- now, 3 only before" for pulse4all-subscriptions; db/diagnose_0009zq_prod.sql, kept in records/0009zq-prod-2026-11-24/,
+-- found under one snapshot six rows of check source_figure_gap, where 214's function sets the market and the copy, which
+-- does not map the object type source_figure, says unknown): E6 leaves out the rows of the object types the current
+-- function's text names and the old copy's does not (today source_figure) and names those types and the check keys on
+-- them, as E5 does since 21 November 2026 (source_figure_gap is verified by 211 and 215); pg_temp.v0009o_diff computes both sides and its four numbers in one statement, so writes
+-- made while the check runs (prod's ingest) cannot split them. Not caused by 0009zq: no function the flash findings
+-- read is one 234 re-creates.
 -- Expected verdict, in dev and in prod: "0009o verified | 179_verify_job_reads: <n> ok, 0 FAIL, <k> skip" (a tenant
 -- without data reads ok on empty sets); provoked (verify.provoke true at the top): every E row reads FAIL (the previous
 -- definition's first row is dropped before the comparison, or the row says the set was empty), every S and A row reads
@@ -106,9 +121,16 @@ as $$
   order by case when m.open_s is null then 1 else 0 end, (m.sla * 60 - m.open_s), m.source_created_at, m.source_id
 $$;
 
--- speed_to_lead_of as 40 defined it
+-- speed_to_lead_of as 40 defined it, with its row type's columns as 40 defined them (0009zq appends four to the type;
+-- spelled out, the copy is still made where 0009zq has run, though E3 and E4 then skip)
 create or replace function pg_temp.old_speed_to_lead_of(p_tenant_id uuid, p_from timestamptz, p_to timestamptz)
-returns setof cma.speed_to_lead_row
+returns table (tenant_id uuid, deal_id uuid, connection_id uuid, deal_source_id text, pipeline_id text, pipeline_label text,
+               business_date date, created_at timestamptz, market text, market_source text, is_closed boolean, status text,
+               first_call_id uuid, first_call_source_id text, first_call_at timestamptz, first_call_linked boolean,
+               first_any_call_at timestamptz, first_any_direction text, inbound_first boolean, first_connected_at timestamptz,
+               agent_user_id uuid, agent_ref text, agent_from text, elapsed_seconds integer, business_seconds integer,
+               target_seconds integer, within_target boolean, next_business_noon timestamptz, before_next_noon boolean,
+               waiting_business_seconds integer)
 language sql stable
 as $$
   with s as (
@@ -742,19 +764,20 @@ begin
   if current_setting('verify.provoke')::boolean then
     v_old := format('select * from (%s) z offset 1', p_old);
   end if;
-  execute format('select count(*) from (%s) a', p_new) into v_n_new;
-  execute format('select count(*) from (%s) a', v_old) into v_n_old;
+  -- one statement (edited after 0009zq): both sides are read once and the four numbers and the order come from the same
+  -- snapshot, so rows written while the check runs (prod's ingest) cannot make the two sides differ
+  execute format('with a as materialized (%s), b as materialized (%s)
+                  select (select count(*) from a), (select count(*) from b),
+                         (select count(*) from (select * from a except all select * from b) x),
+                         (select count(*) from (select * from b except all select * from a) x),
+                         case when %L then (select string_agg(r::text, ''|'' order by r.o) from (select row_number() over () as o, t from a t) r)
+                                           is not distinct from
+                                           (select string_agg(r::text, ''|'' order by r.o) from (select row_number() over () as o, t from b t) r)
+                              else true end', p_new, v_old, p_ordered)
+    into v_n_new, v_n_old, v_only_new, v_only_old, v_same;
   if current_setting('verify.provoke')::boolean and v_n_new = 0 then
     return 'provoked, but the set is empty: nothing to differ (FAIL by the switch)';
   end if;
-  if p_ordered then
-    execute format('select (select string_agg(a::text, ''|'' order by a.o) from (select row_number() over () as o, t from (%s) t) a) is not distinct from
-                           (select string_agg(b::text, ''|'' order by b.o) from (select row_number() over () as o, t from (%s) t) b)', p_new, v_old) into v_same;
-  else
-    v_same := true;
-  end if;
-  execute format('select count(*) from ((%s) except all (%s)) a', p_new, v_old) into v_only_new;
-  execute format('select count(*) from ((%s) except all (%s)) a', v_old, p_new) into v_only_old;
   if v_only_new = 0 and v_only_old = 0 and v_same then
     return null;
   end if;
@@ -775,11 +798,18 @@ language plpgsql
 as $$
 declare
   c record; n_s integer := 0; n_d integer := 0; n_n integer := 0; v_pairs integer := 0; v_first text;
-  a timestamptz; b timestamptz;
+  a timestamptz; b timestamptz; v_noon timestamptz;
+  -- 0009zq: the cutoff form, with the tenant's cutoff (the _of function reads the same setting)
+  v_cutoff_form boolean := to_regprocedure('cma.next_business_noon_in(text,integer[],date[],timestamptz,time)') is not null;
 begin
   select * into c from cma.business_calendar_of(p_tenant) x where x.market = p_market;
   foreach a in array p_from loop
-    if cma.next_business_noon_in(c.time_zone, c.weekdays, c.holidays, a) is distinct from cma.next_business_noon_of(p_tenant, p_market, a) then
+    if v_cutoff_form then
+      v_noon := cma.next_business_noon_in(c.time_zone, c.weekdays, c.holidays, a, cma.setting_of(p_tenant, 'speed_to_lead.next_day_cutoff')::time);
+    else
+      v_noon := cma.next_business_noon_in(c.time_zone, c.weekdays, c.holidays, a);
+    end if;
+    if v_noon is distinct from cma.next_business_noon_of(p_tenant, p_market, a) then
       n_n := n_n + 1; v_first := coalesce(v_first, format('noon at %s', a));
     end if;
     foreach b in array p_to loop
@@ -843,7 +873,9 @@ begin
   v_ok := true; v_txt := null;
   foreach f in array array[
     'cma.business_calendar_of(uuid)', 'cma.business_seconds_in(text,integer[],time[],time[],date[],timestamptz,timestamptz)',
-    'cma.business_days_in(text,integer[],date[],timestamptz,timestamptz)', 'cma.next_business_noon_in(text,integer[],date[],timestamptz)',
+    'cma.business_days_in(text,integer[],date[],timestamptz,timestamptz)',
+    case when to_regprocedure('cma.next_business_noon_in(text,integer[],date[],timestamptz,time)') is not null
+         then 'cma.next_business_noon_in(text,integer[],date[],timestamptz,time)' else 'cma.next_business_noon_in(text,integer[],date[],timestamptz)' end,
     'cma.open_tickets_of(uuid)', 'cma.speed_to_lead_of(uuid,timestamptz,timestamptz)', 'cma.open_leads_of(uuid)', 'cma.data_quality_of(uuid)',
     'cma.flash_findings_compute_of(uuid)', 'cma.follow_up_item_print(integer,text,uuid,text,jsonb)', 'cma.follow_up_input_tables()',
     'cma.follow_up_next_change_of(uuid,timestamptz)', 'cma.refresh_follow_up_of(uuid,boolean)', 'cma.refresh_follow_up()',
@@ -900,6 +932,11 @@ declare
   v_checks text[]; v_sql_new text[]; v_sql_old text[]; v_ordered boolean[];
   v_from timestamptz[]; v_to timestamptz[]; m record; v_bad text;
   r jsonb; v_n_old bigint; v_only bigint; v_snap boolean;
+  -- E3 and E4 where 0009zq has run: the columns it leaves as they were (the cutoff moment only at a 12:00 cutoff)
+  v_kept text := 'tenant_id, deal_id, connection_id, deal_source_id, pipeline_id, pipeline_label, business_date, created_at, market, '
+                 || 'market_source, is_closed, first_call_id, first_call_source_id, first_call_at, first_call_linked, first_any_call_at, '
+                 || 'first_any_direction, inbound_first, first_connected_at, target_seconds, '
+                 || 'case when cma.setting_of(tenant_id, ''speed_to_lead.next_day_cutoff'') = ''12:00'' then next_business_noon end as noon_at_12';
   -- E5 (edited after 0009zg, 21 November 2026): the old copy is 160's and knows none of the checks added since (210's
   -- subscription_variant_unmapped and subscription_device_units_mismatch, 214's source_figure_gap, ...), so the new
   -- function is compared on the check keys the old copy knows: every key of the catalog that its text names, quoted.
@@ -909,6 +946,18 @@ declare
                           where position('''' || c.check_key || '''' in v_src) > 0 order by c.check_key collate "C");
   v_left  text := (select string_agg(c.check_key, ', ' order by c.check_key collate "C") from cma.data_quality_catalog() c
                    where position('''' || c.check_key || '''' in v_src) = 0);
+  -- E6 (edited after 0009zq, 24 November 2026): the old copy is 132's and maps a finding's market by its object type; 214
+  -- added the type source_figure (check source_figure_gap, verified by 211 and 215), which the copy reads as unknown. E6
+  -- leaves out the rows of the types the current function names and the copy does not, and names them
+  v_ff_src  text := (select p.prosrc from pg_proc p where p.oid = 'pg_temp.old_flash_findings_compute_of(uuid)'::regprocedure);
+  -- the words the current function's text quotes and the old copy's does not: the object types it maps that the copy
+  -- reads as unknown (today source_figure); only rows of those types are left out
+  v_ff_left text[] := array(select w
+                            from (select distinct (regexp_matches(p.prosrc, '''([a-z_]+)''', 'g'))[1] as w
+                                  from pg_proc p where p.oid = 'cma.flash_findings_compute_of(uuid)'::regprocedure) x
+                            where position('''' || w || '''' in v_ff_src) = 0
+                            order by w collate "C");
+  v_ff_keys text;
 begin
   for t in select te.id, te.slug from cma.tenant te order by te.slug loop
     perform set_config('app.tenant_id', t.id::text, true);
@@ -923,14 +972,27 @@ begin
                        format('select * from cma.speed_to_lead_of(%L, null, null)', t.id),
                        format('select * from cma.speed_to_lead_of(%L, date_trunc(''month'', now()) - interval ''1 month'', date_trunc(''month'', now()))', t.id),
                        format('select * from cma.data_quality_of(%L) where check_key = any (%L::text[])', t.id, v_known),
-                       format('select * from cma.flash_findings_compute_of(%L)', t.id)];
+                       format('select * from cma.flash_findings_compute_of(%L) where coalesce(object_type, '''') <> all (%L::text[])', t.id, v_ff_left)];
     v_sql_old := array[format('select * from pg_temp.old_open_tickets_of(%L)', t.id), format('select * from pg_temp.old_open_leads_of(%L)', t.id),
                        format('select * from pg_temp.old_speed_to_lead_of(%L, null, null)', t.id),
                        format('select * from pg_temp.old_speed_to_lead_of(%L, date_trunc(''month'', now()) - interval ''1 month'', date_trunc(''month'', now()))', t.id),
-                       format('select * from pg_temp.old_data_quality_of(%L)', t.id), format('select * from pg_temp.old_flash_findings_compute_of(%L)', t.id)];
+                       format('select * from pg_temp.old_data_quality_of(%L)', t.id),
+                       format('select * from pg_temp.old_flash_findings_compute_of(%L) where coalesce(object_type, '''') <> all (%L::text[])', t.id, v_ff_left)];
     v_ordered := array[true, true, false, false, false, false];
     for i in 1 .. cardinality(v_checks) loop
       v_ord := v_ord + 1; v_diff := null; v_err := null;
+      -- 0009zq redefined open_leads_of's population and owner and speed_to_lead_of's end on purpose: 235 verifies them.
+      -- E2 skips; E3 and E4 compare the columns 0009zq leaves as they were (the deals, the first outbound CRM call, the
+      -- first call and the first connected call, the target, and the cutoff moment where the tenant's cutoff is 12:00)
+      if i = 2 and exists (select 1 from cma.schema_migration where version = '0009zq') then
+        insert into verify_0009o values (v_ord, v_checks[i] || ' (' || t.slug || ')', case when v_provoke then 'FAIL' else 'skip' end,
+          'redefined by 0009zq (234): 235_verify_speed_to_lead_one.sql verifies it');
+        continue;
+      end if;
+      if i in (3, 4) and exists (select 1 from cma.schema_migration where version = '0009zq') then
+        v_sql_new[i] := replace(v_sql_new[i], 'select * from', 'select ' || v_kept || ' from');
+        v_sql_old[i] := replace(v_sql_old[i], 'select * from', 'select ' || v_kept || ' from');
+      end if;
       begin
         -- E5 with no key of the catalog found in the old copy compares nothing: a FAIL, never an empty ok
         if i = 5 and cardinality(v_known) = 0 then
@@ -938,6 +1000,11 @@ begin
         end if;
         perform set_config('role', 'cma_app', true);
         v_diff := pg_temp.v0009o_diff(v_sql_new[i], v_sql_old[i], v_ordered[i]);
+        -- E6: the check keys on the rows it leaves out, named in its row
+        if i = 6 then
+          select string_agg(distinct f.check_key collate "C", ', ' order by f.check_key collate "C") into v_ff_keys
+          from cma.flash_findings_compute_of(t.id) f where f.object_type = any (v_ff_left);
+        end if;
         perform set_config('role', 'cma_owner', true);
       exception when others then
         perform set_config('role', 'cma_owner', true);
@@ -945,8 +1012,11 @@ begin
       end;
       insert into verify_0009o values (v_ord, v_checks[i] || ' (' || t.slug || ')',
         case when v_err is null and v_diff is null then 'ok' else 'FAIL' end,
-        coalesce(v_err, v_diff, 'the same rows as the previous definition' || case when v_ordered[i] then ', in the same order' else '' end)
+        coalesce(v_err, v_diff, 'the same rows as the previous definition' || case when v_ordered[i] then ', in the same order' else '' end
+                 || case when i in (3, 4) and position('noon_at_12' in v_sql_new[i]) > 0 then ', on the columns 0009zq keeps' else '' end)
         || case when i = 5 then format(' (on the %s check keys the old copy knows; left out, added since: %s)', cardinality(v_known), coalesce(v_left, 'none'))
+                when i = 6 then format(' (left out, object types the current function maps and the old copy does not: %s; check keys on those rows here: %s)',
+                                       coalesce(nullif(array_to_string(v_ff_left, ', '), ''), 'none'), coalesce(v_ff_keys, 'none'))
                 else '' end);
     end loop;
 

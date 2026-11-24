@@ -55,7 +55,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { INVITE_TOKEN_RE } from "@/lib/invitations";
 import { recordUrlPreview, settingsProblem } from "@/lib/sources";
 import {
-  applyConnections, callRecords, callRules, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead,
+  applyConnections, callRecords, callRules, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead, speedFigures,
   historyStartOf, inboundCalls, inboundFigures, missedReasonOf, parseCallsFilter, PER_AGENT_PERMISSION, previousCalls, previousPeriod, rangeProblem,
   FORMS_GROUPS, formsAnswersOf, formsFigures, formsHistoryStart, parseAnswerFilter, parseFormsFilter, previousForms, type FormSubmissionRecord,
   type CallRecord, type CallRules, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture, timeInZone,
@@ -245,7 +245,7 @@ function mockSpeedRows(me: Principal, range: { from: DateKey; to: DateKey }): Sp
       const createdAt = new Date(createdMs).toISOString();
       const recent = addDays(date, 3) >= today;
       const roll = h("status");
-      const status: SpeedToLeadStatus = date === today && i === 0 ? "not_called_open" : roll < 0.72 ? "called" : recent ? "not_called_open" : "not_called_closed";
+      const status: SpeedToLeadStatus = date === today && i === 0 ? "not_called_open" : roll < 0.72 ? "called" : recent ? "not_called_open" : "closed_before_first_call";
       const called = status === "called";
       const businessMinutes = Math.round(2 + h("speed") ** 2 * 300);
       const businessSeconds = called && known ? businessMinutes * 60 : null;
@@ -254,7 +254,8 @@ function mockSpeedRows(me: Principal, range: { from: DateKey; to: DateKey }): Sp
       const team = TEAM[Math.floor(h("agent") * TEAM.length)]!;
       const mapped = Math.floor(h("agent") * 1000) % 5 !== 0;
       const waiting = status === "not_called_open" && known ? Math.round(30 + h("wait") * 900) * 60 : null;
-      const late = !called && known && (waiting === null || waiting > 3600);
+      // late once past the target, for an open deal not called yet only: a deal closed before its first call is in no share
+      const late = status === "not_called_open" && known && (waiting === null || waiting > 3600);
       rows.push({
         dealId: `00000000-0000-7000-8000-${String(rows.length + 1).padStart(12, "0")}`,
         connectionId: MOCK_CRM_CONNECTION,
@@ -265,7 +266,7 @@ function mockSpeedRows(me: Principal, range: { from: DateKey; to: DateKey }): Sp
         createdAt,
         market,
         marketSource: known ? (h("src") < 0.8 ? "record" : "contact") : null,
-        isClosed: status === "not_called_closed" || (called && h("closed") < 0.4),
+        isClosed: status === "closed_before_first_call" || (called && h("closed") < 0.4),
         status,
         firstCallSourceId: called ? String(70_000_000 + Math.floor(h("call") * 9_000_000)) : null,
         firstCallAt: callAt,
@@ -274,16 +275,20 @@ function mockSpeedRows(me: Principal, range: { from: DateKey; to: DateKey }): Sp
         firstAnyDirection: called ? "outbound" : null,
         inboundFirst: false,
         firstConnectedAt: called && h("conn") < 0.6 ? callAt : null,
-        // the first call's owner when called, else the deal's owner, as the database picks the agent
-        agentUserId: mapped ? team.userId : null,
-        agentFrom: called ? "call" : "deal",
+        // the person who placed the first attempt, as the database picks the agent (0009zq): none without an attempt
+        agentUserId: called && mapped ? team.userId : null,
+        agentFrom: called ? "call" : null,
         elapsedSeconds: callAt ? Math.round((Date.parse(callAt) - createdMs) / 1000) : null,
         businessSeconds,
         targetSeconds: 3600,
         withinTarget: businessSeconds !== null ? businessSeconds <= 3600 : late ? false : null,
         nextBusinessNoon: noon,
-        beforeNextNoon: called && noon ? Date.parse(callAt!) < Date.parse(noon) : noon && now >= Date.parse(noon) ? false : null,
+        beforeNextNoon: called && noon ? Date.parse(callAt!) < Date.parse(noon) : status === "not_called_open" && noon && now >= Date.parse(noon) ? false : null,
         waitingBusinessSeconds: waiting,
+        firstAttemptCallId: called ? `00000000-0000-7000-9000-${String(rows.length + 1).padStart(12, "0")}` : null,
+        firstAttemptAt: callAt,
+        attemptsSoFar: called ? 1 + Math.floor(h("tries") * 4) : 0,
+        dealOwnerUserId: mapped ? team.userId : null,
         recordUrl: `https://example.com/crm/deal/${String(90_000_000 + Math.floor(h("id") * 9_000_000))}`,
       });
     }
@@ -1531,6 +1536,8 @@ const MOCK_SETTINGS: TenantSetting[] = [
   { key: "calls.conversation_min_talk_seconds", value: "30", isDefault: true },
   { key: "attempts.speed_buckets_business_minutes", value: "5,15,60,240,1440", isDefault: true },
   { key: "speed_to_lead.pre_window_minutes", value: "10", isDefault: false },
+  // speed to lead in one function (addition 0009zq): the next working day's cutoff at its catalog default, as Pulse4all has it
+  { key: "speed_to_lead.next_day_cutoff", value: "12:00", isDefault: true },
   // lead cohorts (addition 0008zm): the ages and the days lead to order counts, at their catalog defaults
   { key: "cohorts.lead_ages_days", value: "1,7,30,60,90", isDefault: true },
   { key: "lead_to_order.max_days", value: "90", isDefault: true },
@@ -2202,7 +2209,7 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "export.csv.duration_format": "decimal_hours", "export.csv.utf8_bom": "true", "roster.adherence_tolerance_minutes": "5",
   "workday.auto_close_grace_minutes": "120", "telephony.connected_min_seconds": "0",
   "auth.invitation_valid_days": "7", "auth.invitation_email_domains": "",
-  "reports.cancellation_kind": "", "speed_to_lead.target_minutes": "60", "tickets.sla_minutes": "240", "tickets.sla_warning_pct": "75", "leads.age_buckets_business_days": "1,2,5", "tasks.callback_window_minutes": "240",
+  "reports.cancellation_kind": "", "speed_to_lead.target_minutes": "60", "speed_to_lead.next_day_cutoff": "12:00", "tickets.sla_minutes": "240", "tickets.sla_warning_pct": "75", "leads.age_buckets_business_days": "1,2,5", "tasks.callback_window_minutes": "240",
   "follow_up.list_rows": "100",
   "attribution.window_days": "90", "attribution.level_order": "lead_deal,conversation,email,phone_match,attempt,known_contact",
   "attribution.assisted_levels": "lead_deal,conversation,email,phone_match", "attribution.known_contact_minutes": "60", "attribution.order_match_minutes": "1440",
@@ -3567,7 +3574,7 @@ export const mockData: CmaData = {
     const speed = (async () => {
       assertReportRange(range);
       assertPerformance(me);
-      return (await mockData.getSpeedToLeadRows(me, range)).map((r) => ({ ...r, recordUrl: null }));
+      return { groupKey: "total", groupLabel: null, ...speedFigures(await mockData.getSpeedToLeadRows(me, range)) };
     })();
     for (const p of [time, counts, speed]) p.catch(() => undefined);
     return { time, counts, speed };
@@ -4589,12 +4596,15 @@ export const mockData: CmaData = {
     return mockSpeedRows(me, range);
   },
 
-  async getSpeedToLeadSummary(me, range, group) {
+  async getSpeedToLeadSummary(me, range, group, market = null) {
     assertAny(me, ["reports.view", "performance.team"]);
     assertReportRange(range);
     if (!["day", "market", "agent", "pipeline"].includes(group)) throw new CmaDbError("CMA04", "group by day, market, agent or pipeline");
     const names = new Map(TEAM.map((p) => [p.userId, p.displayName]));
-    return { ...range, group, rows: groupSpeedToLead(mockSpeedRows(me, range), group, (id) => names.get(id) ?? null) };
+    const rows = mockSpeedRows(me, range).filter((r) => market === null || r.market === market);
+    const settings = state.config ? state.config.settings : MOCK_SETTINGS;
+    const nextDayCutoff = settings.find((x) => x.key === "speed_to_lead.next_day_cutoff")?.value ?? "12:00";
+    return { ...range, group, rows: groupSpeedToLead(rows, group, (id) => names.get(id) ?? null), nextDayCutoff };
   },
 
   async getIntake(me, range): Promise<Intake> {

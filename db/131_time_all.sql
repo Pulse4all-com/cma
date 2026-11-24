@@ -29,6 +29,9 @@
 -- Subscriptions' page, its list and file, and Customers → Active's Churn rate card), after 216_subscriptions_page.sql.
 -- Since addition 0009zp (232_intake_call_center.sql) the Dashboard's Intake row reads its deals and tickets from the
 -- intake, so its row 'crm records per day' is gone.
+-- Since addition 0009zq (234_speed_to_lead_one.sql) the Dashboard's speed-to-lead row reads the one-row total of
+-- cma.speed_to_lead_summary ('speed to lead total', which needs 234: before it the group is refused, CMA04), and Speed to
+-- lead's page has its rows read timed as a row of its own ('speed to lead {P}', 'rows').
 -- Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
@@ -438,9 +441,10 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- report cores, the previous month then 92 days ({P} is replaced by the period's name, {f} and {t} by its bounds)
 ('b', 'dashboard {P}', 'team status time', $q$select t.*, h.tenant_has_work_area from (select coalesce(bool_or(w.work_area is not null), false) as tenant_has_work_area from cma.work_status w where w.tenant_id = cma.current_tenant_id()) h left join cma.team_status_time('{f}', '{t}', null) t on true$q$, 'overview', array['performance.team']),
 ('b', 'dashboard {P}', 'intake per day', $q$select * from cma.intake_per_day('{f}', '{t}')$q$, 'overview', array['reports.view', 'performance.team']),
-('b', 'dashboard {P}', 'speed to lead rows', $q$select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) from cma.speed_to_lead_rows('{f}', '{t}') r$q$, 'list', array['reports.view', 'performance.team']),
+('b', 'dashboard {P}', 'speed to lead total', $q$select * from cma.speed_to_lead_summary('{f}', '{t}', 'total')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'dashboard {P}', 'callbacks kept', $q$select * from cma.callbacks_kept_report('{f}', '{t}')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'speed to lead {P}', 'summary by day', $q$select * from cma.speed_to_lead_summary('{f}', '{t}', 'day')$q$, 'overview', array['reports.view', 'performance.team']),
+('b', 'speed to lead {P}', 'rows', $q$select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) from cma.speed_to_lead_rows('{f}', '{t}') r$q$, 'list', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'overview by day', $q$select * from cma.calls_overview('{f}', '{t}', null, null, 'day')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'overview by market', $q$select * from cma.calls_overview('{f}', '{t}', null, null, 'market') where period = 'current' and group_key is not null$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'overview by line', $q$select * from cma.calls_overview('{f}', '{t}', null, null, 'line') where period = 'current' and group_key is not null$q$, 'overview', array['reports.view', 'performance.team']),

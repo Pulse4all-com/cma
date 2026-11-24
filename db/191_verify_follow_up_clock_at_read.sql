@@ -9,6 +9,11 @@
 -- because Cloud SQL Studio shows no notices; blocks E and A end with a row of their own ("ran to the end"), which the
 -- verdict requires, so a block that an error ended reads FAIL. Run as your own IAM login after 190_follow_up_clock_at_read.sql, dev
 -- first, then prod.
+-- Edited after 0009zq (24 November 2026; prod's run of 191 after 234: E4 read "1171 items: 1 with another key moved" for
+-- pulse4all-subscriptions, which db/diagnose_0009zq_prod.sql, kept in records/0009zq-prod-2026-11-24/, did not find under
+-- one snapshot: 1,163 items, 0 moved, while the audit log held 153 crm_call, 133 telephony_call and 217 commerce_customer
+-- writes in the 30 minutes before): E4 computes both instants in one statement, so writes made while the check runs
+-- cannot move a key between the two minutes. Not caused by 0009zq.
 -- Expected verdict, in dev and in prod: "0009u verified | 191_verify_follow_up_clock_at_read: <n> ok, 0 FAIL, <k> skip"
 -- (E3 skips a tenant without an active person who may read the report lists, E5 one without a person who may read their
 -- own follow-up; a tenant without open items reads ok on empty sets). Provoked (verify.provoke true at the top): the derived side is computed a minute later than the live one
@@ -307,10 +312,15 @@ begin
     v_ord := v_ord + 1; v_err := null;
     begin
       perform set_config('role', 'cma_app', true);
-      create temporary table v0009u_a on commit drop as
-        select 'u'::text as shape, * from pg_temp.v0009u_items_at(t.id, v_at, '0009u') union all select 'o', * from pg_temp.v0009u_items_at(t.id, v_at, '0009o');
-      create temporary table v0009u_b on commit drop as
-        select 'u'::text as shape, * from pg_temp.v0009u_items_at(t.id, v_at + interval '1 minute', '0009u') union all select 'o', * from pg_temp.v0009u_items_at(t.id, v_at + interval '1 minute', '0009o');
+      -- both instants in one statement (edited after 0009zq): one snapshot, so rows written while the check runs (prod's
+      -- ingest) cannot make the two minutes differ; the two tables below are cut from it and read no live row
+      create temporary table v0009u_ab on commit drop as
+        select 'a'::text as side, 'u'::text as shape, * from pg_temp.v0009u_items_at(t.id, v_at, '0009u')
+        union all select 'a', 'o', * from pg_temp.v0009u_items_at(t.id, v_at, '0009o')
+        union all select 'b', 'u', * from pg_temp.v0009u_items_at(t.id, v_at + interval '1 minute', '0009u')
+        union all select 'b', 'o', * from pg_temp.v0009u_items_at(t.id, v_at + interval '1 minute', '0009o');
+      create temporary table v0009u_a on commit drop as select x.shape, x.kind, x.item_id, x.sort_key, x.state, x.item_row, x.print from v0009u_ab x where x.side = 'a';
+      create temporary table v0009u_b on commit drop as select x.shape, x.kind, x.item_id, x.sort_key, x.state, x.item_row, x.print from v0009u_ab x where x.side = 'b';
       -- rows a refresh writes: 2 for an item whose fingerprint changed, 1 for an item on one side only
       select 2 * count(*) filter (where a.item_id is not null and b.item_id is not null and a.print <> b.print) + count(*) filter (where a.item_id is null or b.item_id is null)
         into v_old_written
