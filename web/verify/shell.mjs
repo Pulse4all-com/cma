@@ -14,7 +14,7 @@
  *       draws no frame of its own, the layout renders ShellFrame and the page's Shell no longer does
  *   D5  the full prefetch only for 131's agent class (lib/nav mayFullPrefetch): the agent pages, a Live board and the team
  *       pages, never a report, a configuration page or Log out; the head start per role (headStartHrefs): an agent's My
- *       day, Messages, My schedule; a supervisor's also the first Live board and Team hours; an analyst none; a person
+ *       day, Messages, My schedule; a supervisor's the first Live board and Team hours instead; an analyst none; a person
  *       without a contact center no board; the hover delay of 100 ms; staleTimes 30 s for dynamic and full prefetches
  *   D3  the day shown at once (lib/live dayWithStatus, dayEnded): a pause closes the running stretch at that moment and
  *       stops the clock, a working status after a pause starts one, working to working keeps the stretch, the status, its
@@ -99,9 +99,9 @@ expect("never for a report, configuration or Log out",
   ["/reports/dashboard", "/reports/follow-up", "/reports/flash", "/configuration/sources", "/logout", "/live/newco/x", "/team"].map(mayFullPrefetch),
   Array(7).fill(false), Array(7).fill(true));
 expect("an agent's head start", headStartHrefs(principal(AGENT), copy), ["/day", "/messages", "/schedule"], []);
-expect("a supervisor's head start", headStartHrefs(principal(SUPERVISOR), copy), ["/day", "/messages", "/schedule", "/live/newco", "/team/hours"], ["/day"]);
+expect("a supervisor's head start: the board and Team hours, not the agent's set", headStartHrefs(principal(SUPERVISOR), copy), ["/live/newco", "/team/hours"], ["/day", "/messages", "/schedule", "/live/newco", "/team/hours"]);
 expect("an analyst's head start: the board only (no clock, no Team hours)", headStartHrefs(principal(ANALYST), copy), ["/live/newco"], []);
-expect("no contact center, no board", headStartHrefs(principal(SUPERVISOR, []), copy), ["/day", "/messages", "/schedule", "/team/hours"], []);
+expect("no contact center, no board", headStartHrefs(principal(SUPERVISOR, []), copy), ["/team/hours"], []);
 expect("the hover delay", HOVER_PREFETCH_MS, 100, 0);
 const config = readFileSync(path.join(here, "..", "next.config.ts"), "utf8");
 expect("staleTimes: dynamic and full prefetches 30 s", /staleTimes:\s*\{\s*dynamic:\s*30,\s*static:\s*30\s*\}/.test(config), true, false);

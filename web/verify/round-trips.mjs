@@ -112,8 +112,9 @@ const browserLines = [];
 if (prefetchRows.length > 0) {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch();
+  // the meta inside the payload's serialised element, quotes escaped or not
   const metaCost = (text) => {
-    const all = [...text.matchAll(/"cma-db","content":"(tx=\d+;rt=\d+;ms=[\d.]+)"/g)];
+    const all = [...text.matchAll(/cma-db\\?"\s*,\s*\\?"content\\?"\s*:\s*\\?"(tx=\d+;rt=\d+;ms=[\d.]+)/g)];
     return all.length ? parse(all.at(-1)[1]) : null;
   };
   for (const group of Object.values(Object.groupBy(prefetchRows, (r) => `${r.subject} ${r.from}`))) {
@@ -124,12 +125,20 @@ if (prefetchRows.length > 0) {
     const pending = [];
     let fresh = 0;
     let loaded = false;
+    let navigated = false;
+    // counted when asked (a request), not when answered: a client navigation never waits for the network to go idle
+    page.on("request", (req) => {
+      const url = new URL(req.url());
+      if (url.pathname === "/api/v1/me/messages" && !url.searchParams.has("since") && loaded) fresh += 1;
+    });
     page.on("response", (res) => {
       const req = res.request();
       const url = new URL(res.url());
-      if (url.pathname === "/api/v1/me/messages" && !url.searchParams.has("since") && loaded) fresh += 1;
+
       const h = req.headers();
-      if (!loaded || !(h.rsc || h["next-router-prefetch"])) return;
+      // a full prefetch: a React Server Components request without Next-Router-Prefetch (that header marks the loading
+      // boundary's prefetch, which renders no page and carries no meta), before the navigation below
+      if (navigated || !h.rsc || h["next-router-prefetch"]) return;
       pending.push(res.text().then((text) => {
         const cost = metaCost(text);
         if (!cost) return;
@@ -156,14 +165,16 @@ if (prefetchRows.length > 0) {
       if (cost.rt > maxRt) problems.push(`${subject} prefetch ${row.path}: ${cost.rt} statements, budget ${maxRt}`);
       browserLines.push(`${subject} prefetch ${row.path} from ${from}: ${cost.tx} tx, ${cost.rt} rt`);
     }
-    // the frame persists: a click to the first prefetched page and Back
-    const target = want[0];
+    // the frame persists: a click on a visible rail link (a prefetched one where the rail shows it) and Back
+    const visible = await page.locator("nav[data-rail-nav] a[href]").evaluateAll((as) => as.filter((a) => a.offsetParent !== null).map((a) => a.getAttribute("href")));
+    const target = want.find((h) => visible.includes(h)) ?? visible.find((h) => h !== from) ?? want[0];
     const before = fresh;
-    await page.locator(`nav[data-rail-nav] a[href="${target}"]`).first().click().catch(() => page.goto(BASE + target));
+    navigated = true;
+    await page.locator(`nav[data-rail-nav] a[href="${target}"]`).first().click();
     await page.waitForURL(`**${target}`);
-    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(2000);
     await page.goBack();
-    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(2000);
     const extra = fresh - before;
     browserLines.push(`${subject} ${from} → ${target} → back: ${extra} inbox read from scratch`);
     if (provoke ? extra === 0 : extra > 0) problems.push(`${subject}: ${extra} inbox read${extra === 1 ? "" : "s"} from scratch on a navigation (the message centre mounted again)${provoke ? " (provoked: 0 counts as a failure)" : ""}`);

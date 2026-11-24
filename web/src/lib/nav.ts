@@ -523,9 +523,10 @@ export const HOVER_PREFETCH_MS = 100;
 
 /**
  * The head start after Welcome (D5): once Welcome's blocks have settled and the browser is idle, the role's top
- * destinations are prefetched in full, so the next click finds the page with its data. A person with a clock: My day,
- * Messages, My schedule; a supervisor or manager (monitoring.live or workday.team): their contact center's Live board
- * (the first board the rail shows) and Team hours. Only pages the person sees, and only routes mayFullPrefetch allows.
+ * destinations are prefetched in full, so the next click finds the page with its data. A supervisor or manager
+ * (monitoring.live or workday.team): their contact center's Live board (the first board the rail shows) and Team hours;
+ * any other person with a clock (an agent): My day, Messages, My schedule. One role's set, so a manager who also keeps
+ * time costs two prefetches, not five. Only pages the person sees, and only routes mayFullPrefetch allows.
  */
 export function headStartHrefs(me: Principal, copy: Copy): string[] {
   const visible = visibleNav(me, copy).flatMap((e) => (e.kind === "page" ? [e.item] : e.items)).map((i) => i.href as string);
@@ -533,10 +534,11 @@ export function headStartHrefs(me: Principal, copy: Copy): string[] {
   const add = (href: string | undefined) => {
     if (href && visible.includes(href) && mayFullPrefetch(href) && !out.includes(href)) out.push(href);
   };
-  if (me.permissions.includes("workday.own")) ["/day", "/messages", "/schedule"].forEach(add);
   if (me.permissions.includes("monitoring.live") || me.permissions.includes("workday.team")) {
     add(visible.find((h) => h.startsWith("/live/")));
     add("/team/hours");
+  } else if (me.permissions.includes("workday.own")) {
+    ["/day", "/messages", "/schedule"].forEach(add);
   }
   return out;
 }
