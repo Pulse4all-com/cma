@@ -11,7 +11,7 @@
 -- compare with a deliberate difference (one stored outcome removed, one deal left out of 234's side), which their details
 -- show (1 row differs, at least 1 row differs).
 --
---   S1  0009zr recorded after 0009zq; cma.web_busy(text) SECURITY DEFINER owned by cma_owner; it, cma.job_gate_of(text),
+--   S1  0009zr recorded after 0009zq; cma.web_busy(text) SECURITY DEFINER owned by cma_owner with its search path pinned; it, cma.job_gate_of(text),
 --       cma.speed_to_lead_rows_of and cma.renewal_outcomes_of(uuid, uuid[], text[]) the application's only (not
 --       public); the settings jobs.defer_web_statements (2), jobs.defer_max_in_a_row (5) and customers.refresh_minutes'
 --       default 10; a value out of range refused (CMA04); cma.refresh_follow_up_of and the new outcomes form without
@@ -311,7 +311,8 @@ begin
     and c.relname in ('setting', 'tenant_setting', 'market', 'market_alias', 'business_hours', 'business_holiday', 'telephony_tag', 'app_user_external_id')
     and c.reloptions @> array['autovacuum_analyze_threshold=10', 'autovacuum_analyze_scale_factor=0'];
   ok := (select a.applied_at >= b.applied_at from cma.schema_migration a, cma.schema_migration b where a.version = '0009zr' and b.version = '0009zq')
-    and (select p.prosecdef and pg_get_userbyid(p.proowner) = 'cma_owner' from pg_proc p where p.oid = 'cma.web_busy(text)'::regprocedure)
+    and (select p.prosecdef and pg_get_userbyid(p.proowner) = 'cma_owner' and 'search_path=pg_catalog, pg_temp' = any (p.proconfig)
+         from pg_proc p where p.oid = 'cma.web_busy(text)'::regprocedure)
     and not has_function_privilege('public', 'cma.web_busy(text)', 'execute') and has_function_privilege('cma_app', 'cma.web_busy(text)', 'execute')
     and not has_function_privilege('public', 'cma.job_gate_of(text)', 'execute') and has_function_privilege('cma_app', 'cma.job_gate_of(text)', 'execute')
     and not has_function_privilege('public', 'cma.speed_to_lead_rows_of(uuid,timestamptz,timestamptz,boolean)', 'execute')

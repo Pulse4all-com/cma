@@ -13,7 +13,8 @@
 /** The settings that may be sent, each with the values it accepts */
 export const SESSION_OPTION_RULES = Object.freeze({
   jit: /^(on|off)$/,
-  work_mem: /^[1-9][0-9]{0,3}(kB|MB)$/,
+  // at most 256 MB: the setting holds for every sort and hash step of every pooled connection (3.75 GB, 93 connections)
+  work_mem: /^([1-9][0-9]{0,4}kB|([1-9][0-9]?|1[0-9]{2}|2[0-4][0-9]|25[0-6])MB)$/,
   random_page_cost: /^(0|[1-9][0-9]?)(\.[0-9]{1,2})?$/,
 });
 

@@ -61,8 +61,8 @@ steps:
           echo "_MAX_INSTANCES and _DB_POOL_MAX must be whole numbers above 0, got '${_MAX_INSTANCES}' and '${_DB_POOL_MAX}'; nothing deployed"
           exit 1
         fi
-        if ! [[ "${_DB_SESSION_OPTIONS}" =~ ^([a-z_]+=[A-Za-z0-9.]+(;[a-z_]+=[A-Za-z0-9.]+)*)?$$ ]]; then
-          echo "_DB_SESSION_OPTIONS must be empty or name=value pairs separated by ';', got '${_DB_SESSION_OPTIONS}'; nothing deployed"
+        if ! [[ "${_DB_SESSION_OPTIONS}" =~ ^((jit|work_mem|random_page_cost)=[A-Za-z0-9.]+(;(jit|work_mem|random_page_cost)=[A-Za-z0-9.]+)*)?$$ ]]; then
+          echo "_DB_SESSION_OPTIONS must be empty or jit, work_mem, random_page_cost as name=value pairs separated by ';', got '${_DB_SESSION_OPTIONS}'; nothing deployed"
           exit 1
         fi
         echo "config: auth=${_AUTH_MODE} data=${_DATA_MODE} db=${_DB_INSTANCE} max-instances=${_MAX_INSTANCES} pool=${_DB_POOL_MAX} session-options=${_DB_SESSION_OPTIONS} logout=${_LOGOUT_TARGET}"

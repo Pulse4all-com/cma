@@ -5,9 +5,9 @@
 -- in every database, after 234_speed_to_lead_one.sql (0009zq). Rerunnable, forward-only, in one transaction with a lock
 -- timeout. Run as your own IAM login: dev first, then 237_verify_jobs_off_the_vcpu.sql there (normal and provoked), then
 -- the verifies that read what this re-creates, each still PASS: 211, 213, 217, 219, 221, 223 and 225 (they read
--- cma.subscription_facts_refresh_of or cma.renewal_outcomes_of; none is edited by this change), 41, 73, 81, 95, 99 and
--- 179 (they read cma.speed_to_lead_of or cma.open_leads_of directly or through the follow-up refresh; unchanged: the
--- answers are the same), 191 and 235, edited by this change (both copy or read the printed definition of speed to lead,
+-- cma.subscription_facts_refresh_of or cma.renewal_outcomes_of; none is edited by this change), 41, 73, 75, 81, 95, 151,
+-- 155 and 179 (they read cma.speed_to_lead_of or cma.open_leads_of directly or through cma.refresh_follow_up_of;
+-- unchanged: the answers are the same; 99 and 221 ran too, as a further check), 191 and 235, edited by this change (both copy or read the printed definition of speed to lead,
 -- which moved into cma.speed_to_lead_rows_of; they now take it from there when it exists), then 131_time_all.sql parts a
 -- and b. Prod the same after the merge, outside office
 -- hours: 236, 237, the same reruns where they run in prod (95, 73 and 81 run in dev only, as before).
