@@ -7,7 +7,10 @@ export const dynamic = "force-dynamic";
 /**
  * Intake per business date and market for ?from&to (at most 92 days; cma.intake_per_day, migration
  * 0007d): form submissions, deals and tickets created and closed, calls in and out and tagged calls,
- * new customers, first and repeat orders and renewals, with `connections` (telephony, commerce) and the
+ * new customers, first and repeat orders and renewals; since addition 0009zp also leadDealsCreated,
+ * leadDealsClosed (lead pipelines: call center work) and otherDealsCreated (the other counted deal
+ * pipelines), while dealsCreated and dealsClosed keep every counted deal pipeline's deals, with
+ * `connections` (telephony, commerce) and the
  * tenant's `startDate`. A telephony figure is null when the tenant has no telephony connected, a
  * commerce figure null without a shop: never 0 for a source that is not there. Needs reports.view or
  * performance.team, here and again in the database.

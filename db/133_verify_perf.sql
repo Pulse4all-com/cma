@@ -295,9 +295,13 @@ as $$
     on mr.tenant_id = c.tenant_id and mr.source_system = c.source_system and mr.code = r.code
 $$;
 
--- intake_per_day_of as 74 defined it
+-- intake_per_day_of as 74 defined it. Edited by 232_intake_call_center.sql (addition 0009zp): it returns its fifteen
+-- columns as a table of its own, since cma.intake_per_day_row appends three; E6 compares the new function's fifteen
+-- earlier columns with it
 create function pg_temp.old_intake_per_day_of(p_tenant_id uuid, p_from timestamptz, p_to timestamptz)
-returns setof cma.intake_per_day_row
+returns table (tenant_id uuid, business_date date, market text, form_submissions integer, deals_created integer,
+               deals_closed integer, tickets_created integer, tickets_closed integer, calls_in integer, calls_out integer,
+               tagged_calls integer, new_customers integer, first_orders integer, repeat_orders integer, renewals integer)
 language sql stable
 as $$
   with s as (
@@ -661,7 +665,9 @@ begin
     v_sql_old := array_append(v_sql_old, format('select * from pg_temp.old_inbound_calls_of(%L, %L::date::timestamptz, null)', t.id, v_from)); v_ordered := array_append(v_ordered, false);
     -- E6 intake_per_day_of over the last 92 days (unordered)
     v_checks := array_append(v_checks, 'E6 intake_per_day_of over the last 92 days');
-    v_sql_new := array_append(v_sql_new, format('select * from cma.intake_per_day_of(%L, %L::date::timestamptz, null)', t.id, v_from));
+    v_sql_new := array_append(v_sql_new, format('select tenant_id, business_date, market, form_submissions, deals_created, deals_closed, tickets_created, '
+      || 'tickets_closed, calls_in, calls_out, tagged_calls, new_customers, first_orders, repeat_orders, renewals '
+      || 'from cma.intake_per_day_of(%L, %L::date::timestamptz, null)', t.id, v_from));
     v_sql_old := array_append(v_sql_old, format('select * from pg_temp.old_intake_per_day_of(%L, %L::date::timestamptz, null)', t.id, v_from)); v_ordered := array_append(v_ordered, false);
     -- E7 open_tickets_of, E8 open_tasks_of (ordered)
     v_checks := array_append(v_checks, 'E7 open_tickets_of'); v_sql_new := array_append(v_sql_new, format('select * from cma.open_tickets_of(%L)', t.id));

@@ -1528,7 +1528,10 @@ async function reportChecks() {
     return (data.rows ?? []).every((r) =>
       ["callsIn", "callsOut", "taggedCalls"].every((f) => (c.telephony ? Number.isInteger(r[f]) : r[f] === null)) &&
       ["newCustomers", "firstOrders", "repeatOrders", "renewals"].every((f) => (c.commerce ? Number.isInteger(r[f]) : r[f] === null)) &&
-      ["formSubmissions", "dealsCreated", "dealsClosed", "ticketsCreated", "ticketsClosed"].every((f) => Number.isInteger(r[f])));
+      ["formSubmissions", "dealsCreated", "dealsClosed", "leadDealsCreated", "leadDealsClosed", "otherDealsCreated", "ticketsCreated",
+       "ticketsClosed"].every((f) => Number.isInteger(r[f])) &&
+      // addition 0009zp: lead and other deals in add up to every counted pipeline's deals in; lead deals closed are among the closed
+      r.leadDealsCreated + r.otherDealsCreated === r.dealsCreated && r.leadDealsClosed <= r.dealsClosed);
   };
   const intake = (await get(ANALYST, `/api/v1/reports/intake?${range}`)).body?.data;
   expect("reports: intake figures follow the tenant's connections", consistent(intake), true, false);

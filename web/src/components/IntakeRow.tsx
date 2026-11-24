@@ -8,9 +8,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
 import { keptShare } from "@/lib/callbacks";
-import type { CallbacksKept, CrmRecordsDay, Intake, SpeedToLeadRow } from "@/lib/data";
+import type { CallbacksKept, Intake, SpeedToLeadRow } from "@/lib/data";
 import { blankNumbers, type Head } from "@/lib/head-start";
-import { fillHint, fmtBusinessMinutes, fmtCount, fmtPct, intakeTotals, recordsOfType, speedFigures } from "@/lib/reports";
+import { fillHint, fmtBusinessMinutes, fmtCount, fmtPct, intakeTotals, speedFigures } from "@/lib/reports";
 import { fmtDate, fmtPercent } from "@/lib/time";
 import { metricsHref } from "@/lib/metrics";
 import { HeaderHint } from "./HeaderHint";
@@ -49,11 +49,15 @@ function IntakeTile({
 }
 
 /**
- * The Dashboard's Intake row for the selected period: leads (counted form submissions), deals and
- * tickets created (cma.crm_records_per_day, the 0006 Dashboard read), speed to lead over the period's
- * lead deals (median business minutes, % within target, open not called), calls and the shop's
- * orders, or the not-connected state of either; since addition 0008w the callbacks kept (KPI 5), or
- * "No callback type set" while the tenant counts none.
+ * The Dashboard's Intake row for the selected period: leads (counted form submissions), lead deals in
+ * (with the lead deals closed in its hint) and tickets created, speed to lead over the period's lead
+ * deals (median business minutes, % within target, open not called), calls, the callbacks kept (KPI 5,
+ * since addition 0008w; "No callback type set" while the tenant counts none), and, set apart at the
+ * row's end under Overall, the shop's first orders, or the not-connected state of telephony or the shop.
+ * Since addition 0009zp (Martin, 24 November 2026) the deals and tickets come from the intake read
+ * (cma.intake_per_day, clamped at intake.start_date like every other count of the row), no longer from
+ * cma.crm_records_per_day, and the deals are those of lead pipelines only: call center work. Overall is
+ * the quieter group (Pulse4all-Style 7.1: a 1 px Border divider and a 16 px gap; its label in Muted text).
  *
  * Since 12 November 2026 the row's two reads arrive on their own (lib/head-start): the counts (the intake, the records
  * created and the callbacks kept, one transaction) and the speed to lead (the dearest read of the page, its own). The
@@ -62,7 +66,7 @@ function IntakeTile({
  */
 export function IntakeRow({
   counts, speed, k, copy, locale, from, canOpenMetrics = false,
-}: { counts: Head<{ intake: Intake; records: CrmRecordsDay[]; callbacks: CallbacksKept }>; speed: Head<SpeedToLeadRow[]>;
+}: { counts: Head<{ intake: Intake; callbacks: CallbacksKept }>; speed: Head<SpeedToLeadRow[]>;
   /** What the reads are of (the period): a boundary's key, so another period shows its outlines at once */
   k: string; copy: Copy; locale: Locale; from: string;
   /** True for a holder of tenant.configure: each tile's hint links to its entry on Configuration → Metrics */
@@ -95,16 +99,17 @@ export function IntakeRow({
       </div>
       <div className="relative grid grid-cols-4 gap-4 2xl:grid-cols-7">
         <Part head={counts} k={`counts-a|${k}`} fallback={<>
-          {waiting("intake-leads", t.leads, t.leadsHint, h.leads, "dashboard.intake.leads")}{waiting("intake-deals", t.deals, t.dealsHint, h.dealsCreatedClosed, "dashboard.intake.deals_created")}
+          {waiting("intake-leads", t.leads, t.leadsHint, h.leads, "dashboard.intake.leads")}{waiting("intake-deals", t.deals, blank(t.dealsHint), h.leadDealsCreated, "dashboard.intake.lead_deals_created")}
           {waiting("intake-tickets", t.tickets, t.ticketsHint, h.ticketsCreatedClosed, "dashboard.intake.tickets_created")}
         </>}>
-          {({ intake, records }) => {
+          {({ intake }) => {
             const totals = intakeTotals(intake.rows, intake.connections);
             return (
               <>
                 <IntakeTile testId="intake-leads" href="/reports/intake" label={t.leads} info={info(t.leads, h.leads, "dashboard.intake.leads")} value={n(totals.formSubmissions ?? 0)} hint={t.leadsHint} />
-                <IntakeTile testId="intake-deals" href="/reports/intake" label={t.deals} info={info(t.deals, h.dealsCreatedClosed, "dashboard.intake.deals_created")} value={n(recordsOfType(records, "deal"))} hint={t.dealsHint} />
-                <IntakeTile testId="intake-tickets" href="/reports/intake" label={t.tickets} info={info(t.tickets, h.ticketsCreatedClosed, "dashboard.intake.tickets_created")} value={n(recordsOfType(records, "ticket"))} hint={t.ticketsHint} />
+                <IntakeTile testId="intake-deals" href="/reports/intake" label={t.deals} info={info(t.deals, h.leadDealsCreated, "dashboard.intake.lead_deals_created")}
+                  value={n(totals.leadDealsCreated ?? 0)} hint={t.dealsHint.replace("{closed}", n(totals.leadDealsClosed ?? 0))} />
+                <IntakeTile testId="intake-tickets" href="/reports/intake" label={t.tickets} info={info(t.tickets, h.ticketsCreatedClosed, "dashboard.intake.tickets_created")} value={n(totals.ticketsCreated ?? 0)} hint={t.ticketsHint} />
               </>
             );
           }}
@@ -125,7 +130,7 @@ export function IntakeRow({
           }}
         </Part>
         <Part head={counts} k={`counts-b|${k}`} fallback={<>
-          {waiting("intake-calls", t.calls, blank(t.callsHint), h.calls, "dashboard.intake.calls")}{waiting("intake-shop", t.shop, blank(t.shopHint), h.shop, "dashboard.intake.first_orders")}
+          {waiting("intake-calls", t.calls, blank(t.callsHint), h.calls, "dashboard.intake.calls")}
           {waiting("intake-callbacks", t.callbacks, blank(t.callbacksHint), h.cbTile, "dashboard.intake.callbacks_kept", "/reports/follow-up")}
         </>}>
           {({ intake, callbacks }) => {
@@ -143,17 +148,6 @@ export function IntakeRow({
                   hint={intake.connections.telephony ? t.callsHint.replace("{in}", n(totals.callsIn ?? 0)).replace("{out}", n(totals.callsOut ?? 0)) : r.noTelephonyHint}
                 />
                 <IntakeTile
-                  testId="intake-shop"
-                  href="/reports/intake"
-                  label={t.shop}
-                  info={info(t.shop, h.shop, "dashboard.intake.first_orders")}
-                  notConnected={!intake.connections.commerce}
-                  value={intake.connections.commerce ? n(totals.firstOrders ?? 0) : muted(r.noShop, r.noShopHint)}
-                  hint={intake.connections.commerce
-                    ? t.shopHint.replace("{customers}", n(totals.newCustomers ?? 0)).replace("{repeat}", n(totals.repeatOrders ?? 0)).replace("{renewals}", n(totals.renewals ?? 0))
-                    : r.noShopHint}
-                />
-                <IntakeTile
                   testId="intake-callbacks"
                   href="/reports/follow-up"
                   label={t.callbacks}
@@ -168,6 +162,33 @@ export function IntakeRow({
             );
           }}
         </Part>
+        {/* Overall, set apart at the row's end: not call center work. Its label stands at once; the tile waits for the counts */}
+        <div className="flex flex-col border-l border-p4a-border pl-4" data-testid="intake-overall">
+          <p className="mb-2 flex items-start text-caption font-semibold text-p4a-muted" data-hint-anchor="">
+            {t.overall}<HeaderHint label={h.about.replace("{label}", t.overall)} text={t.overallHint} />
+          </p>
+          {/* the tile, waiting or not, fills the column's height below the label */}
+          <div className="flex flex-1 flex-col *:flex-1">
+            <Part head={counts} k={`counts-c|${k}`} fallback={waiting("intake-shop", t.shop, blank(t.shopHint), h.shop, "dashboard.intake.first_orders")}>
+              {({ intake }) => {
+                const totals = intakeTotals(intake.rows, intake.connections);
+                return (
+                  <IntakeTile
+                    testId="intake-shop"
+                    href="/reports/intake"
+                    label={t.shop}
+                    info={info(t.shop, h.shop, "dashboard.intake.first_orders")}
+                    notConnected={!intake.connections.commerce}
+                    value={intake.connections.commerce ? n(totals.firstOrders ?? 0) : muted(r.noShop, r.noShopHint)}
+                    hint={intake.connections.commerce
+                      ? t.shopHint.replace("{customers}", n(totals.newCustomers ?? 0)).replace("{repeat}", n(totals.repeatOrders ?? 0)).replace("{renewals}", n(totals.renewals ?? 0))
+                      : r.noShopHint}
+                  />
+                );
+              }}
+            </Part>
+          </div>
+        </div>
         {/* the note that the period starts before the intake's start date, with the counts: it hangs under the tiles in
             the row's own bottom margin, so it takes no height and nothing moves when it lands */}
         <Part head={counts} k={`note|${k}`} fallback={null}>

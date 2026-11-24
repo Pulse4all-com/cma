@@ -200,6 +200,7 @@ type IntakeDbRow = {
   business_date: string; market: string; form_submissions: number; deals_created: number; deals_closed: number;
   tickets_created: number; tickets_closed: number; calls_in: number; calls_out: number; tagged_calls: number;
   new_customers: number; first_orders: number; repeat_orders: number; renewals: number;
+  lead_deals_created: number; lead_deals_closed: number; other_deals_created: number;
 };
 
 /**
@@ -234,7 +235,8 @@ async function readIntake(q: Querier, range: HoursRange): Promise<Intake> {
     date: x.business_date, market: x.market, formSubmissions: x.form_submissions, dealsCreated: x.deals_created,
     dealsClosed: x.deals_closed, ticketsCreated: x.tickets_created, ticketsClosed: x.tickets_closed, callsIn: x.calls_in,
     callsOut: x.calls_out, taggedCalls: x.tagged_calls, newCustomers: x.new_customers, firstOrders: x.first_orders,
-    repeatOrders: x.repeat_orders, renewals: x.renewals,
+    repeatOrders: x.repeat_orders, renewals: x.renewals, leadDealsCreated: x.lead_deals_created,
+    leadDealsClosed: x.lead_deals_closed, otherDealsCreated: x.other_deals_created,
   }));
   return { ...range, connections, startDate: start.rows[0]?.value ?? null, rows: applyConnections(counts, connections) };
 }
@@ -2046,7 +2048,7 @@ export const postgresData: CmaData = {
       assertReportRange(range);
       counts = withTenant(ctx(me), async (q) => {
         timeOk(await readTeamStatusTime(q, range, null));
-        return { intake: await readIntake(q, range), records: await readCrmRecordsPerDay(q, range), callbacks: await readCallbacksKept(q, range) };
+        return { intake: await readIntake(q, range), callbacks: await readCallbacksKept(q, range) };
       });
       speed = withTenant(ctx(me), async (q) => {
         await q.query(`select cma.assert_permission('performance.team')`);

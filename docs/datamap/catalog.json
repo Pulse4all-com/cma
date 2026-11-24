@@ -789,7 +789,7 @@
     },
     {
       "name": "intake_per_day_v",
-      "what": "Per day and market: forms, deals, tickets, calls, new customers, orders, renewals"
+      "what": "Per day and market: forms, deals, tickets, calls, new customers, orders, renewals; the deals also split into lead deals in and closed (lead pipelines: call center work) and other deals in (the other counted pipelines), deals_created and deals_closed keeping every counted pipeline (0009zp)"
     },
     {
       "name": "crm_record_detail",

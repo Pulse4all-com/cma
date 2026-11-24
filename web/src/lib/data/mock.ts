@@ -211,9 +211,14 @@ function mockIntakeCounts(me: Principal, date: DateKey, market: string): IntakeC
   const weekend = mockWeekend(me, date);
   const scale = (market === "unknown" ? 0.2 : market === "NL" ? 1 : 0.6) * (weekend ? 0.3 : 1);
   const n = (k: string, max: number) => h(k, Math.max(1, Math.round(max * scale)) + 1);
+  // the deals as the database splits them (addition 0009zp): lead deals, and other deals (an order pipeline's, created and
+  // closed in one go), which together are every counted deal pipeline's deals in and closed
+  const lead = n("deal", 8);
+  const leadClosed = n("dealc", 5);
+  const other = n("order", 4);
   const row: IntakeCounts = {
-    date, market, formSubmissions: n("form", 14), dealsCreated: n("deal", 8), dealsClosed: n("dealc", 5),
-    ticketsCreated: n("ticket", 6), ticketsClosed: n("ticketc", 5), callsIn: n("in", 30), callsOut: n("out", 45),
+    date, market, formSubmissions: n("form", 14), dealsCreated: lead + other, dealsClosed: leadClosed + other, leadDealsCreated: lead,
+    leadDealsClosed: leadClosed, otherDealsCreated: other, ticketsCreated: n("ticket", 6), ticketsClosed: n("ticketc", 5), callsIn: n("in", 30), callsOut: n("out", 45),
     taggedCalls: n("tag", 12), newCustomers: n("cust", 5), firstOrders: n("first", 4), repeatOrders: n("repeat", 2),
     renewals: n("renew", 3),
   };
@@ -3557,7 +3562,7 @@ export const mockData: CmaData = {
   getDashboardReads(me, range): DashboardReads {
     const time = (async () => { assertReportRange(range); return mockData.getTeamStatusTime(me, range, null); })();
     const counts = time.then(async () => ({
-      intake: await mockData.getIntake(me, range), records: await mockData.getCrmRecordsPerDay(me, range), callbacks: await mockData.getCallbacksKept(me, range),
+      intake: await mockData.getIntake(me, range), callbacks: await mockData.getCallbacksKept(me, range),
     }));
     const speed = (async () => {
       assertReportRange(range);

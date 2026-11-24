@@ -10,7 +10,7 @@ import { holdsAny } from "@/lib/nav";
 import { resolvePeriod } from "@/lib/period";
 import {
   barShares, COMMERCE_FIELDS, CRM_FIELDS, filterMarket, fmtCount, intakeMarkets, intakeTotals, MAX_REPORT_DAYS,
-  REPORT_PERMISSIONS, TELEPHONY_FIELDS, type IntakeField, type IntakeTotals,
+  OVERALL_CRM_FIELDS, REPORT_PERMISSIONS, TELEPHONY_FIELDS, type IntakeField, type IntakeTotals,
 } from "@/lib/reports";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { resolve } from "../../access";
@@ -23,6 +23,13 @@ import { pickCopy } from "@/lib/copy";
  * holding reports.view or performance.team; the database checks again on every read. Counts only.
  * Every column header explains itself in a hint (copy.hints). The table scrolls sideways inside its
  * card where it is wider than the card (1280 px), so the page itself never does.
+ *
+ * Since addition 0009zp (Martin, 24 November 2026) the columns stand in two groups under a header level of their
+ * own: Call center work (leads, lead deals in and closed, tickets in and closed; calls in and out, tagged) and Overall
+ * (other deals in; the shop). Overall is the quieter group, never a warning (Pulse4all-Style 2.1, 2.3, 7.1, 7.6): a
+ * 16 px gap between the groups in every row (7.1's spacing step), its group label underlined in Border grey where Call
+ * center work's has the thin Deep Blue divider (7.1), its header cells on Warm Off-White instead of Background Blue,
+ * its labels and figures in Muted text. The Volume bar counts call center work only.
  */
 export default async function IntakePage({ searchParams }: PageProps<"/reports/intake">) {
   const r = await resolve();
@@ -53,36 +60,55 @@ export default async function IntakePage({ searchParams }: PageProps<"/reports/i
     range === "custom" && !invalid ? { range, from: period.from, to: period.to } : { range };
 
   const labels: Record<IntakeField, string> = {
-    formSubmissions: t.leads, dealsCreated: t.dealsCreated, dealsClosed: t.dealsClosed, ticketsCreated: t.ticketsCreated,
+    formSubmissions: t.leads, leadDealsCreated: t.leadDealsCreated, leadDealsClosed: t.leadDealsClosed, ticketsCreated: t.ticketsCreated,
     ticketsClosed: t.ticketsClosed, callsIn: t.callsIn, callsOut: t.callsOut, taggedCalls: t.taggedCalls,
-    newCustomers: t.newCustomers, firstOrders: t.firstOrders, repeatOrders: t.repeatOrders, renewals: t.renewals,
+    otherDealsCreated: t.otherDealsCreated, newCustomers: t.newCustomers, firstOrders: t.firstOrders, repeatOrders: t.repeatOrders,
+    renewals: t.renewals,
   };
   const h = copy.hints;
   const hints: Record<IntakeField, string> = {
-    formSubmissions: h.leads, dealsCreated: h.dealsCreatedClosed, dealsClosed: h.dealsCreatedClosed,
+    formSubmissions: h.leads, leadDealsCreated: h.leadDealsCreated, leadDealsClosed: h.leadDealsClosed,
     ticketsCreated: h.ticketsCreatedClosed, ticketsClosed: h.ticketsCreatedClosed, callsIn: h.calls, callsOut: h.calls,
-    taggedCalls: h.taggedCalls, newCustomers: h.shop, firstOrders: h.shop, repeatOrders: h.shop, renewals: h.shop,
+    taggedCalls: h.taggedCalls, otherDealsCreated: h.otherDealsCreated, newCustomers: h.shop, firstOrders: h.shop,
+    repeatOrders: h.shop, renewals: h.shop,
   };
   const hint = (label: string, text: string) => <HeaderHint label={h.about.replace("{label}", label)} text={text} />;
   const n = (x: number | null) => (x === null ? "" : fmtCount(x, me.locale));
   const th = "h-10 px-2 font-semibold";
   const td = "h-10 whitespace-nowrap px-2";
   const sep = "border-l border-p4a-border";
+  // Overall, the quieter group: Warm Off-White header cells, Muted labels and figures
+  const quiet = "text-p4a-muted";
+  const workSpan = CRM_FIELDS.length + TELEPHONY_FIELDS.length;
+  const overallSpan = OVERALL_CRM_FIELDS.length + COMMERCE_FIELDS.length;
+  /** The 16 px gap between Call center work and Overall, in every row */
+  const gap = (key: string) => <td key={key} className="w-4 min-w-4 p-0" aria-hidden="true" />;
+  const gapHead = (key: string) => <th key={key} className="w-4 min-w-4 p-0" aria-hidden="true" data-intake-gap="" />;
 
-  /** The telephony and shop cells of a row: the counts, or one cell saying the source is not connected */
-  function sourceCells(values: Pick<IntakeTotals, IntakeField>, bold: boolean) {
+  /** A row's figures in the table's order: call center work, the gap, overall; a source not connected is one cell saying so */
+  function cells(values: Pick<IntakeTotals, IntakeField>, bold: boolean, rowKey: string) {
     const cls = `${td} tabular text-right ${bold ? "font-semibold" : ""}`;
     return (
       <>
+        {CRM_FIELDS.map((f, j) => <td key={f} className={`${cls} ${j === 0 ? sep : ""}`}>{n(values[f])}</td>)}
         {telephony
           ? TELEPHONY_FIELDS.map((f, i) => <td key={f} className={`${cls} ${i === 0 ? sep : ""}`}>{n(values[f])}</td>)
           : <td colSpan={TELEPHONY_FIELDS.length} className={`${td} ${sep} text-center`}><NotConnected label={copy.reports.noTelephony} hint={copy.reports.noTelephonyHint} /></td>}
+        {gap(`gap-${rowKey}`)}
+        {OVERALL_CRM_FIELDS.map((f) => <td key={f} className={`${cls} ${quiet}`} data-group="overall">{n(values[f])}</td>)}
         {commerce
-          ? COMMERCE_FIELDS.map((f, i) => <td key={f} className={`${cls} ${i === 0 ? sep : ""}`}>{n(values[f])}</td>)
-          : <td colSpan={COMMERCE_FIELDS.length} className={`${td} ${sep} text-center`}><NotConnected label={copy.reports.noShop} hint={copy.reports.noShopHint} /></td>}
+          ? COMMERCE_FIELDS.map((f, i) => <td key={f} className={`${cls} ${quiet} ${i === 0 ? sep : ""}`} data-group="overall">{n(values[f])}</td>)
+          : <td colSpan={COMMERCE_FIELDS.length} className={`${td} ${sep} text-center`} data-group="overall"><NotConnected label={copy.reports.noShop} hint={copy.reports.noShopHint} /></td>}
       </>
     );
   }
+
+  /** A column header: Background Blue in Call center work, Warm Off-White and Muted in Overall */
+  const head = (f: IntakeField, first: boolean, overall: boolean) => (
+    <th key={f} scope="col" className={`${th} text-right ${overall ? `bg-p4a-offwhite ${quiet}` : "bg-p4a-bgblue"} ${first ? sep : ""}`}>
+      <HintLabel label={labels[f]}>{hint(labels[f], hints[f])}</HintLabel>
+    </th>
+  );
 
   return (
     <Shell copy={copy} me={me} active="intake" wide>
@@ -119,19 +145,33 @@ export default async function IntakePage({ searchParams }: PageProps<"/reports/i
           <div className="overflow-x-auto" data-testid="intake-scroll" role="region" aria-label={t.title} tabIndex={0}>
             <table className="w-full border-collapse text-small" data-testid="intake-table">
               <thead>
+                <tr className="text-left text-small">
+                  <th className="px-2" colSpan={3} />
+                  <th scope="colgroup" colSpan={workSpan} className="border-b border-p4a-deepblue px-2 pb-1 font-semibold text-p4a-heading" data-testid="intake-group-work">
+                    <HintLabel label={t.groupWork}>{hint(t.groupWork, h.groupWork)}</HintLabel>
+                  </th>
+                  {gapHead("gap-group")}
+                  <th scope="colgroup" colSpan={overallSpan} className={`border-b border-p4a-border px-2 pb-1 font-semibold ${quiet}`} data-testid="intake-group-overall">
+                    <HintLabel label={t.groupOverall}>{hint(t.groupOverall, h.groupOverall)}</HintLabel>
+                  </th>
+                </tr>
                 <tr className="text-left text-caption text-p4a-grey">
                   <th className="px-2" colSpan={3} />
-                  <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={CRM_FIELDS.length}><HintLabel label={t.sourceCrm}>{hint(t.sourceCrm, h.sourceCrm)}</HintLabel></th>
-                  <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={TELEPHONY_FIELDS.length}><HintLabel label={t.sourceTelephony}>{hint(t.sourceTelephony, h.sourceTelephony)}</HintLabel></th>
-                  <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={COMMERCE_FIELDS.length}><HintLabel label={t.sourceShop}>{hint(t.sourceShop, h.sourceShop)}</HintLabel></th>
+                  <th className={`px-2 pb-1 pt-2 font-semibold ${sep}`} colSpan={CRM_FIELDS.length}><HintLabel label={t.sourceCrm}>{hint(t.sourceCrm, h.sourceCrm)}</HintLabel></th>
+                  <th className={`px-2 pb-1 pt-2 font-semibold ${sep}`} colSpan={TELEPHONY_FIELDS.length}><HintLabel label={t.sourceTelephony}>{hint(t.sourceTelephony, h.sourceTelephony)}</HintLabel></th>
+                  {gapHead("gap-source")}
+                  <th className="px-2 pb-1 pt-2 font-semibold" colSpan={OVERALL_CRM_FIELDS.length}><HintLabel label={t.sourceCrm}>{hint(t.sourceCrm, h.sourceCrmOverall)}</HintLabel></th>
+                  <th className={`px-2 pb-1 pt-2 font-semibold ${sep}`} colSpan={COMMERCE_FIELDS.length}><HintLabel label={t.sourceShop}>{hint(t.sourceShop, h.sourceShop)}</HintLabel></th>
                 </tr>
-                <tr className="bg-p4a-bgblue text-left text-p4a-heading">
-                  <th className={th}><HintLabel label={copy.reports.date}>{hint(copy.reports.date, h.date)}</HintLabel></th>
-                  <th className={th}><HintLabel label={copy.reports.market}>{hint(copy.reports.market, h.intakeMarket)}</HintLabel></th>
-                  <th className={`${th} w-24`}><HintLabel label={t.volume}>{hint(t.volume, h.volume)}</HintLabel></th>
-                  {CRM_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}><HintLabel label={labels[f]}>{hint(labels[f], hints[f])}</HintLabel></th>)}
-                  {TELEPHONY_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}><HintLabel label={labels[f]}>{hint(labels[f], hints[f])}</HintLabel></th>)}
-                  {COMMERCE_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}><HintLabel label={labels[f]}>{hint(labels[f], hints[f])}</HintLabel></th>)}
+                <tr className="text-left text-p4a-heading">
+                  <th scope="col" className={`${th} bg-p4a-bgblue`}><HintLabel label={copy.reports.date}>{hint(copy.reports.date, h.date)}</HintLabel></th>
+                  <th scope="col" className={`${th} bg-p4a-bgblue`}><HintLabel label={copy.reports.market}>{hint(copy.reports.market, h.intakeMarket)}</HintLabel></th>
+                  <th scope="col" className={`${th} w-24 bg-p4a-bgblue`}><HintLabel label={t.volume}>{hint(t.volume, h.volume)}</HintLabel></th>
+                  {CRM_FIELDS.map((f, i) => head(f, i === 0, false))}
+                  {TELEPHONY_FIELDS.map((f, i) => head(f, i === 0, false))}
+                  {gapHead("gap-head")}
+                  {OVERALL_CRM_FIELDS.map((f) => head(f, false, true))}
+                  {COMMERCE_FIELDS.map((f, i) => head(f, i === 0, true))}
                 </tr>
               </thead>
               <tbody>
@@ -144,16 +184,14 @@ export default async function IntakePage({ searchParams }: PageProps<"/reports/i
                         <div className="h-2 rounded-full bg-p4a-deepblue" style={{ width: `${Math.round(shares[i]! * 100)}%` }} />
                       </div>
                     </td>
-                    {CRM_FIELDS.map((f, j) => <td key={f} className={`${td} tabular text-right ${j === 0 ? sep : ""}`}>{n(x[f])}</td>)}
-                    {sourceCells(x, false)}
+                    {cells(x, false, `${x.date}:${x.market}`)}
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="text-p4a-heading" data-testid="intake-total">
                   <td className={`${td} font-semibold`} colSpan={3}>{copy.reports.total}</td>
-                  {CRM_FIELDS.map((f, j) => <td key={f} className={`${td} tabular text-right font-semibold ${j === 0 ? sep : ""}`}>{n(totals[f])}</td>)}
-                  {sourceCells(totals, true)}
+                  {cells(totals, true, "total")}
                 </tr>
               </tfoot>
             </table>

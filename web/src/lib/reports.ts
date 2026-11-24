@@ -153,11 +153,21 @@ export function openNotCalled(rows: SpeedToLeadRow[]): SpeedToLeadRow[] {
 /** A row of cma.intake_per_day as the database answers it, every figure a count */
 export type IntakeCounts = { [K in keyof IntakeDay]: IntakeDay[K] extends number | null ? number : IntakeDay[K] };
 
+/*
+ * Intake's two groups (addition 0009zp, Martin, 24 November 2026): Call center work (the customer records' leads, lead
+ * deals and tickets, then the telephony) and Overall (the customer records' other deals, then the shop). The deals of
+ * every counted pipeline (dealsCreated, dealsClosed) stay in the data and the API for analytics; no screen shows them.
+ */
 export const TELEPHONY_FIELDS = ["callsIn", "callsOut", "taggedCalls"] as const;
 export const COMMERCE_FIELDS = ["newCustomers", "firstOrders", "repeatOrders", "renewals"] as const;
-export const CRM_FIELDS = ["formSubmissions", "dealsCreated", "dealsClosed", "ticketsCreated", "ticketsClosed"] as const;
-export type IntakeField = (typeof CRM_FIELDS)[number] | (typeof TELEPHONY_FIELDS)[number] | (typeof COMMERCE_FIELDS)[number];
-export const INTAKE_FIELDS: readonly IntakeField[] = [...CRM_FIELDS, ...TELEPHONY_FIELDS, ...COMMERCE_FIELDS];
+/** Call center work's customer records */
+export const CRM_FIELDS = ["formSubmissions", "leadDealsCreated", "leadDealsClosed", "ticketsCreated", "ticketsClosed"] as const;
+/** Overall's customer records: the deals that are not call center work */
+export const OVERALL_CRM_FIELDS = ["otherDealsCreated"] as const;
+export type IntakeField = (typeof CRM_FIELDS)[number] | (typeof TELEPHONY_FIELDS)[number] | (typeof OVERALL_CRM_FIELDS)[number]
+  | (typeof COMMERCE_FIELDS)[number];
+/** The columns in the order the table shows them: Call center work, then Overall */
+export const INTAKE_FIELDS: readonly IntakeField[] = [...CRM_FIELDS, ...TELEPHONY_FIELDS, ...OVERALL_CRM_FIELDS, ...COMMERCE_FIELDS];
 
 /** The telephony figures become null without telephony, the commerce figures without a shop */
 export function applyConnections(rows: IntakeCounts[], c: SourceConnections): IntakeDay[] {
@@ -196,9 +206,9 @@ export function filterMarket<T extends Pick<IntakeDay, "market">>(rows: T[], mar
   return market ? rows.filter((r) => r.market === market) : rows;
 }
 
-/** A row's inline bar: what came in (forms, deals and tickets created), as a share of the largest row */
+/** A row's inline bar: the call center work that came in (leads, lead deals and tickets in), as a share of the largest row */
 export function intakeVolume(r: IntakeDay): number {
-  return r.formSubmissions + r.dealsCreated + r.ticketsCreated;
+  return r.formSubmissions + r.leadDealsCreated + r.ticketsCreated;
 }
 
 export function barShares(rows: IntakeDay[]): number[] {

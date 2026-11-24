@@ -63,8 +63,9 @@ export default async function DashboardPage({ searchParams }: PageProps<"/report
   const asked = typeof sp.person === "string" && PERSON.test(sp.person) ? sp.person : "";
 
   // The three parts, on two connections side by side, counted as streamed (the first paint's cost is the identity's
-  // alone): the time per status, then, in the same transaction, the Intake row's counts (B11, migration 0007d and 0006's
-  // crm_records_per_day; since addition 0008w with the callbacks kept, KPI 5), to which the person filter does not apply;
+  // alone): the time per status, then, in the same transaction, the Intake row's counts (B11, migration 0007d; since
+  // addition 0008w with the callbacks kept, KPI 5; since 0009zp the deals and tickets from the intake too, no longer from
+  // 0006's crm_records_per_day), to which the person filter does not apply;
   // beside them the speed to lead, the dearest.
   // late (the test data only): parts held back past the head start, so the outlines can be seen and verified
   const late = dataIsMock && typeof sp.late === "string" ? sp.late.split(",") : [];
