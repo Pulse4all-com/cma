@@ -1,8 +1,11 @@
 #!/bin/bash
 # The refresh of Customers → Active's stored take (addition 0009l, decision D13 of addendum B, 11 November 2026): a Cloud
 # Run job on the web image that computes every tenant's take (jobs/refresh-active-customers.mjs), started by Cloud
-# Scheduler every minute; the tenant's setting customers.refresh_minutes (5 by default) and a settings change that marks
-# the take stale decide when a take is due, the schedule is only the clock. The sibling of deploy-data-quality.sh, with
+# Scheduler every minute; the tenant's setting customers.refresh_minutes (10 by default since 0009zr, 5 before) and a
+# settings change that marks the take stale decide when a take is due, the schedule is only the clock. Since 0009zr the
+# job asks cma.job_gate_of first: after a run cancelled by its statement timeout it waits 5, 10, 20, 40, at most 60
+# minutes for that tenant, and it defers a minute while the web is busy (OPERATIONS 4.1). Prod ran every 10 minutes by
+# hand from 24 November 2026 until this script set it back to every minute (night N07's morning runbook). The sibling of deploy-data-quality.sh, with
 # the same account, image and variables.
 #
 #   docs/scheduler/deploy-active-customers.sh dev  <short sha>     creates or updates the job and the schedule in p4a-cma-dev

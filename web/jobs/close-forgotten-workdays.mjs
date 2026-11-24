@@ -33,6 +33,7 @@
  */
 import pg from "pg";
 import { codeOf, hearIdleErrors, isConnectionError, isMain, retryOnce, withClient } from "./lib/connection.mjs";
+import { sessionPoolOptions } from "./lib/session-options.mjs";
 
 // A business date stays a YYYY-MM-DD string: it has no instant and must not shift zones (as client.ts)
 pg.types.setTypeParser(1082, (v) => v);
@@ -45,7 +46,7 @@ async function openPool() {
   const database = process.env.CMA_DB_NAME ?? "cma";
   if (process.env.CMA_DB_HOST) {
     return { pool: new pg.Pool({ host: process.env.CMA_DB_HOST, port: Number(process.env.CMA_DB_PORT ?? 5432), user: required("CMA_DB_USER"),
-      password: process.env.CMA_DB_PASSWORD || undefined, database, max: 2, application_name: "cma-scheduler-local" }), close: () => undefined };
+      password: process.env.CMA_DB_PASSWORD || undefined, database, max: 2, application_name: "cma-scheduler-local", ...sessionPoolOptions() }), close: () => undefined };
   }
   const { Connector, AuthTypes, IpAddressTypes } = await import("@google-cloud/cloud-sql-connector");
   const connector = new Connector();
@@ -55,7 +56,7 @@ async function openPool() {
       authType: AuthTypes.IAM,
       ipType: process.env.CMA_DB_IP === "PRIVATE" ? IpAddressTypes.PRIVATE : IpAddressTypes.PUBLIC,
     });
-    return { pool: new pg.Pool({ ...opts, user: required("CMA_DB_USER"), database, max: 2, application_name: "cma-scheduler" }), close: () => connector.close() };
+    return { pool: new pg.Pool({ ...opts, user: required("CMA_DB_USER"), database, max: 2, application_name: "cma-scheduler", ...sessionPoolOptions() }), close: () => connector.close() };
   } catch (e) {
     connector.close();
     throw e;

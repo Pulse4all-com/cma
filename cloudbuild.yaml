@@ -16,6 +16,9 @@
 #   _DB_USER        <service account>@<project>.iam   IAM database user, member of cma_app
 #   _DB_NAME        cma
 #   _DB_POOL_MAX    connections per instance (default 10, Decision log 6 November 2026: a Flash page holds two)
+#   _DB_SESSION_OPTIONS  database session settings sent at connect, empty by default (night N07, decision D6): pairs
+#                   name=value separated by ";" (a comma would split --set-env-vars), only jit, work_mem and
+#                   random_page_cost (web/jobs/lib/session-options.mjs); Martin switches each on after measuring it in dev
 #   _MAX_INSTANCES  Cloud Run ceiling (default 4); instances x pool is counted in the Database
 #                   connection budget (docs/architecture/infrastructure.md), whose ceilings together
 #                   exceed the 93 usable connections with the pool of 10 (112; Decision log, 6 November 2026)
@@ -58,7 +61,11 @@ steps:
           echo "_MAX_INSTANCES and _DB_POOL_MAX must be whole numbers above 0, got '${_MAX_INSTANCES}' and '${_DB_POOL_MAX}'; nothing deployed"
           exit 1
         fi
-        echo "config: auth=${_AUTH_MODE} data=${_DATA_MODE} db=${_DB_INSTANCE} max-instances=${_MAX_INSTANCES} pool=${_DB_POOL_MAX} logout=${_LOGOUT_TARGET}"
+        if ! [[ "${_DB_SESSION_OPTIONS}" =~ ^([a-z_]+=[A-Za-z0-9.]+(;[a-z_]+=[A-Za-z0-9.]+)*)?$$ ]]; then
+          echo "_DB_SESSION_OPTIONS must be empty or name=value pairs separated by ';', got '${_DB_SESSION_OPTIONS}'; nothing deployed"
+          exit 1
+        fi
+        echo "config: auth=${_AUTH_MODE} data=${_DATA_MODE} db=${_DB_INSTANCE} max-instances=${_MAX_INSTANCES} pool=${_DB_POOL_MAX} session-options=${_DB_SESSION_OPTIONS} logout=${_LOGOUT_TARGET}"
 
   # System health documents (addition 0008r): the files docs/system-health/documents.txt names, copied by basename into
   # web/documents/ so the Docker build (context web/) can list them in its manifest. A file not in this commit is skipped
@@ -111,7 +118,7 @@ steps:
       - --min-instances=1
       - --startup-probe=httpGet.path=/api/health,httpGet.port=8080,periodSeconds=2,timeoutSeconds=2,failureThreshold=30
       - --cpu-boost
-      - --set-env-vars=CMA_AUTH_MODE=${_AUTH_MODE},CMA_DATA_MODE=${_DATA_MODE},IAP_AUDIENCE=${_IAP_AUDIENCE},CMA_VERSION=${SHORT_SHA},CMA_DB_INSTANCE=${_DB_INSTANCE},CMA_DB_USER=${_DB_USER},CMA_DB_NAME=${_DB_NAME},CMA_DB_POOL_MAX=${_DB_POOL_MAX},CMA_LOGOUT_TARGET=${_LOGOUT_TARGET}
+      - --set-env-vars=CMA_AUTH_MODE=${_AUTH_MODE},CMA_DATA_MODE=${_DATA_MODE},IAP_AUDIENCE=${_IAP_AUDIENCE},CMA_VERSION=${SHORT_SHA},CMA_DB_INSTANCE=${_DB_INSTANCE},CMA_DB_USER=${_DB_USER},CMA_DB_NAME=${_DB_NAME},CMA_DB_POOL_MAX=${_DB_POOL_MAX},CMA_DB_SESSION_OPTIONS=${_DB_SESSION_OPTIONS},CMA_LOGOUT_TARGET=${_LOGOUT_TARGET}
       - --quiet
 
 images:
@@ -129,6 +136,7 @@ substitutions:
   _DB_USER: ""
   _DB_NAME: cma
   _DB_POOL_MAX: "10"
+  _DB_SESSION_OPTIONS: ""
   _MAX_INSTANCES: "4"
   _LOGOUT_TARGET: legacy
 

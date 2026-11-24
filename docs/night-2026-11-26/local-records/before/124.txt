@@ -1,0 +1,67 @@
+DO
+SET
+DO
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ 1500
+(1 row)
+
+ set_config 
+------------
+ 800
+(1 row)
+
+ set_config 
+------------
+ 2500
+(1 row)
+
+ set_config 
+------------
+ 240
+(1 row)
+
+psql:db/124_time_flash.sql:59: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+DO
+DROP FUNCTION
+                             check_name                             | result |                                                 detail                                                 
+--------------------------------------------------------------------+--------+--------------------------------------------------------------------------------------------------------
+ read only                                                          | info   | a write in the timed part is refused (25006)
+ pulse4all-invest                                                   | skip   | no active person holds reports.view: nothing timed
+ pulse4all-subscriptions acting as                                  | info   | app_user 01a20e63-6d1f-7393-9e01-96a9b68ede9e: the first active person holding reports.view
+ pulse4all-subscriptions overview customers                         | ok     | 382.8 ms (best of 2) against 1500 ms
+ pulse4all-subscriptions overview subscriptions                     | ok     | 860.7 ms (best of 2) against 1500 ms
+ pulse4all-subscriptions overview installed_base                    | ok     | 315.3 ms (best of 2) against 1500 ms
+ pulse4all-subscriptions overview churn                             | ok     | 79.6 ms (best of 2) against 1500 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions overview orders                            | ok     | 268.0 ms (best of 2) against 1500 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions overview payments                          | ok     | 151.9 ms (best of 2) against 1500 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions overview open_deals                        | ok     | 35.5 ms (best of 2) against 1500 ms
+ pulse4all-subscriptions overview open_tickets                      | ok     | 157.1 ms (best of 2) against 1500 ms
+ pulse4all-subscriptions overview open_tasks                        | ok     | 287.8 ms (best of 2) against 1500 ms
+ pulse4all-subscriptions overview reviews                           | ok     | 42.3 ms (best of 2) against 1500 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions overview data_quality                      | ok     | 13.8 ms (best of 2) against 2500 ms
+ pulse4all-subscriptions landing                                    | ok     | 10.0 ms (best of 2) against 1500 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions list customers by lifetime_orders desc     | ok     | 477.0 ms (best of 2) against 800 ms
+ pulse4all-subscriptions list subscriptions by subscription_id desc | ok     | 707.2 ms (best of 2) against 800 ms
+ pulse4all-subscriptions list installed_base by serial desc         | ok     | 295.2 ms (best of 2) against 800 ms
+ pulse4all-subscriptions list churn by churned_at desc              | ok     | 92.5 ms (best of 2) against 800 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions list orders by created_at desc             | ok     | 297.1 ms (best of 2) against 800 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions list payments by at desc                   | ok     | 132.6 ms (best of 2) against 800 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions list open_deals by age_days desc           | ok     | 58.7 ms (best of 2) against 800 ms
+ pulse4all-subscriptions list open_tickets by age_days desc         | ok     | 159.3 ms (best of 2) against 800 ms
+ pulse4all-subscriptions list open_tasks by due_at desc             | ok     | 283.3 ms (best of 2) against 800 ms
+ pulse4all-subscriptions list reviews by submitted_at desc          | ok     | 36.7 ms (best of 2) against 800 ms; flows 2026-10-01 to 2026-10-31
+ pulse4all-subscriptions list data_quality by object_id desc        | ok     | 1.1 ms (best of 2) against 2500 ms
+ verdict                                                            | PASS   | 124_time_flash: 23 ok, 0 FAIL, 1 skip; worst 860.7 ms (pulse4all-subscriptions overview subscriptions)
+(27 rows)
+
+DROP TABLE
+RESET

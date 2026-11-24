@@ -1,0 +1,30 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ true
+(1 row)
+
+psql:223_verify_subscription_moves_entry.sql:33: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+ALTER FUNCTION
+DO
+DO
+DROP FUNCTION
+                                                                                                      check_name                                                                                                      | result |                                                                                                                                                      detail                                                                                                                                                       
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0009zk recorded, after 0009ze                                                                                                                                                                            | PASS   | 
+ A2 cma.subscription_moves_of the application's and no one else's; its JIT off; the entry status from the first status event, 210's filter on a named previous status gone                                            | PASS   | jit=off false true
+ A3 its moves equal 210's on every tenant, but for subscriptions whose first status event names no previous status (counts only)                                                                                      | PASS   | 67310 moves, 11018 subscriptions differ, 0 of them with a named first previous status | 11993 subscriptions whose first status event names none
+ B1 a legacy move into canceled in 2025 then a reactivation from canceled in 2026: entry active, churned in 2025, reactivated in 2026 (210: entered canceled, no churn); all legacy, and all named, move as under 210 | PASS   | l1:new@2025-01,churned@2025-06,reactivated@2026-03 l2:new@2025-01,moved_to_failed@2025-05,reactivated@2025-05 n1:new@2025-01,churned@2025-07,reactivated@2026-04 old-l1:reactivated@2026-03 old-l2:new@2025-01,moved_to_failed@2025-05,reactivated@2025-05 old-n1:new@2025-01,churned@2025-07,reactivated@2026-04
+ verdict                                                                                                                                                                                                              | PASS   | 223_verify_subscription_moves_entry: 4 PASS, 0 FAIL
+(5 rows)
+
+RESET

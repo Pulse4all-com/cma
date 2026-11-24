@@ -243,6 +243,36 @@ Expected: `link_calls`, `forms_poll` and `email_poll` rows every minute, `succee
 03:30; `close_forgotten_workdays` rows hourly (since 0008r) and `refresh_follow_up` rows every minute per tenant
 (since 0008s).
 
+### 4.1 A web minute job that waits (addition 0009zr, night N07)
+
+The web's minute jobs (`refresh_follow_up`, `refresh_data_quality`, `refresh_active_customers`, `flash_snapshot`) ask
+`cma.job_gate_of` before their heavy step. A run that waits still leaves its run row, `succeeded` with `skipped` 1 and
+the wait it was in among its counts, and one log line with `reason`:
+
+| Wait | Run row's count | Log line | What it means | What to do |
+|---|---|---|---|---|
+| Deferred | `defer_wait` 1 | INFO, `reason` `deferred` | the web service had `jobs.defer_web_statements` (2) or more statements active: people were waiting on pages, so the job leaves the database's one vCPU to them for this minute. After `jobs.defer_max_in_a_row` (5) deferrals in a row it computes regardless | nothing; many deferrals all day long mean the web is slow on its own (section 2, the request log) |
+| Backoff | `backoff_wait` 1 | WARNING, `reason` `backoff` | the job's latest runs for this tenant were cancelled by their statement timeout (`57014`): it waits 5, 10, 20, 40 and at most 60 minutes after the last one before it computes again, instead of retrying every minute under the load it causes; any other outcome resets it | the timeout's cause: `tools/perf/prod-load-breakdown.sql` (the job's time per run by hour) and `tools/perf/active-refresh-breakdown.sql` (the Active refresh's steps); a manual backfill that grew `cma.subscription_event` is the usual one |
+| Nothing to read | `nothing_to_read` 1 | INFO, `reason` `nothing_to_read` | the follow-up of a tenant without an active CRM connection, or Customers → Active without a store or subscriptions connection: one read of the tenant's connections, no computation | nothing |
+
+Interim, by hand on 24 November 2026 (Martin): the schedule `cma-refresh-active-customers-minutely` runs every 10
+minutes (`*/10 * * * *`, UTC) against the timeout streaks; `docs/scheduler/deploy-active-customers.sh` sets it back to
+every minute once 0009zr and an image with the gate are deployed (night N07's morning runbook).
+
+Customers → Active computes at most every `customers.refresh_minutes` (10 by default since 0009zr) and only when its
+inputs changed. Its second step, the subscription facts, computes the renewal outcomes of the subscriptions written
+since the last computation, the whole set once an hour.
+
+**Studio (cma-prod-pg)** (the waits per job today, counts only)
+```sql
+set role cma_owner;
+select job, count(*) filter (where counts ? 'defer_wait') as deferred, count(*) filter (where counts ? 'backoff_wait') as backoff,
+       count(*) filter (where counts ? 'nothing_to_read') as nothing_to_read, count(*) filter (where error = '57014') as timeouts
+from cma.sync_run where connection_id is null and started_at > current_date group by job order by job;
+reset role;
+```
+Expected: few deferrals outside the office's busy hours, no timeouts, and backoff rows only after timeouts.
+
 ## 5. Pause and resume a Cloud Scheduler job
 
 Names: `ingest-sweep`, `ingest-poll-forms`, `ingest-poll-email`, `ingest-reconcile`, `ingest-outbox` (paused

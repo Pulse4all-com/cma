@@ -9,6 +9,9 @@
 -- because Cloud SQL Studio shows no notices; blocks E and A end with a row of their own ("ran to the end"), which the
 -- verdict requires, so a block that an error ended reads FAIL. Run as your own IAM login after 190_follow_up_clock_at_read.sql, dev
 -- first, then prod.
+-- Edited by 0009zr (236, night N07, 25 November 2026): the clock-at-read copy of speed to lead is made of
+-- cma.speed_to_lead_rows_of when it exists (236 moved 234's one definition there, with an open-only bound that
+-- cma.open_leads_of passes as true), cma.speed_to_lead_of's form as before; the checks themselves are unchanged.
 -- Edited after 0009zq (24 November 2026; prod's run of 191 after 234: E4 read "1171 items: 1 with another key moved" for
 -- pulse4all-subscriptions, which db/diagnose_0009zq_prod.sql, kept in records/0009zq-prod-2026-11-24/, did not find under
 -- one snapshot: 1,163 items, 0 moved, while the audit log held 153 crm_call, 133 telephony_call and 217 commerce_customer
@@ -82,17 +85,34 @@ begin
   d := replace(replace(d, 'FUNCTION cma.open_tickets_of(p_tenant_id uuid)', 'FUNCTION pg_temp.v0009u_open_tickets_at(p_tenant_id uuid, p_at timestamp with time zone)'),
                'now()', 'p_at');
   execute d;
-  d := pg_get_functiondef('cma.speed_to_lead_of(uuid,timestamptz,timestamptz)'::regprocedure);
-  if position('FUNCTION cma.speed_to_lead_of(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone)' in d) = 0 then
-    raise exception 'speed_to_lead_of: unexpected header';
+  -- since 0009zr (236) the one definition is cma.speed_to_lead_rows_of (its open-only bound p_open_only) and
+  -- cma.speed_to_lead_of reads it without the bound: the copy is made of the definition that holds the body (edited by 236)
+  if to_regprocedure('cma.speed_to_lead_rows_of(uuid,timestamptz,timestamptz,boolean)') is not null then
+    d := pg_get_functiondef('cma.speed_to_lead_rows_of(uuid,timestamptz,timestamptz,boolean)'::regprocedure);
+    if position('FUNCTION cma.speed_to_lead_rows_of(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone, p_open_only boolean)' in d) = 0 then
+      raise exception 'speed_to_lead_rows_of: unexpected header';
+    end if;
+    d := replace(replace(d, 'FUNCTION cma.speed_to_lead_rows_of(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone, p_open_only boolean)',
+                            'FUNCTION pg_temp.v0009u_speed_to_lead_rows_at(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone, p_open_only boolean, p_at timestamp with time zone)'),
+                 'now()', 'p_at');
+    execute d;
+    execute 'create or replace function pg_temp.v0009u_speed_to_lead_at(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone, p_at timestamp with time zone)
+             returns setof cma.speed_to_lead_row language sql stable
+             as $f$ select * from pg_temp.v0009u_speed_to_lead_rows_at(p_tenant_id, p_from, p_to, false, p_at) $f$';
+  else
+    d := pg_get_functiondef('cma.speed_to_lead_of(uuid,timestamptz,timestamptz)'::regprocedure);
+    if position('FUNCTION cma.speed_to_lead_of(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone)' in d) = 0 then
+      raise exception 'speed_to_lead_of: unexpected header';
+    end if;
+    d := replace(replace(d, 'FUNCTION cma.speed_to_lead_of(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone)',
+                            'FUNCTION pg_temp.v0009u_speed_to_lead_at(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone, p_at timestamp with time zone)'),
+                 'now()', 'p_at');
+    execute d;
   end if;
-  d := replace(replace(d, 'FUNCTION cma.speed_to_lead_of(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone)',
-                          'FUNCTION pg_temp.v0009u_speed_to_lead_at(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone, p_at timestamp with time zone)'),
-               'now()', 'p_at');
-  execute d;
   d := pg_get_functiondef('cma.open_leads_of(uuid)'::regprocedure);
   if position('FUNCTION cma.open_leads_of(p_tenant_id uuid)' in d) = 0 or position('cma.speed_to_lead_of(p_tenant_id, NULL::timestamp with time zone, NULL::timestamp with time zone)' in d) = 0
-     and position('cma.speed_to_lead_of(p_tenant_id, null, null)' in d) = 0 then
+     and position('cma.speed_to_lead_of(p_tenant_id, null, null)' in d) = 0
+     and position('cma.speed_to_lead_rows_of(p_tenant_id, null, null, true)' in d) = 0 then
     raise exception 'open_leads_of: unexpected header or call';
   end if;
   d := replace(replace(replace(replace(d, 'FUNCTION cma.open_leads_of(p_tenant_id uuid)', 'FUNCTION pg_temp.v0009u_open_leads_at(p_tenant_id uuid, p_at timestamp with time zone)'),
@@ -100,6 +120,8 @@ begin
                                'pg_temp.v0009u_speed_to_lead_at(p_tenant_id, NULL::timestamp with time zone, NULL::timestamp with time zone, p_at)'),
                        'cma.speed_to_lead_of(p_tenant_id, null, null)', 'pg_temp.v0009u_speed_to_lead_at(p_tenant_id, null, null, p_at)'),
                'now()', 'p_at');
+  -- 0009zr's open leads read the one definition with its open-only bound
+  d := replace(d, 'cma.speed_to_lead_rows_of(p_tenant_id, null, null, true)', 'pg_temp.v0009u_speed_to_lead_rows_at(p_tenant_id, null, null, true, p_at)');
   execute d;
   perform set_config('search_path', v_path, true);
 end

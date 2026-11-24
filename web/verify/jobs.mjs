@@ -25,6 +25,8 @@ import { refreshTenants } from "../jobs/refresh-follow-up.mjs";
 import { refreshTenants as refreshDataQuality } from "../jobs/refresh-data-quality.mjs";
 import { refreshTenants as refreshActiveCustomers } from "../jobs/refresh-active-customers.mjs";
 import { closeTenants } from "../jobs/close-forgotten-workdays.mjs";
+import { gatedCounts, gatedSeverity } from "../jobs/lib/gate.mjs";
+import { parseSessionOptions, sessionPoolOptions } from "../jobs/lib/session-options.mjs";
 import { snapshotTenants, countsOf, currentCountsOf, pledgeCountsOf, runErrorOf, poolMax, STATEMENT_TIMEOUT_MS, TAKE_RETRY_MINUTES } from "../jobs/snapshot-flash.mjs";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -68,7 +70,7 @@ function dbTake({ earlier = [] } = {}) {
 const CURRENT = { current_refreshed: 1, current_fresh: 0, current_running: 0, current_not_set_up: 0, current_failed: 0, current_rows: 65, current_duration_ms: 40 };
 const dbCurrent = () => () => CURRENT;
 function mockPool({ faults = [], connectFaults = [], take = dbTake(), current = dbCurrent(), lastFailed = () => null,
-  pledge = () => ({ answer: "not_due", local_date: "2026-11-02" }) } = {}) {
+  pledge = () => ({ answer: "not_due", local_date: "2026-11-02" }), gate = null } = {}) {
   const pool = new EventEmitter();
   const state = { connects: 0, released: 0, dropped: 0, statements: [], runStarts: [], runFinishes: [] };
   let nextRun = 0;
@@ -86,6 +88,9 @@ function mockPool({ faults = [], connectFaults = [], take = dbTake(), current = 
     client.release = (err) => { state.released += 1; if (err) state.dropped += 1; };
     const respond = (text, values) => {
       if (/find_tenants_for_identity/.test(text)) return { rows: [{ tenant_id: T1 }, { tenant_id: T2 }], rowCount: 2 };
+      // the jobs' gate (0009zr): absent unless the test gives one (a database before 0009zr: the job computes as before)
+      if (/to_regprocedure\('cma\.job_gate_of\(text\)'\)/.test(text)) return { rows: [{ has: gate !== null }], rowCount: 1 };
+      if (/cma\.job_gate_of\(/.test(text)) return { rows: [{ g: gate(tenant, values[0]) }], rowCount: 1 };
       if (/from cma\.app_user_external_id/.test(text)) return { rows: [{ id: USER, slug: tenant === T1 ? "one" : "two" }], rowCount: 1 };
       if (/cma\.job_run_start|cma\.scheduler_run_start/.test(text)) {
         nextRun += 1;
@@ -526,6 +531,80 @@ expect("snapshot: the pledge take's counts (one answer 1, the devices of a file 
   expect("snapshot, a reset in tenant 1's pledge take: retried once, Flash's take sent once, the pledge take twice, one run row, succeeded",
     [r.failed, count(pool, taken, T1), count(pool, pledgeTake, T1), starts(pool, T1), finishes(pool)[0]],
     [0, 1, 2, 1, "t1:succeeded:9"], [1, 2, 1, 2, "t1:failed:ECONNRESET"]);
+}
+
+// ---- The gate (addition 0009zr, brief N07, decision D7) --------------------------------------------------------------
+expect("gate: a gated run's counts name its wait (backoff, deferred, nothing to read) and skip",
+  [gatedCounts({ reason: "backoff" }), gatedCounts({ reason: "deferred" }), gatedCounts({ reason: "nothing_to_read" }),
+    gatedSeverity("backoff"), gatedSeverity("deferred")],
+  [{ rows: 0, duration_ms: 0, skipped: 1, backoff_wait: 1 }, { rows: 0, duration_ms: 0, skipped: 1, defer_wait: 1 },
+    { rows: 0, duration_ms: 0, skipped: 1, nothing_to_read: 1 }, "WARNING", "INFO"],
+  [{}, {}, {}, "INFO", "WARNING"]);
+{
+  // the follow-up: tenant 1 deferred (the web busy), tenant 2 goes: tenant 1's refresh never sent, its run row succeeded
+  // with defer_wait, tenant 2 refreshed as before
+  const gate = (tenant) => (tenant === T1 ? { go: false, reason: "deferred", web_statements: 3, deferrals_in_a_row: 1 } : { go: true });
+  const pool = mockPool({ gate });
+  lines.length = 0;
+  const r = await refreshTenants({ connect: pool.connect, log });
+  const sent = (t) => pool.state.statements.filter((x) => x.tenant === t && /cma\.refresh_follow_up\(\)/.test(x.text)).length;
+  const fin = pool.state.runFinishes.map((x) => `${x.tenant === T1 ? "t1" : "t2"}:${x.status}:${x.counts.defer_wait ?? 0}:${x.counts.skipped}`);
+  expect("gate, follow-up: a deferred tenant computes nothing, its run row succeeded with defer_wait 1; the other refreshed",
+    [r, sent(T1), sent(T2), fin, lines.map((l) => `${l.severity}:${l.reason ?? "-"}`)],
+    [{ tenants: 2, failed: 0 }, 0, 1, ["t1:succeeded:1:1", "t2:succeeded:0:0"], ["INFO:deferred", "INFO:-"]],
+    [{ tenants: 2, failed: 1 }, 1, 0, [], []]);
+}
+{
+  // Customers → Active: tenant 1 in the timeout's backoff: neither Active nor the facts computed, the run row counts
+  // backoff_wait, the log line a WARNING; tenant 2 goes
+  const gate = (tenant) => (tenant === T1 ? { go: false, reason: "backoff", timeouts_in_a_row: 2, wait_minutes: 10 } : { go: true });
+  const pool = mockPool({ gate });
+  lines.length = 0;
+  const r = await refreshActiveCustomers({ connect: pool.connect, log });
+  const sent = (t, re) => pool.state.statements.filter((x) => x.tenant === t && re.test(x.text)).length;
+  const fin = pool.state.runFinishes.map((x) => `${x.tenant === T1 ? "t1" : "t2"}:${x.status}:${x.counts.backoff_wait ?? 0}`);
+  expect("gate, Active: a tenant in the backoff computes neither Active nor the facts; backoff_wait 1, a WARNING line",
+    [r, sent(T1, /cma\.active_refresh\(\)/), sent(T1, /cma\.subscription_facts_refresh\(\)/), sent(T2, /cma\.active_refresh\(\)/), fin,
+      lines.map((l) => `${l.severity}:${l.reason ?? "-"}`)],
+    [{ tenants: 2, failed: 0 }, 0, 0, 1, ["t1:succeeded:1", "t2:succeeded:0"], ["WARNING:backoff", "INFO:fresh"]],
+    [{ tenants: 2, failed: 1 }, 1, 1, 0, [], []]);
+}
+{
+  // data quality: no gate in the database (before 0009zr): both tenants as before, no gate statement beyond the probe
+  const pool = mockPool();
+  lines.length = 0;
+  const r = await refreshDataQuality({ connect: pool.connect, log });
+  const gates = pool.state.statements.filter((x) => /cma\.job_gate_of\(\$1\)/.test(x.text)).length;
+  const sent = pool.state.statements.filter((x) => /cma\.refresh_data_quality\(\)/.test(x.text)).length;
+  expect("gate, data quality on a database without it: both tenants refreshed as before, the gate never called",
+    [r, gates, sent], [{ tenants: 2, failed: 0 }, 0, 2], [{ tenants: 2, failed: 1 }, 2, 0]);
+}
+{
+  // Flash: tenant 1 deferred: its current takes not refreshed this minute, the dated take still taken, the run row
+  // succeeded with defer_wait 1 among Flash's counts
+  const gate = (tenant) => (tenant === T1 ? { go: false, reason: "deferred", web_statements: 2, deferrals_in_a_row: 1 } : { go: true });
+  const pool = mockPool({ gate });
+  lines.length = 0;
+  const r = await snapshotTenants({ connect: pool.connect, log });
+  const sent = (t, re) => pool.state.statements.filter((x) => x.tenant === t && re.test(x.text)).length;
+  const fin = pool.state.runFinishes.map((x) => `${x.tenant === T1 ? "t1" : "t2"}:${x.status}:${x.counts.defer_wait ?? 0}:${x.counts.current_refreshed}`);
+  expect("gate, Flash: a deferred tenant's current takes wait a minute, its dated take still taken, defer_wait 1",
+    [r.failed, sent(T1, /cma\.flash_current_refresh\(/), sent(T1, /cma\.flash_snapshot_take\(/), sent(T2, /cma\.flash_current_refresh\(/), fin],
+    [0, 0, 1, 1, ["t1:succeeded:1:0", "t2:succeeded:0:1"]],
+    [1, 1, 0, 0, []]);
+}
+
+// ---- Database session settings (night N07, WP5, decision D6): CMA_DB_SESSION_OPTIONS ---------------------------------
+{
+  const refused = (raw) => { try { parseSessionOptions(raw); return "accepted"; } catch { return "refused"; } };
+  expect("session options: empty sends nothing; ';' and ',' pairs become -c options; only jit, work_mem, random_page_cost",
+    [parseSessionOptions("").options ?? null, sessionPoolOptions({}), parseSessionOptions("jit=off;work_mem=16MB").options,
+      parseSessionOptions("random_page_cost=1.1, jit=off").options,
+      refused("search_path=public"), refused("role=cma_owner"), refused("app.tenant_id=x"), refused("work_mem=16GB"),
+      refused("jit=maybe"), refused("jit=off;jit=on"), refused("jit")],
+    [null, {}, "-c jit=off -c work_mem=16MB", "-c random_page_cost=1.1 -c jit=off",
+      "refused", "refused", "refused", "refused", "refused", "refused", "refused"],
+    ["-c jit=on", { options: "" }, "", "", "accepted", "accepted", "accepted", "accepted", "accepted", "accepted", "accepted"]);
 }
 
 const passed = results.filter(Boolean).length;

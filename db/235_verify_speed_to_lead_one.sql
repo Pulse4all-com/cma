@@ -10,6 +10,9 @@
 -- starts "FAIL V<n>"), because Cloud SQL Studio shows no notices; the block ends with a row of its own ("ran to the
 -- end"), which the verdict requires, so a block that an error ended reads FAIL. Run as your own IAM login after
 -- 234_speed_to_lead_one.sql, dev first, then prod.
+-- Edited by 0009zr (236, night N07, 25 November 2026): V1 and V11 read the one definition's body in
+-- cma.speed_to_lead_rows_of when it exists (236 moved it there, with an open-only bound cma.open_leads_of passes as true);
+-- the checks are otherwise unchanged.
 -- Expected: V1 to V13 OK, then the verdict "PASS 0009zq". Provoked (verify.provoke true at the top): every row reads
 -- FAIL with its own id, and the verdict PROVOKED, NOT A PASS.
 --
@@ -193,7 +196,10 @@ begin
   if v_view is distinct from v_type then
     v_bad := v_bad || 'cma_read.speed_to_lead is ' || coalesce(v_view, 'missing') || '; ';
   end if;
-  v_txt := (select p.prosrc from pg_proc p where p.oid = 'cma.speed_to_lead_of(uuid,timestamptz,timestamptz)'::regprocedure);
+  -- since 0009zr (236) the one definition's body is cma.speed_to_lead_rows_of (edited by 236)
+  v_txt := (select p.prosrc from pg_proc p
+            where p.oid = coalesce(to_regprocedure('cma.speed_to_lead_rows_of(uuid,timestamptz,timestamptz,boolean)'),
+                                   'cma.speed_to_lead_of(uuid,timestamptz,timestamptz)'::regprocedure));
   if position('''closed_before_first_call''' in v_txt) = 0 or position('not_called_closed' in v_txt) > 0
      or position('''not_called_open''' in v_txt) = 0 or position('''called''' in v_txt) = 0 then
     v_bad := v_bad || 'cma.speed_to_lead_of does not name the three status values alone; ';
@@ -625,8 +631,22 @@ begin
     --      equals the function at now() (provoked: a day later); cma.open_leads_of calls it as 191 expects
     perform set_config('role', 'cma_owner', true);
     perform set_config('search_path', 'pg_catalog', true);
-    v_txt := pg_get_functiondef('cma.speed_to_lead_of(uuid,timestamptz,timestamptz)'::regprocedure);
     v_txt2 := pg_get_functiondef('cma.open_leads_of(uuid)'::regprocedure);
+    if to_regprocedure('cma.speed_to_lead_rows_of(uuid,timestamptz,timestamptz,boolean)') is not null then
+      -- 0009zr (236, which edits this check): the body and its open-only bound in cma.speed_to_lead_rows_of, which 191 copies
+      v_txt := pg_get_functiondef('cma.speed_to_lead_rows_of(uuid,timestamptz,timestamptz,boolean)'::regprocedure);
+      v_ok := position('FUNCTION cma.speed_to_lead_rows_of(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone, p_open_only boolean)' in v_txt) > 0
+              and position('cma.speed_to_lead_rows_of(p_tenant_id, null, null, true)' in v_txt2) > 0;
+      if v_ok then
+        execute replace(replace(v_txt, 'FUNCTION cma.speed_to_lead_rows_of(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone, p_open_only boolean)',
+                                       'FUNCTION pg_temp.v9zp_speed_to_lead_rows_at(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone, p_open_only boolean, p_at timestamp with time zone)'),
+                        'now()', 'p_at');
+        execute 'create or replace function pg_temp.v9zp_speed_to_lead_at(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone, p_at timestamp with time zone)
+                 returns setof cma.speed_to_lead_row language sql stable
+                 as $f$ select * from pg_temp.v9zp_speed_to_lead_rows_at(p_tenant_id, p_from, p_to, false, p_at) $f$';
+      end if;
+    else
+    v_txt := pg_get_functiondef('cma.speed_to_lead_of(uuid,timestamptz,timestamptz)'::regprocedure);
     v_ok := position('FUNCTION cma.speed_to_lead_of(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone)' in v_txt) > 0
             and (position('cma.speed_to_lead_of(p_tenant_id, NULL::timestamp with time zone, NULL::timestamp with time zone)' in v_txt2) > 0
                  or position('cma.speed_to_lead_of(p_tenant_id, null, null)' in v_txt2) > 0);
@@ -634,6 +654,7 @@ begin
       execute replace(replace(v_txt, 'FUNCTION cma.speed_to_lead_of(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone)',
                                      'FUNCTION pg_temp.v9zp_speed_to_lead_at(p_tenant_id uuid, p_from timestamp with time zone, p_to timestamp with time zone, p_at timestamp with time zone)'),
                       'now()', 'p_at');
+    end if;
     end if;
     perform set_config('search_path', v_path, true);
     if v_ok then
@@ -666,6 +687,7 @@ end
 $$;
 
 drop function if exists pg_temp.v9zp_speed_to_lead_at(uuid, timestamptz, timestamptz, timestamptz);
+drop function if exists pg_temp.v9zp_speed_to_lead_rows_at(uuid, timestamptz, timestamptz, boolean, timestamptz);
 drop function if exists pg_temp.v9zp_code(text);
 drop function if exists pg_temp.v9zp_noon_of_40(uuid, text, timestamptz);
 drop function if exists pg_temp.v9zp_cso_94(uuid);

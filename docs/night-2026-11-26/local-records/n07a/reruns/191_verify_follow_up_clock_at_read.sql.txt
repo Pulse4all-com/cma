@@ -1,0 +1,50 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:191_verify_follow_up_clock_at_read.sql:69: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                          check_name                                                           |     result     |                                                                                    detail                                                                                    
+-------------------------------------------------------------------------------------------------------------------------------+----------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 addition 0009u recorded after 0009t                                                                                        | ok             | cma.schema_migration holds 0009u
+ S2 the six functions: the application may execute them, public may not, in the caller's rights                                | ok             | as designed
+ S3 the follow-up's derived tables carry no audit trigger (their writes never reach cma.audit_log)                             | ok             | follow_up_item, follow_up_snapshot, follow_up_marker
+ E0 the copies with the instant as a parameter equal the functions at now() (pulse4all-invest)                                 | ok             | 0 tickets and 0 leads equal in order; speed to lead equal
+ E1 the stored lead and ticket rows hold no clock field, every item kept (pulse4all-invest)                                    | ok             | 0 leads, 0 tickets stored; 0 rows with a clock field (rolled back)
+ E2 the follow-up lists (every row, and attention) equal the live rows at the same instant, in order (pulse4all-invest)        | ok             | 0 leads and 0 tickets, the three fields and the state words derived at now()
+ E3 cma.open_leads() and cma.open_tickets() equal the live functions at the same instant (pulse4all-invest)                    | skip           | no active person holds reports.view
+ E4 a minute of office hours moves nothing in the stored row but the day counts and the state words (pulse4all-invest)         | ok             | 2026-11-25 11:06 to 11:07 UTC, 0 items: 0 with another key moved; rows a refresh writes: 0 as 0009o stored them, 0 now (0 state changes, 0 places moved, 0 day counts)
+ E5 Welcome's Waiting for you: the counts equal the lengths of each person's own lists (pulse4all-invest)                      | ok             | 1 people who may read them, every count and computed_at equal (rolled back)
+ E0 the copies with the instant as a parameter equal the functions at now() (pulse4all-subscriptions)                          | ok             | 3600 tickets and 1380 leads equal in order; speed to lead equal
+ E1 the stored lead and ticket rows hold no clock field, every item kept (pulse4all-subscriptions)                             | ok             | 1380 leads, 3600 tickets stored; 0 rows with a clock field (rolled back)
+ E2 the follow-up lists (every row, and attention) equal the live rows at the same instant, in order (pulse4all-subscriptions) | ok             | 1380 leads and 3600 tickets, the three fields and the state words derived at now()
+ E3 cma.open_leads() and cma.open_tickets() equal the live functions at the same instant (pulse4all-subscriptions)             | ok             | 1380 leads and 3600 tickets, every column, in order
+ E4 a minute of office hours moves nothing in the stored row but the day counts and the state words (pulse4all-subscriptions)  | ok             | 2026-11-25 11:06 to 11:07 UTC, 4980 items: 0 with another key moved; rows a refresh writes: 9960 as 0009o stored them, 2 now (0 state changes, 0 places moved, 1 day counts)
+ E5 Welcome's Waiting for you: the counts equal the lengths of each person's own lists (pulse4all-subscriptions)               | ok             | 5 people who may read them, every count and computed_at equal (rolled back)
+ E ran to the end, every tenant                                                                                                | ok             | 2 tenants
+ A1 the page, an agent's own follow-up and its counts, open_leads() and open_tickets() equal the live rows at the same instant | ok             | 4 leads (2 past the target), 5 tickets (states breached,at_risk,ok,ok,no_hours); the agent's own 2 leads and 4 tickets
+ A2 a minute later with nothing else changed a refresh writes 0 rows (0009o's stored row: every lead and ticket with a market) | ok             | 4 leads and 5 tickets: 0 changed a minute later (0009o's shape: 7); a second refresh now wrote 0
+ A3 a real change is written: an owner (2 rows) and the last ticket closed (1 row), the rest unchanged                         | ok             | written 3 (3 expected), unchanged 7; x2's owner o-2, x4 gone
+ A4 three refreshes, no audit row for follow_up_item, follow_up_snapshot or follow_up_marker                                   | ok             | 0 audit rows for the follow-up's tables; 11 for the tenant's records (the ingest's writes)
+ A5 Welcome's counts refuse a person without leads.accept or workday.own (CMA06) and a call without an acting user (CMA01)     | ok             | without the permissions CMA06; without an acting user CMA01
+ A ran to the end                                                                                                              | ok             | 5 A rows
+ verdict                                                                                                                       | 0009u verified | 191_verify_follow_up_clock_at_read: 21 ok, 0 FAIL, 1 skip
+(23 rows)
+

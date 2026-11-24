@@ -1,0 +1,52 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/dev/stdin:48: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+CREATE FUNCTION
+psql:/dev/stdin:559: NOTICE:  relation "subscription_facts_units" already exists, skipping
+psql:/dev/stdin:559: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
+psql:/dev/stdin:559: NOTICE:  relation "subscription_facts_take" already exists, skipping
+psql:/dev/stdin:559: NOTICE:  relation "subscription_facts_units" already exists, skipping
+psql:/dev/stdin:559: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
+psql:/dev/stdin:559: NOTICE:  relation "subscription_facts_take" already exists, skipping
+psql:/dev/stdin:559: NOTICE:  relation "subscription_facts_units" already exists, skipping
+psql:/dev/stdin:559: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
+psql:/dev/stdin:559: NOTICE:  relation "subscription_facts_take" already exists, skipping
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                    check_name                    |        result        |                                                                detail                                                                 
+--------------------------------------------------+----------------------+---------------------------------------------------------------------------------------------------------------------------------------
+ S1 structure                                     | FAIL                 | FAIL S1: provoked; order, web_busy definer of cma_owner, grants, settings 2/5/10, range refusals CMA04/CMA04, jit off, 8 small tables
+ G1 every tenant's gate answers; a person refused | FAIL                 | FAIL G1: provoked; 2 tenants, web statements now 0
+ G2 the timeout's backoff                         | FAIL                 | FAIL G2: provoked; a backoff/5, b true, c backoff/10, d backoff/2, e true, f backoff/60
+ G3 the deferrals in a row                        | FAIL                 | FAIL G3: provoked; 3 deferrals counted
+ G4 nothing to read                               | FAIL                 | FAIL G4: provoked; follow-up nothing_to_read, data quality go, Flash go
+ F1 forced refresh equals 210                     | FAIL                 | FAIL F1: provoked; 1 rows differ, 578015 outcome rows
+ F2 new events: incremental, equal                | FAIL                 | FAIL F2: provoked; 1 rows differ, whole false, scope 3 subscriptions (3 written)
+ F3 a subscription row: in scope, equal           | FAIL                 | FAIL F3: provoked; 1 rows differ, whole false, scope 4
+ F4 a billing event: whole, equal                 | FAIL                 | FAIL F4: provoked; 0 rows differ, whole true
+ L1 speed to lead equals 234                      | FAIL                 | FAIL L1: provoked; 1 rows differ over 6882 lead deals
+ L2 the open leads equal 234                      | FAIL                 | FAIL L2: provoked; 0 rows differ over 1380 open leads
+ verdict                                          | PROVOKED, NOT A PASS | 237_verify_jobs_off_the_vcpu: 0 OK, 11 FAIL
+(12 rows)
+
+RESET
