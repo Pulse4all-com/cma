@@ -1188,6 +1188,10 @@ async function followUpChecks() {
   if ((await get(READER, "/api/v1/me")).status === 200) {
     expect("follow-up: the reader (reports.view alone) reads the tasks, no summary and no per-person figures",
       [(await get(READER, `${fu}/tasks`)).status, (await get(READER, `${fu}/summary`)).status, (await get(READER, `${fu}/by-owner`)).status], [200, 403, 403], [200, 200, 403]);
+    // Night N07: the page's poll is one scalar for every follow-up reader, the reader with reports.view alone too
+    const readerUpdated = await get(READER, `${fu}/updated`);
+    expect("follow-up: the reader polls the snapshot's time alone",
+      [readerUpdated.status, Object.keys(readerUpdated.body?.data ?? {})], [200, ["computedAt"]], [403, []]);
   } else {
     console.log("note  no reader identity in this tenant: the reader's check is left out");
   }

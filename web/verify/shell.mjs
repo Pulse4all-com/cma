@@ -98,13 +98,17 @@ expect("full prefetch for the agent class",
 expect("never for a report, configuration or Log out",
   ["/reports/dashboard", "/reports/follow-up", "/reports/flash", "/configuration/sources", "/logout", "/live/newco/x", "/team"].map(mayFullPrefetch),
   Array(7).fill(false), Array(7).fill(true));
-expect("an agent's head start", headStartHrefs(principal(AGENT), copy), ["/day", "/messages", "/schedule"], []);
-expect("a supervisor's head start: the board and Team hours, not the agent's set", headStartHrefs(principal(SUPERVISOR), copy), ["/live/newco", "/team/hours"], ["/day", "/messages", "/schedule", "/live/newco", "/team/hours"]);
+expect("an agent's head start once the day is open", headStartHrefs(principal(AGENT), copy, true), ["/day", "/messages", "/schedule"], []);
+expect("none while the day is not open (Clock in would throw it away)", [headStartHrefs(principal(AGENT), copy, false), headStartHrefs(principal(AGENT), copy), headStartHrefs(principal(SUPERVISOR), copy, false)], [[], [], []], [["/day"], ["/day"], ["/team/hours"]]);
+expect("a supervisor's head start: the board and Team hours, not the agent's set", headStartHrefs(principal(SUPERVISOR), copy, true), ["/live/newco", "/team/hours"], ["/day", "/messages", "/schedule", "/live/newco", "/team/hours"]);
 expect("an analyst's head start: the board only (no clock, no Team hours)", headStartHrefs(principal(ANALYST), copy), ["/live/newco"], []);
-expect("no contact center, no board", headStartHrefs(principal(SUPERVISOR, []), copy), ["/team/hours"], []);
+expect("no contact center, no board", headStartHrefs(principal(SUPERVISOR, []), copy, true), ["/team/hours"], []);
 expect("the hover delay", HOVER_PREFETCH_MS, 100, 0);
 const config = readFileSync(path.join(here, "..", "next.config.ts"), "utf8");
 expect("staleTimes: dynamic and full prefetches 30 s", /staleTimes:\s*\{\s*dynamic:\s*30,\s*static:\s*30\s*\}/.test(config), true, false);
+
+const idle = src("components/IdlePrefetch.tsx");
+expect("the head start runs at most once per tab and day state (a module-level set, keyed)", [/^const ran = new Set<string>\(\);/m.test(idle), /ran\.has\(runKey\)/.test(idle)], [true, true], [false, false]);
 
 // ---- D3: the day shown at once
 const T0 = Date.parse("2026-11-25T09:00:00Z");

@@ -4779,6 +4779,12 @@ export const mockData: CmaData = {
     return { rows: mockFollowUpRows(me, now).tasks, computedAt: new Date(now).toISOString() };
   },
 
+  async getFollowUpComputedAt(me): Promise<Instant> {
+    assertAny(me, [...FOLLOW_UP_PERMISSIONS]);
+    // the mock's snapshot moves once a minute, as the refresh job's does
+    return new Date(Math.floor(Date.now() / 60_000) * 60_000).toISOString();
+  },
+
   async getFollowUpSummary(me): Promise<FollowUpSummaryAt> {
     assertAny(me, [...FOLLOW_UP_SUMMARY_PERMISSIONS]);
     const now = Date.now();

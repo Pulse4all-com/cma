@@ -3634,6 +3634,11 @@ export const postgresData: CmaData = {
     });
   },
 
+  async getFollowUpComputedAt(me): Promise<string> {
+    // one scalar for every caller: cma.follow_up_computed_at() checks a follow-up read's permission itself
+    return withTenant(ctx(me), (q) => computedAt(q));
+  },
+
   async getOpenLeads(me): Promise<FollowUpRowsAt<OpenLead>> {
     return withTenant(ctx(me), async (q) => {
       const r = await q.query<OpenLeadDb>(

@@ -119,6 +119,9 @@ if (prefetchRows.length > 0) {
   };
   for (const group of Object.values(Object.groupBy(prefetchRows, (r) => `${r.subject} ${r.from}`))) {
     const { subject, from } = group[0];
+    // The head start waits for an open day (a person whose time is kept): the subject's day is opened first, as Clock in
+    // does (dev data; an open day answers as it is)
+    await fetch(`${BASE}/api/v1/me/day/start`, { method: "POST", headers: { "x-cma-mock-subject": subject, "x-cma-request": "1" } }).catch(() => null);
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const page = await ctx.newPage();
     const fetched = new Map();

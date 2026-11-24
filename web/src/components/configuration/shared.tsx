@@ -37,8 +37,9 @@ export function refusalMessage(status: number, c: Copy["configuration"], conflic
  * Runs a write, shows its state and re-reads the page on success, so the table shows the database's answer.
  *
  * A toggle (night N07, decision D3): `toggle(id, next, run)` shows the switch's new value at once (`flag(id, server)`
- * answers it, useOptimistic over the values the person set), keeps it once the write succeeded until the page's next read
- * brings the same value, and drops it on a refusal, whose message the save note shows as for any write
+ * answers it, useOptimistic over the values the person set), keeps it once the write succeeded (night default, to confirm:
+ * until the screen is loaded again; another admin's later change of the same switch shows after a reload)
+ * and drops it on a refusal, whose message the save note shows as for any write
  */
 export function useSave(c: Copy["configuration"]) {
   const router = useRouter();

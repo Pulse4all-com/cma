@@ -528,7 +528,10 @@ export const HOVER_PREFETCH_MS = 100;
  * any other person with a clock (an agent): My day, Messages, My schedule. One role's set, so a manager who also keeps
  * time costs two prefetches, not five. Only pages the person sees, and only routes mayFullPrefetch allows.
  */
-export function headStartHrefs(me: Principal, copy: Copy): string[] {
+export function headStartHrefs(me: Principal, copy: Copy, dayOpen: boolean | null = null): string[] {
+  // A person whose time is kept and whose day is not open gets none: Clock in on Welcome reads the page again
+  // (router.refresh), which empties the client router cache, so a prefetch now would be thrown away (review of N07b)
+  if (me.permissions.includes("workday.own") && dayOpen !== true) return [];
   const visible = visibleNav(me, copy).flatMap((e) => (e.kind === "page" ? [e.item] : e.items)).map((i) => i.href as string);
   const out: string[] = [];
   const add = (href: string | undefined) => {

@@ -33,7 +33,8 @@ export function FollowUpPoll({ computedAt }: { computedAt: string }) {
         if (!res.ok) throw new Error(String(res.status));
         failures = 0;
         const at = ((await res.json()) as { data?: { computedAt?: string } }).data?.computedAt;
-        if (at && at !== shown.current) startTransition(() => router.refresh());
+        // a later snapshot than the one on the screen: the page is read again
+        if (at && Date.parse(at) > Date.parse(shown.current)) startTransition(() => router.refresh());
       } catch {
         failures += 1;
       }

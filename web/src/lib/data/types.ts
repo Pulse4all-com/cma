@@ -4773,6 +4773,11 @@ export interface CmaData {
   getOpenTasks(me: Principal): Promise<FollowUpRowsAt<OpenTask>>;
   /** The counts. Needs monitoring.live, performance.team or workday.team */
   getFollowUpSummary(me: Principal): Promise<FollowUpSummaryAt>;
+  /**
+   * When the follow-up snapshot was computed (cma.follow_up_computed_at(), one scalar; any follow-up read's permission):
+   * Reports → Follow-up's poll (night N07, D3)
+   */
+  getFollowUpComputedAt(me: Principal): Promise<Instant>;
   /** Per person, the not-linked row last. Needs performance.team */
   getFollowUpByOwner(me: Principal): Promise<FollowUpRowsAt<FollowUpOwner>>;
   /** The caller's own rows. Needs leads.accept or workday.own */

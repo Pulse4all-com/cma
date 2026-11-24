@@ -132,7 +132,7 @@ export default async function WelcomePage() {
       {/* The head start (D5): once every block has settled, the role's top destinations are prefetched in full when the
           browser is idle */}
       <Suspense fallback={null}>
-        <HeadStartAfter reads={Object.values(reads)} hrefs={headStartHrefs(me, copy)} />
+        <HeadStartAfter reads={Object.values(reads)} day={reads.day} me={me} copy={copy} />
       </Suspense>
 
       {dataIsMock ? (
@@ -212,10 +212,17 @@ async function AppLinksLoader({ read, copy }: { read: Promise<AppLink[]>; copy: 
  * (verify/round-trips.mjs reads the last meta, as on System health). Never rendered when the trace is off
  */
 /** Streams the idle prefetch after Welcome's blocks have settled (D5), so the prefetches never compete with them */
-async function HeadStartAfter({ reads, hrefs }: { reads: (Promise<unknown> | null)[]; hrefs: string[] }) {
-  if (hrefs.length === 0) return null;
+async function HeadStartAfter({ reads, day, me, copy }: {
+  reads: (Promise<unknown> | null)[]; day: Promise<[Workday | null, WorkStatus[]]> | null; me: Principal; copy: Copy;
+}) {
   await Promise.allSettled(reads);
-  return <IdlePrefetch hrefs={hrefs} />;
+  // Only once the person's day is open (or they keep no time): Clock in reads the page again and would throw it away
+  const workday = day ? await day.then(([w]) => w).catch(() => null) : null;
+  const open = day ? workday?.status === "working" : null;
+  const hrefs = headStartHrefs(me, copy, open);
+  if (hrefs.length === 0) return null;
+  // keyed on the day's state, so it runs once after Clock in; at most once per tab and key (IdlePrefetch)
+  return <IdlePrefetch hrefs={hrefs} runKey={`${me.userId}:${open === null ? "untimed" : open ? "open" : "closed"}`} />;
 }
 
 async function TraceMeta({ reads }: { reads: (Promise<unknown> | null)[] }) {

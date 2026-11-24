@@ -9,6 +9,7 @@
  * link, never customer data.
  */
 import { useEffect, useOptimistic, useState, useSyncExternalStore, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
 import type { MyMessage, MyMessages } from "@/lib/data";
 import { Badge, Button, Card } from "./primitives";
@@ -54,6 +55,7 @@ export function Inbox({ initial, copy, timeZone, locale, canWithdraw = false }: 
   /** The viewer holds messages.withdraw: each message carries Delete */
   canWithdraw?: boolean;
 }) {
+  const router = useRouter();
   const [list, setList] = useState<MyMessage[]>(initial.messages);
   /**
    * The list with the change in flight shown at once (night N07, decision D3): a message read or acknowledged the moment it
@@ -94,6 +96,9 @@ export function Inbox({ initial, copy, timeZone, locale, canWithdraw = false }: 
       if (res?.ok) {
         setList((l) => applyRead(l, change));
         if (typeof answer?.unreadCount === "number") announceUnread(answer.unreadCount);
+        // the page read again after the change is on the screen: a Back within 30 s (the client router cache, D4)
+        // shows the messages read
+        startTransition(() => router.refresh());
       } else {
         setWriteFailed(true);
         announceUnread(before);

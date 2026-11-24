@@ -14,14 +14,18 @@ import { mayFullPrefetch } from "@/lib/nav";
 
 type IdleWindow = Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
 
-export function IdlePrefetch({ hrefs }: { hrefs: readonly string[] }) {
+/** The head starts this tab already ran (the person and the day's state): at most once each, never again on Welcome's revisits */
+const ran = new Set<string>();
+
+export function IdlePrefetch({ hrefs, runKey }: { hrefs: readonly string[]; runKey: string }) {
   const router = useRouter();
   const key = hrefs.join(" ");
   useEffect(() => {
     const list = key.split(" ").filter((h) => h !== "" && mayFullPrefetch(h));
-    if (list.length === 0) return;
+    if (list.length === 0 || ran.has(runKey)) return;
     const w = window as IdleWindow;
     const run = () => {
+      ran.add(runKey);
       for (const href of list) router.prefetch(href, { kind: "full" } as Parameters<typeof router.prefetch>[1]);
     };
     if (w.requestIdleCallback) {
@@ -30,6 +34,6 @@ export function IdlePrefetch({ hrefs }: { hrefs: readonly string[] }) {
     }
     const id = setTimeout(run, 500);
     return () => clearTimeout(id);
-  }, [key, router]);
+  }, [key, runKey, router]);
   return null;
 }

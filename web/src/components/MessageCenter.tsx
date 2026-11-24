@@ -15,7 +15,7 @@
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useId, useRef, useState } from "react";
 import type { Copy } from "@/lib/copy";
 import type { MyMessage, MyMessages } from "@/lib/data";
 import { arrivals, POLL_HIDDEN_MS, POLL_VISIBLE_MS, titleWithUnread, TOAST_MS } from "@/lib/messages";
@@ -208,7 +208,11 @@ export function MessageCenter({ copy }: { copy: Copy["messages"] }) {
     setUnread((u) => (u === null ? u : Math.max(0, u - ids.length)));
     const res = await fetch("/api/v1/me/messages/read", { method: "POST", headers: HEADERS, body: JSON.stringify({ ids }) }).catch(() => null);
     const n = res?.ok ? ((await res.json().catch(() => null)) as { data?: { unreadCount?: number } } | null)?.data?.unreadCount : undefined;
-    if (typeof n === "number") setUnread(n);
+    if (typeof n === "number") {
+      setUnread(n);
+      // a Back within 30 s (the client router cache, D4) then shows the message read
+      startTransition(() => router.refresh());
+    }
     else window.dispatchEvent(new Event(MESSAGES_CHANGED_EVENT));
   }
 
@@ -236,6 +240,7 @@ export function MessageCenter({ copy }: { copy: Copy["messages"] }) {
       if (res?.ok) {
         const n = ((await res.json().catch(() => null)) as { data?: { unreadCount?: number } } | null)?.data?.unreadCount;
         if (typeof n === "number") setUnread(n);
+        startTransition(() => router.refresh());
       } else if (res?.status !== 404) {
         setUrgent((u) => (u.some((x) => x.id === m.id) ? u : [m, ...u]));
         setAckFailed(true);
