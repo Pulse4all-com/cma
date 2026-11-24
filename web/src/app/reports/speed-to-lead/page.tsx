@@ -99,7 +99,7 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
     const tl = speedTimeline(d, s.targetMinutes === null ? null : s.targetMinutes * 60);
     const called = d.status === "called";
     // no business time: the market is unknown, so it has no office hours to count
-    const speed = d.businessSeconds === null ? t.noBusinessHours
+    const speed = d.businessSeconds === null ? t.noOfficeHours
       : called ? minutes(d.businessSeconds) : t.waitingFor.replace("{time}", minutes(d.businessSeconds));
     return {
       id: d.dealId, sourceId: d.dealSourceId, recordUrl: d.recordUrl, recordLabel: t.openRecord.replace("{id}", d.dealSourceId),
