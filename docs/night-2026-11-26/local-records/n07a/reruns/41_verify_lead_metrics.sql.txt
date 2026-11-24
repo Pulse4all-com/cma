@@ -16,6 +16,6 @@ DROP FUNCTION
          tenant          | lead_deals | called | dq_findings | verdict 
 -------------------------+------------+--------+-------------+---------
  pulse4all-invest        |          0 |      0 |           0 | PASS
- pulse4all-subscriptions |       6882 |    543 |      208261 | PASS
+ pulse4all-subscriptions |       6882 |    543 |      208309 | PASS
 (2 rows)
 
