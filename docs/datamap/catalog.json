@@ -777,7 +777,7 @@
   "derived": [
     {
       "name": "speed_to_lead",
-      "what": "Per lead: first call, agent, time to first attempt in business hours, within target"
+      "what": "Per lead deal: the first Attempt, the agent, the deal owner, the time to the first attempt in business hours, the status (called, not_called_open, closed_before_first_call). first_call_* are deprecated, removed in B40b"
     },
     {
       "name": "lead_to_order",

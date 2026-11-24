@@ -18,8 +18,10 @@
  *   conversation (0008zc; docs/definitions.md) the linked telephony call is connected (cma.is_connected), has at least
  *                calls.conversation_min_talk_seconds of talk time and carries no tag meaning not reached or
  *                incorrect data (cma.is_conversation); the CRM call's outcome decides nothing, and a call without a telephony call is none
- *   speed        business seconds from the creation to the first attempt (0007d's business time); called before the next
- *                business noon as 0007d
+ *   speed        since addition 0009zq the deal's speed to lead from cma.speed_to_lead_of (one function, D29): business
+ *                seconds from the creation to the first Attempt before the close, an attempt in the pre-window 0; called
+ *                before the next working day's cutoff (speed_to_lead.next_day_cutoff); a deal closed before its first
+ *                attempt has neither. The mock mirrors it on the attempts of the deal's own window
  *   outcome      won by the stage; else ordered (the window ended at an order); else lost by the stage; else unknown
  *                (closed) or open
  *   since last   an open deal's business days in its market since its last attempt, else its creation; none for an
@@ -298,7 +300,8 @@ export function attemptRecords(deals: readonly AttemptDealFixture[], o: AttemptO
         talkSecondsTotal: attempts.reduce((s, a) => s + (a.talkSeconds ?? 0), 0),
         talkSecondsConversation: attempts.filter((a) => a.conversation).reduce((s, a) => s + (a.talkSeconds ?? 0), 0),
         firstAttemptAt: first?.at ?? null, speedToLeadSeconds: first ? o.businessSeconds(d.market, d.createdAt, first.at) : null,
-        calledBeforeNextNoon: first ? (noon === null ? null : ms(first.at) < ms(noon)) : noon !== null && now >= ms(noon) ? false : null,
+        // a deal closed before its first attempt is in no share (0009zq, D27)
+        calledBeforeNextNoon: first ? (noon === null ? null : ms(first.at) < ms(noon)) : !d.isClosed && noon !== null && now >= ms(noon) ? false : null,
         lastAttemptAt: last, businessDaysSinceLast: days, sinceLastFrom: bucket?.from ?? null, sinceLastTo: bucket?.to ?? null,
         sinceLastBucket: bucket ? bucketText(bucket.from, bucket.to) : null,
         attemptsWithoutOutcome: attempts.filter((a) => a.outcome === null).length, loggedWithoutAircall: withoutAircall,

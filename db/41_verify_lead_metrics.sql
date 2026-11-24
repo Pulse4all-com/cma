@@ -27,6 +27,10 @@
 --      refused, no acting user), tenant isolation for the application and for readers, the
 --      readers' views equal to the application's rows, readers and the application kept to their
 --      own functions
+-- Since addition 0009zq (234, 24 November 2026) block B's tenant takes attempts.source crm, so its CRM calls stay the
+-- Attempts that end speed to lead (the telephony rule is 235's): a deal closed before its first call reads
+-- closed_before_first_call and stays out of both percentages, the agent is the first attempt's telephony user (none
+-- here: no attempt has one; the deal's owner is deal_owner_user_id), the summary takes a market and the group total.
 -- Provoke: set provoke below to true; every block must then stop with FAIL, and the verdict
 -- (reached only when the run does not stop on errors) says PROVOKED instead of PASS.
 -- =============================================================================================
@@ -58,7 +62,7 @@ begin
   -- A2. the application's functions and their helpers: cma_app may execute them, readers and
   --     public may not; none runs as its owner (0007's business time functions included)
   foreach v_fn in array array[
-    'cma.speed_to_lead_rows(date,date)', 'cma.speed_to_lead_summary(date,date,text)',
+    'cma.speed_to_lead_rows(date,date)', 'cma.speed_to_lead_summary(date,date,text,text)',
     'cma.lead_to_order_rows(date,date)', 'cma.intake_per_day(date,date)', 'cma.data_quality()',
     'cma.setting_of(uuid,text)', 'cma.market_code_of(uuid,text)', 'cma.record_market_of(uuid,uuid,text,text)',
     'cma.business_seconds_of(uuid,text,timestamptz,timestamptz)', 'cma.next_business_noon_of(uuid,text,timestamptz)',
@@ -208,6 +212,8 @@ begin
   perform cma.set_business_holiday('NL', date '2026-09-16', 'Verify holiday');
   perform cma.set_tenant_setting('intake.start_date', '2026-09-01');
   perform cma.set_tenant_setting('speed_to_lead.pre_window_minutes', '10');
+  -- 0009zq: the CRM's outbound calls are the attempts here (block B's calls have no telephony call but d10's)
+  perform cma.set_tenant_setting('attempts.source', 'crm');
   perform cma.set_tenant_setting('commerce.renewal_source_names', 'subscription_contract');
   perform cma.set_user_external_id(v_agent1, 'verifycrm_owner', 'o-1');
   perform cma.set_user_external_id(v_agent2, 'verifycrm_owner', 'o-2');
@@ -378,25 +384,28 @@ begin
     if v_txt is distinct from
        'd1:called:420:true:true d10:called:2310:true:true d11:called:3000:true:true d13:called:1800:true:true '
        'd14:called:-:-:- d16:called:3600:true:true d2:called:900:true:true d3:not_called_open:-:false:false '
-       'd4:not_called_closed:-:false:false d5:called:1800:true:true d6:called:1200:true:true d7:called:1800:true:true '
+       'd4:closed_before_first_call:-:-:- d5:called:1800:true:true d6:called:1200:true:true d7:called:1800:true:true '
        'd8:not_called_open:-:false:false d9:called:0:true:true' or v_provoke then
       raise exception 'FAIL B1: speed to lead rows are %', v_txt;
     end if;
 
     -- B2. Friday 16:55 to Monday 09:10: 64 h 15 min elapsed, 15 business minutes, before Monday's
-    --     noon; the call's owner has no person, so the agent is the deal's owner's person
+    --     noon; the attempt has no telephony user, so no agent (0009zq: no fallback to the owner, who is
+    --     deal_owner_user_id)
     select * into r from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x where x.deal_source_id = 'd2';
     if r.elapsed_seconds <> 231300 or r.business_seconds <> 900 or r.next_business_noon <> '2026-09-21T10:00:00Z'
-       or r.agent_user_id is distinct from (f ->> 'agent1')::uuid or r.agent_from <> 'deal' or r.agent_ref <> 'o-1' then
+       or r.agent_user_id is not null or r.agent_from is not null or r.agent_ref is not null
+       or r.deal_owner_user_id is distinct from (f ->> 'agent1')::uuid or r.attempts_so_far <> 1 then
       raise exception 'FAIL B2: d2 gives elapsed %, business %, noon %, agent % from %', r.elapsed_seconds, r.business_seconds,
         r.next_business_noon, r.agent_user_id, r.agent_from;
     end if;
 
-    -- B3. 7 business minutes, the agent through the call's owner, the connected outcome; across the
+    -- B3. 7 business minutes, no agent (the attempt has no telephony user; 0009zq), the owner apart, the connected outcome; across the
     --     NL holiday (16:30 Tuesday to 09:30 Thursday is 60 business minutes, and the next noon is
     --     Thursday's)
     select * into r from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x where x.deal_source_id = 'd1';
-    if r.elapsed_seconds <> 420 or r.agent_user_id is distinct from (f ->> 'agent1')::uuid or r.agent_from <> 'call'
+    if r.elapsed_seconds <> 420 or r.agent_user_id is not null or r.agent_from is not null
+       or r.deal_owner_user_id is distinct from (f ->> 'agent1')::uuid or r.first_attempt_at <> '2026-09-15T08:07:00Z'
        or r.first_connected_at <> '2026-09-15T08:07:00Z' or r.market <> 'NL' or r.market_source <> 'record'
        or r.first_call_source_id <> 'c1' or r.first_call_linked then
       raise exception 'FAIL B3: d1 gives elapsed %, agent % from %, connected at %', r.elapsed_seconds, r.agent_user_id, r.agent_from, r.first_connected_at;
@@ -406,14 +415,17 @@ begin
       raise exception 'FAIL B3: across the holiday d16 gives % business seconds and noon %', r.business_seconds, r.next_business_noon;
     end if;
 
-    -- B4. never called: open (still waiting, the deal owner's person as agent) and closed (not waiting)
+    -- B4. never called: open (still waiting, no agent, the deal owner's person apart; 0009zq) and closed before the
+    --     first call (not waiting, out of both percentages)
     select * into r from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x where x.deal_source_id = 'd3';
     if r.first_call_at is not null or r.waiting_business_seconds is null or r.waiting_business_seconds <= 3600
-       or r.agent_user_id is distinct from (f ->> 'agent2')::uuid or r.agent_from <> 'deal' then
+       or r.agent_user_id is not null or r.agent_from is not null or r.deal_owner_user_id is distinct from (f ->> 'agent2')::uuid
+       or r.attempts_so_far <> 0 then
       raise exception 'FAIL B4: d3 gives first call %, waiting %, agent % from %', r.first_call_at, r.waiting_business_seconds, r.agent_user_id, r.agent_from;
     end if;
     select * into r from cma.speed_to_lead_rows('2026-09-14', '2026-09-21') x where x.deal_source_id = 'd4';
-    if r.waiting_business_seconds is not null or not r.is_closed or r.agent_user_id is not null then
+    if r.waiting_business_seconds is not null or not r.is_closed or r.agent_user_id is not null
+       or r.status <> 'closed_before_first_call' or r.within_target is not null or r.before_next_noon is not null then
       raise exception 'FAIL B4: d4 gives waiting %, closed %', r.waiting_business_seconds, r.is_closed;
     end if;
 
@@ -472,19 +484,22 @@ begin
     end if;
 
     -- B11. the summary by market: deals, called, median and p80 business minutes, the two
-    --      percentages over known outcomes, open not called
+    --      percentages over known outcomes (d4, closed before its first call, is in neither: 9 of 11 in NL), open not
+    --      called, closed before the first call (0009zq)
     select string_agg(concat_ws(':', s.group_key, s.group_label, s.deals, s.called, s.median_business_minutes, s.p80_business_minutes,
-                                coalesce(s.within_target_pct::text, '-'), coalesce(s.before_next_noon_pct::text, '-'), s.open_not_called), ' '
+                                coalesce(s.within_target_pct::text, '-'), coalesce(s.before_next_noon_pct::text, '-'), s.open_not_called,
+                                s.closed_before_first_call), ' '
                       order by s.group_key) into v_txt
     from cma.speed_to_lead_summary('2026-09-14', '2026-09-21', 'market') s;
-    if v_txt is distinct from 'GB:GB:1:1:30.0:30.0:100.0:100.0:0 NL:NL:12:9:30.0:43.1:75.0:75.0:2 unknown:unknown:1:1:-:-:0' then
+    if v_txt is distinct from 'GB:GB:1:1:30.0:30.0:100.0:100.0:0:0 NL:NL:12:9:30.0:43.1:81.8:81.8:2:1 unknown:unknown:1:1:-:-:0:0' then
       raise exception 'FAIL B11: the summary by market is %', v_txt;
     end if;
 
-    -- B12. by day, agent and pipeline; an unknown grouping is refused
+    -- B12. by day, agent and pipeline; an unknown grouping is refused. By agent (0009zq): the deals without an attempt
+    --      under no_attempt without a label, the attempts without a telephony user under unknown
     if (select s.deals from cma.speed_to_lead_summary('2026-09-14', '2026-09-21', 'day') s where s.group_key = '2026-09-15') <> 6
-       or (select s.deals || ':' || s.called || ':' || s.group_label from cma.speed_to_lead_summary('2026-09-14', '2026-09-21', 'agent') s
-           where s.group_key = f ->> 'agent1') is distinct from '2:2:Verify agent one'
+       or (select string_agg(s.group_key || ':' || s.deals || ':' || s.called || ':' || coalesce(s.group_label, '-'), ' ' order by s.group_key collate "C")
+           from cma.speed_to_lead_summary('2026-09-14', '2026-09-21', 'agent') s) is distinct from 'no_attempt:3:0:- unknown:11:11:unknown'
        or (select string_agg(s.group_label || ':' || s.deals, ',') from cma.speed_to_lead_summary('2026-09-14', '2026-09-21', 'pipeline') s)
           is distinct from 'Sales:14' then
       raise exception 'FAIL B12: the summary by day, agent or pipeline is wrong';

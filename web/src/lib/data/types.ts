@@ -908,8 +908,12 @@ export interface MessageStat {
 /** How cma.speed_to_lead_summary groups its rows */
 export type SpeedToLeadGroup = "day" | "market" | "agent" | "pipeline";
 
-/** called: an outbound call was made on the deal; otherwise not called, open or closed */
-export type SpeedToLeadStatus = "called" | "not_called_open" | "not_called_closed";
+/**
+ * called: the deal had its first Attempt (an outbound call on the phone system linked to the deal or its contacts) before
+ * it closed; not_called_open: open with no attempt yet; closed_before_first_call: closed (won or lost) before any attempt,
+ * shown apart and out of the median and both shares (addition 0009zq; not_called_closed before it)
+ */
+export type SpeedToLeadStatus = "called" | "not_called_open" | "closed_before_first_call";
 
 /** One lead deal (cma.speed_to_lead_rows) with the link to its record (cma.record_url, null without a template) */
 export interface SpeedToLeadRow {
@@ -928,17 +932,22 @@ export interface SpeedToLeadRow {
   marketSource: string | null;
   isClosed: boolean;
   status: SpeedToLeadStatus;
-  /** The first outbound call's id in the CRM */
+  /**
+   * @deprecated The first outbound CRM call, linked or not: never the measure's end (0009zq). Kept in the API for this
+   * release only, shown nowhere, removed in B40b (Martin, 24 Nov 2026); the end is firstAttemptAt
+   */
   firstCallSourceId: string | null;
+  /** @deprecated As firstCallSourceId: removed in B40b */
   firstCallAt: Instant | null;
+  /** @deprecated As firstCallSourceId: removed in B40b */
   firstCallLinked: boolean | null;
   firstAnyCallAt: Instant | null;
   firstAnyDirection: string | null;
   inboundFirst: boolean;
   firstConnectedAt: Instant | null;
-  /** The CMA person behind the call's or the deal's owner; null when the owner is not mapped */
+  /** The person who placed the first attempt (its telephony user mapped to a person); null without an attempt or a mapping (0009zq) */
   agentUserId: string | null;
-  /** "call" or "deal": whose owner the agent came from; null without an owner */
+  /** "call" when the first attempt has a telephony user; null without one */
   agentFrom: string | null;
   elapsedSeconds: number | null;
   businessSeconds: number | null;
@@ -949,14 +958,24 @@ export interface SpeedToLeadRow {
   beforeNextNoon: boolean | null;
   /** Office seconds waited so far, for open deals not called */
   waitingBusinessSeconds: number | null;
+  /** The first Attempt: its CRM call's id in the Workspace and its start, the end of the measure (0009zq) */
+  firstAttemptCallId: string | null;
+  firstAttemptAt: Instant | null;
+  /** The attempts from the window's start to now or the close */
+  attemptsSoFar: number;
+  /** The deal's owner mapped to a person; never part of the measure */
+  dealOwnerUserId: string | null;
   recordUrl: string | null;
 }
 
 /** One group of cma.speed_to_lead_summary */
 export interface SpeedToLeadSummaryRow {
-  /** The business date, the market code, the agent's user id or "unknown", or connection:pipeline */
+  /**
+   * The business date, the market code, the agent's user id, "unknown" (an attempt by a phone user without a person) or
+   * "no_attempt" (deals without an attempt), connection:pipeline, or "total" (the one-row read)
+   */
   groupKey: string;
-  /** The date, the market, the agent's name or the pipeline label; null for an agent who is not mapped */
+  /** The date, the market, the agent's name or the pipeline label; null for an agent who is not mapped, no attempt, and the total */
   groupLabel: string | null;
   deals: number;
   called: number;
@@ -964,7 +983,10 @@ export interface SpeedToLeadSummaryRow {
   p80BusinessMinutes: number | null;
   withinTargetPct: number | null;
   beforeNextNoonPct: number | null;
+  /** Open deals not called yet */
   openNotCalled: number;
+  /** Deals closed before their first attempt: shown apart, in neither share nor the median */
+  closedBeforeFirstCall: number;
 }
 
 export interface SpeedToLeadSummary {
@@ -972,6 +994,8 @@ export interface SpeedToLeadSummary {
   to: DateKey;
   group: SpeedToLeadGroup;
   rows: SpeedToLeadSummaryRow[];
+  /** The tenant's speed_to_lead.next_day_cutoff, HH:MM: the time the "before … next working day" label names (0009zq) */
+  nextDayCutoff: string;
 }
 
 /**
@@ -4030,7 +4054,8 @@ export interface DashboardIntake {
 export interface DashboardReads {
   time: Promise<TeamStatusTime>;
   counts: Promise<DashboardIntake>;
-  speed: Promise<SpeedToLeadRow[]>;
+  /** cma.speed_to_lead_summary's one-row total (addition 0009zq): the tile's figures from the database, not the web */
+  speed: Promise<SpeedToLeadSummaryRow>;
 }
 
 /** A journey's status (addition 0008v): placeholder until its monitor is built; archived journeys never reach the screens */
@@ -4603,8 +4628,11 @@ export interface CmaData {
   // ---- Intake reports (0007d, 0006): the database checks the permission on every call (CMA06); at most 92 days
   /** One row per lead deal created in the range, with its record link. Needs reports.view or performance.team */
   getSpeedToLeadRows(me: Principal, range: HoursRange): Promise<SpeedToLeadRow[]>;
-  /** The rows grouped by day, market, agent or pipeline. Needs reports.view or performance.team; another group CMA04 */
-  getSpeedToLeadSummary(me: Principal, range: HoursRange, group: SpeedToLeadGroup): Promise<SpeedToLeadSummary>;
+  /**
+   * The rows grouped by day, market, agent or pipeline, narrowed to one market when given (0009zq). Needs reports.view
+   * or performance.team; another group CMA04
+   */
+  getSpeedToLeadSummary(me: Principal, range: HoursRange, group: SpeedToLeadGroup, market?: string | null): Promise<SpeedToLeadSummary>;
   /** Intake per business date and market with the tenant's source connections. Needs reports.view or performance.team */
   getIntake(me: Principal, range: HoursRange): Promise<Intake>;
   /** Every data-quality check with its total, in the database's order. Needs reports.view or tenant.configure */

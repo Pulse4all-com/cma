@@ -183,6 +183,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "speed_to_lead.within_target_pct",
     "speed_to_lead.before_next_noon_pct",
     "speed_to_lead.open_not_called",
+    "speed_to_lead.closed_before_first_call",
     "speed_to_lead.total_row",
     "speed_to_lead.open_list.waiting_business_minutes",
     "speed_to_lead.open_list.no_business_hours",

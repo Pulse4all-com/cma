@@ -8,9 +8,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
 import { keptShare } from "@/lib/callbacks";
-import type { CallbacksKept, Intake, SpeedToLeadRow } from "@/lib/data";
+import type { CallbacksKept, Intake, SpeedToLeadSummaryRow } from "@/lib/data";
 import { blankNumbers, type Head } from "@/lib/head-start";
-import { fillHint, fmtBusinessMinutes, fmtCount, fmtPct, intakeTotals, speedFigures } from "@/lib/reports";
+import { fillHint, fmtBusinessMinutes, fmtCount, fmtPct, intakeTotals } from "@/lib/reports";
 import { fmtDate, fmtPercent } from "@/lib/time";
 import { metricsHref } from "@/lib/metrics";
 import { HeaderHint } from "./HeaderHint";
@@ -51,9 +51,10 @@ function IntakeTile({
 /**
  * The Dashboard's Intake row for the selected period: leads (counted form submissions), lead deals in
  * (with the lead deals closed in its hint) and tickets created, speed to lead over the period's lead
- * deals (median business minutes, % within target, open not called), calls, the callbacks kept (KPI 5,
- * since addition 0008w; "No callback type set" while the tenant counts none), and, set apart at the
- * row's end under Overall, the shop's first orders, or the not-connected state of telephony or the shop.
+ * deals (median business minutes, % within target, not called yet: since addition 0009zq the one-row total of
+ * cma.speed_to_lead_summary, the one function's figures, no longer computed here from the rows), calls, the
+ * callbacks kept (KPI 5, since addition 0008w; "No callback type set" while the tenant counts none), and, set
+ * apart at the row's end under Overall, the shop's first orders, or the not-connected state of telephony or the shop.
  * Since addition 0009zp (Martin, 24 November 2026) the deals and tickets come from the intake read
  * (cma.intake_per_day, clamped at intake.start_date like every other count of the row), no longer from
  * cma.crm_records_per_day, and the deals are those of lead pipelines only: call center work. Overall is
@@ -66,7 +67,7 @@ function IntakeTile({
  */
 export function IntakeRow({
   counts, speed, k, copy, locale, from, canOpenMetrics = false,
-}: { counts: Head<{ intake: Intake; callbacks: CallbacksKept }>; speed: Head<SpeedToLeadRow[]>;
+}: { counts: Head<{ intake: Intake; callbacks: CallbacksKept }>; speed: Head<SpeedToLeadSummaryRow>;
   /** What the reads are of (the period): a boundary's key, so another period shows its outlines at once */
   k: string; copy: Copy; locale: Locale; from: string;
   /** True for a holder of tenant.configure: each tile's hint links to its entry on Configuration → Metrics */
@@ -115,8 +116,7 @@ export function IntakeRow({
           }}
         </Part>
         <Part head={speed} k={`speed|${k}`} fallback={waiting("intake-speed", t.speed, <>{t.speedHint}<br />{blank(t.speedDetail)}</>, h.median, "dashboard.intake.speed_to_lead", "/reports/speed-to-lead")}>
-          {(rows) => {
-            const s = speedFigures(rows);
+          {(s) => {
             return (
               <IntakeTile
                 testId="intake-speed"

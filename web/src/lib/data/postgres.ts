@@ -9,7 +9,7 @@ import type {
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkArea, WorkStatus, PermissionInfo, SentMessage, HoursMarket, MyDayChoices,
-  CrmRecordsDay, DashboardIntake, DashboardReads, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
+  CrmRecordsDay, DashboardIntake, DashboardReads, DataQualityCheck, Intake, SourceConnections, SpeedToLeadGroup, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceRead, SourceKind, SourcePipeline, SourceSettings,
   InboundFigures, InboundNow, OutboundNow, InboundService, MissedReason, LiveBoardData, DataQualityReport,
   CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
@@ -161,7 +161,8 @@ type SpeedDbRow = {
   first_any_direction: string | null; inbound_first: boolean; first_connected_at: Date | null; agent_user_id: string | null;
   agent_from: string | null; elapsed_seconds: number | null; business_seconds: number | null; target_seconds: number | null;
   within_target: boolean | null; next_business_noon: Date | null; before_next_noon: boolean | null;
-  waiting_business_seconds: number | null; record_url: string | null;
+  waiting_business_seconds: number | null; first_attempt_call_id: string | null; first_attempt_at: Date | null;
+  attempts_so_far: number; deal_owner_user_id: string | null; record_url: string | null;
 };
 
 function toSpeedRow(r: SpeedDbRow): SpeedToLeadRow {
@@ -173,19 +174,18 @@ function toSpeedRow(r: SpeedDbRow): SpeedToLeadRow {
     firstAnyDirection: r.first_any_direction, inboundFirst: r.inbound_first, firstConnectedAt: iso(r.first_connected_at),
     agentUserId: r.agent_user_id, agentFrom: r.agent_from, elapsedSeconds: r.elapsed_seconds, businessSeconds: r.business_seconds,
     targetSeconds: r.target_seconds, withinTarget: r.within_target, nextBusinessNoon: iso(r.next_business_noon),
-    beforeNextNoon: r.before_next_noon, waitingBusinessSeconds: r.waiting_business_seconds, recordUrl: r.record_url,
+    beforeNextNoon: r.before_next_noon, waitingBusinessSeconds: r.waiting_business_seconds,
+    firstAttemptCallId: r.first_attempt_call_id, firstAttemptAt: iso(r.first_attempt_at), attemptsSoFar: r.attempts_so_far,
+    dealOwnerUserId: r.deal_owner_user_id, recordUrl: r.record_url,
   };
 }
 
 /** One row per lead deal created in the range (cma.speed_to_lead_rows checks the permission and the 92 days) */
-async function readSpeedToLeadRows(q: Querier, range: HoursRange, links = true): Promise<SpeedToLeadRow[]> {
-  // cma.record_url (migration 0008) builds the link from the connection's own template; null without one. links false
-  // (the Dashboard's tile, which shows three figures and no record): no link is built, a call per row saved
+async function readSpeedToLeadRows(q: Querier, range: HoursRange): Promise<SpeedToLeadRow[]> {
+  // cma.record_url (migration 0008) builds the link from the connection's own template; null without one
   const r = await q.query<SpeedDbRow>(
-    links
-      ? `select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url
-           from cma.speed_to_lead_rows($1::date, $2::date) r`
-      : `select r.*, null::text as record_url from cma.speed_to_lead_rows($1::date, $2::date) r`,
+    `select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url
+       from cma.speed_to_lead_rows($1::date, $2::date) r`,
     [range.from, range.to],
   );
   return r.rows.map(toSpeedRow);
@@ -194,7 +194,20 @@ async function readSpeedToLeadRows(q: Querier, range: HoursRange, links = true):
 type SummaryDbRow = {
   group_key: string; group_label: string | null; deals: number; called: number; median_business_minutes: string | null;
   p80_business_minutes: string | null; within_target_pct: string | null; before_next_noon_pct: string | null; open_not_called: number;
+  closed_before_first_call: number;
 };
+
+/** A row of cma.speed_to_lead_summary; the function labels an agent who is not mapped 'unknown', which the screen says as Not mapped */
+function toSummaryRow(x: SummaryDbRow, group: SpeedToLeadGroup | "total"): SpeedToLeadSummaryRow {
+  return {
+    groupKey: x.group_key,
+    groupLabel: group === "agent" && x.group_key === "unknown" ? null : x.group_label,
+    deals: x.deals, called: x.called,
+    medianBusinessMinutes: num(x.median_business_minutes), p80BusinessMinutes: num(x.p80_business_minutes),
+    withinTargetPct: num(x.within_target_pct), beforeNextNoonPct: num(x.before_next_noon_pct), openNotCalled: x.open_not_called,
+    closedBeforeFirstCall: x.closed_before_first_call,
+  };
+}
 
 type IntakeDbRow = {
   business_date: string; market: string; form_submissions: number; deals_created: number; deals_closed: number;
@@ -2035,15 +2048,16 @@ export const postgresData: CmaData = {
   // The Dashboard on two connections (12 November 2026; one transaction of five reads before, 23 October 2026, in which
   // the dearest read held the page back). The first: the time per status, handed over as it returns, then the Intake
   // row's counts. The second: the speed to lead, after cma.assert_permission('performance.team'), so the database still
-  // refuses this page's read to someone who holds reports.view alone (cma.speed_to_lead_rows takes either; in the single
-  // transaction cma.team_status_time had refused first). Each function checks its own permission and range as before
+  // refuses this page's read to someone who holds reports.view alone (cma.speed_to_lead_summary takes either; in the single
+  // transaction cma.team_status_time had refused first): since addition 0009zq the summary's one-row total, the figures
+  // of the one function, not rows the web computed them from. Each function checks its own permission and range as before
   getDashboardReads(me, range): DashboardReads {
     let timeOk: (v: TeamStatusTime) => void = () => undefined;
     let timeNo: (e: unknown) => void = () => undefined;
     const time = new Promise<TeamStatusTime>((ok, no) => { timeOk = ok; timeNo = no; });
     time.catch(() => undefined); // awaited by the page; a failure nobody awaits yet must not count as unhandled
     let counts: Promise<DashboardIntake>;
-    let speed: Promise<SpeedToLeadRow[]>;
+    let speed: Promise<SpeedToLeadSummaryRow>;
     try {
       assertReportRange(range);
       counts = withTenant(ctx(me), async (q) => {
@@ -2052,7 +2066,8 @@ export const postgresData: CmaData = {
       });
       speed = withTenant(ctx(me), async (q) => {
         await q.query(`select cma.assert_permission('performance.team')`);
-        return readSpeedToLeadRows(q, range, false);
+        const r = await q.query<SummaryDbRow>(`select * from cma.speed_to_lead_summary($1::date, $2::date, 'total')`, [range.from, range.to]);
+        return toSummaryRow(r.rows[0]!, "total");
       });
     } catch (e) {
       // a range out of bounds (or no tenant in the context): every part fails with it, as an awaited read would
@@ -3379,19 +3394,20 @@ export const postgresData: CmaData = {
     return withTenant(ctx(me), (q) => readSpeedToLeadRows(q, range));
   },
 
-  async getSpeedToLeadSummary(me, range, group) {
+  async getSpeedToLeadSummary(me, range, group, market = null) {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
-      const r = await q.query<SummaryDbRow>(`select * from cma.speed_to_lead_summary($1::date, $2::date, $3)`, [range.from, range.to, group]);
-      const rows: SpeedToLeadSummaryRow[] = r.rows.map((x) => ({
-        groupKey: x.group_key,
-        // the function labels an agent who is not mapped 'unknown'; the screen says Not mapped
-        groupLabel: group === "agent" && x.group_key === "unknown" ? null : x.group_label,
-        deals: x.deals, called: x.called,
-        medianBusinessMinutes: num(x.median_business_minutes), p80BusinessMinutes: num(x.p80_business_minutes),
-        withinTargetPct: num(x.within_target_pct), beforeNextNoonPct: num(x.before_next_noon_pct), openNotCalled: x.open_not_called,
-      }));
-      return { ...range, group, rows };
+      // the tenant's next-day cutoff in the same statement (the label names it): one row even when no group has deals,
+      // the groups' columns then null and left out
+      const r = await q.query<SummaryDbRow & { next_day_cutoff: string }>(
+        `select c.next_day_cutoff, s.*
+           from (select cma.setting_of(cma.current_tenant_id(), 'speed_to_lead.next_day_cutoff') as next_day_cutoff) c
+           left join lateral cma.speed_to_lead_summary($1::date, $2::date, $3, $4) s on true`,
+        [range.from, range.to, group, market]);
+      return {
+        ...range, group, nextDayCutoff: r.rows[0]?.next_day_cutoff ?? "",
+        rows: r.rows.filter((x) => x.group_key !== null).map((x) => toSummaryRow(x, group)),
+      };
     });
   },
 

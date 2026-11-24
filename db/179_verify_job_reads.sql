@@ -18,6 +18,13 @@
 -- (210's subscription_variant_unmapped and subscription_device_units_mismatch, 214's source_figure_gap), so E5 compares the
 -- new function on the check keys the old copy names (the catalog's keys quoted in its text) and names the keys it leaves
 -- out in its row; provoked it still fails.
+-- Edited by 0009zq (234, 24 November 2026; brief B40a): speed to lead ends at the first Attempt and the next working
+-- day's cutoff is a setting, on purpose, so where 0009zq has run E2 (open_leads_of: its population changes) reads skip
+-- and names 235_verify_speed_to_lead_one.sql, which verifies the new definitions, and E3 and E4 compare the columns
+-- 0009zq leaves as they were (the deals, the first outbound CRM call, the first call, the first connected call, the
+-- target, and the cutoff moment where the tenant's cutoff is 12:00); E7 and A1 compare
+-- cma.next_business_noon_in in its cutoff form (the tenant's speed_to_lead.next_day_cutoff) with the _of function, which
+-- reads the same setting; S5 names the cutoff form. Before 0009zq the script runs as it did.
 -- Expected verdict, in dev and in prod: "0009o verified | 179_verify_job_reads: <n> ok, 0 FAIL, <k> skip" (a tenant
 -- without data reads ok on empty sets); provoked (verify.provoke true at the top): every E row reads FAIL (the previous
 -- definition's first row is dropped before the comparison, or the row says the set was empty), every S and A row reads
@@ -106,9 +113,16 @@ as $$
   order by case when m.open_s is null then 1 else 0 end, (m.sla * 60 - m.open_s), m.source_created_at, m.source_id
 $$;
 
--- speed_to_lead_of as 40 defined it
+-- speed_to_lead_of as 40 defined it, with its row type's columns as 40 defined them (0009zq appends four to the type;
+-- spelled out, the copy is still made where 0009zq has run, though E3 and E4 then skip)
 create or replace function pg_temp.old_speed_to_lead_of(p_tenant_id uuid, p_from timestamptz, p_to timestamptz)
-returns setof cma.speed_to_lead_row
+returns table (tenant_id uuid, deal_id uuid, connection_id uuid, deal_source_id text, pipeline_id text, pipeline_label text,
+               business_date date, created_at timestamptz, market text, market_source text, is_closed boolean, status text,
+               first_call_id uuid, first_call_source_id text, first_call_at timestamptz, first_call_linked boolean,
+               first_any_call_at timestamptz, first_any_direction text, inbound_first boolean, first_connected_at timestamptz,
+               agent_user_id uuid, agent_ref text, agent_from text, elapsed_seconds integer, business_seconds integer,
+               target_seconds integer, within_target boolean, next_business_noon timestamptz, before_next_noon boolean,
+               waiting_business_seconds integer)
 language sql stable
 as $$
   with s as (
@@ -775,11 +789,18 @@ language plpgsql
 as $$
 declare
   c record; n_s integer := 0; n_d integer := 0; n_n integer := 0; v_pairs integer := 0; v_first text;
-  a timestamptz; b timestamptz;
+  a timestamptz; b timestamptz; v_noon timestamptz;
+  -- 0009zq: the cutoff form, with the tenant's cutoff (the _of function reads the same setting)
+  v_cutoff_form boolean := to_regprocedure('cma.next_business_noon_in(text,integer[],date[],timestamptz,time)') is not null;
 begin
   select * into c from cma.business_calendar_of(p_tenant) x where x.market = p_market;
   foreach a in array p_from loop
-    if cma.next_business_noon_in(c.time_zone, c.weekdays, c.holidays, a) is distinct from cma.next_business_noon_of(p_tenant, p_market, a) then
+    if v_cutoff_form then
+      v_noon := cma.next_business_noon_in(c.time_zone, c.weekdays, c.holidays, a, cma.setting_of(p_tenant, 'speed_to_lead.next_day_cutoff')::time);
+    else
+      v_noon := cma.next_business_noon_in(c.time_zone, c.weekdays, c.holidays, a);
+    end if;
+    if v_noon is distinct from cma.next_business_noon_of(p_tenant, p_market, a) then
       n_n := n_n + 1; v_first := coalesce(v_first, format('noon at %s', a));
     end if;
     foreach b in array p_to loop
@@ -843,7 +864,9 @@ begin
   v_ok := true; v_txt := null;
   foreach f in array array[
     'cma.business_calendar_of(uuid)', 'cma.business_seconds_in(text,integer[],time[],time[],date[],timestamptz,timestamptz)',
-    'cma.business_days_in(text,integer[],date[],timestamptz,timestamptz)', 'cma.next_business_noon_in(text,integer[],date[],timestamptz)',
+    'cma.business_days_in(text,integer[],date[],timestamptz,timestamptz)',
+    case when to_regprocedure('cma.next_business_noon_in(text,integer[],date[],timestamptz,time)') is not null
+         then 'cma.next_business_noon_in(text,integer[],date[],timestamptz,time)' else 'cma.next_business_noon_in(text,integer[],date[],timestamptz)' end,
     'cma.open_tickets_of(uuid)', 'cma.speed_to_lead_of(uuid,timestamptz,timestamptz)', 'cma.open_leads_of(uuid)', 'cma.data_quality_of(uuid)',
     'cma.flash_findings_compute_of(uuid)', 'cma.follow_up_item_print(integer,text,uuid,text,jsonb)', 'cma.follow_up_input_tables()',
     'cma.follow_up_next_change_of(uuid,timestamptz)', 'cma.refresh_follow_up_of(uuid,boolean)', 'cma.refresh_follow_up()',
@@ -900,6 +923,11 @@ declare
   v_checks text[]; v_sql_new text[]; v_sql_old text[]; v_ordered boolean[];
   v_from timestamptz[]; v_to timestamptz[]; m record; v_bad text;
   r jsonb; v_n_old bigint; v_only bigint; v_snap boolean;
+  -- E3 and E4 where 0009zq has run: the columns it leaves as they were (the cutoff moment only at a 12:00 cutoff)
+  v_kept text := 'tenant_id, deal_id, connection_id, deal_source_id, pipeline_id, pipeline_label, business_date, created_at, market, '
+                 || 'market_source, is_closed, first_call_id, first_call_source_id, first_call_at, first_call_linked, first_any_call_at, '
+                 || 'first_any_direction, inbound_first, first_connected_at, target_seconds, '
+                 || 'case when cma.setting_of(tenant_id, ''speed_to_lead.next_day_cutoff'') = ''12:00'' then next_business_noon end as noon_at_12';
   -- E5 (edited after 0009zg, 21 November 2026): the old copy is 160's and knows none of the checks added since (210's
   -- subscription_variant_unmapped and subscription_device_units_mismatch, 214's source_figure_gap, ...), so the new
   -- function is compared on the check keys the old copy knows: every key of the catalog that its text names, quoted.
@@ -931,6 +959,18 @@ begin
     v_ordered := array[true, true, false, false, false, false];
     for i in 1 .. cardinality(v_checks) loop
       v_ord := v_ord + 1; v_diff := null; v_err := null;
+      -- 0009zq redefined open_leads_of's population and owner and speed_to_lead_of's end on purpose: 235 verifies them.
+      -- E2 skips; E3 and E4 compare the columns 0009zq leaves as they were (the deals, the first outbound CRM call, the
+      -- first call and the first connected call, the target, and the cutoff moment where the tenant's cutoff is 12:00)
+      if i = 2 and exists (select 1 from cma.schema_migration where version = '0009zq') then
+        insert into verify_0009o values (v_ord, v_checks[i] || ' (' || t.slug || ')', case when v_provoke then 'FAIL' else 'skip' end,
+          'redefined by 0009zq (234): 235_verify_speed_to_lead_one.sql verifies it');
+        continue;
+      end if;
+      if i in (3, 4) and exists (select 1 from cma.schema_migration where version = '0009zq') then
+        v_sql_new[i] := replace(v_sql_new[i], 'select * from', 'select ' || v_kept || ' from');
+        v_sql_old[i] := replace(v_sql_old[i], 'select * from', 'select ' || v_kept || ' from');
+      end if;
       begin
         -- E5 with no key of the catalog found in the old copy compares nothing: a FAIL, never an empty ok
         if i = 5 and cardinality(v_known) = 0 then
@@ -945,7 +985,8 @@ begin
       end;
       insert into verify_0009o values (v_ord, v_checks[i] || ' (' || t.slug || ')',
         case when v_err is null and v_diff is null then 'ok' else 'FAIL' end,
-        coalesce(v_err, v_diff, 'the same rows as the previous definition' || case when v_ordered[i] then ', in the same order' else '' end)
+        coalesce(v_err, v_diff, 'the same rows as the previous definition' || case when v_ordered[i] then ', in the same order' else '' end
+                 || case when i in (3, 4) and position('noon_at_12' in v_sql_new[i]) > 0 then ', on the columns 0009zq keeps' else '' end)
         || case when i = 5 then format(' (on the %s check keys the old copy knows; left out, added since: %s)', cardinality(v_known), coalesce(v_left, 'none'))
                 else '' end);
     end loop;
