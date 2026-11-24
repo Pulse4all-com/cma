@@ -17,6 +17,7 @@ import { fmtDate } from "@/lib/time";
 import { Legend, LineChart } from "./ActiveCharts";
 import { HeaderHint } from "./HeaderHint";
 import { HintLabel } from "./HintLabel";
+import { LinkPending } from "./PendingMark";
 
 export interface Info { about: string; text: string }
 
@@ -102,7 +103,9 @@ export function MarketCard({ rows, market, hrefOf, headers, words, locale }: {
               <tr key={r.groupKey} className={`border-b border-p4a-border ${on ? "bg-p4a-bgblue" : ""}`} data-market={r.groupKey}>
                 <td className={`${td} font-semibold`}>
                   <Link href={hrefOf(on ? "" : r.groupKey) as Route} scroll={false} aria-current={on ? "true" : undefined}
-                    title={words.filter.replace("{market}", label)} className="text-p4a-deepblue underline-offset-2 hover:underline">{label}</Link>
+                    title={words.filter.replace("{market}", label)} className="relative pr-3 text-p4a-deepblue underline-offset-2 hover:underline">
+                    {label}<LinkPending />
+                  </Link>
                 </td>
                 <td className={`${td} tabular text-right`}>{n(r.deals)}</td>
                 <td className="w-1/4 min-w-48 px-3"><MarketBars row={r} words={{ aria: words.barsAria.replace("{market}", label)
@@ -124,10 +127,13 @@ export function MarketCard({ rows, market, hrefOf, headers, words, locale }: {
 
 /**
  * The trend: within the target and before the cutoff per day (per week over 31 days) as two lines over the period's
- * days or weeks, the goals dashed when set, weekends shaded on the days' axis
+ * days or weeks, the goals dashed when set, and on the days' axis the days without office hours shaded (the weekdays the
+ * market's calendar works, or any market's: no fixed weekend)
  */
-export function TrendCard({ rows, group, from, to, goals, words, locale }: {
+export function TrendCard({ rows, group, from, to, workingWeekdays, goals, words, locale }: {
   rows: SpeedToLeadSummaryRow[]; group: "day" | "week"; from: string; to: string;
+  /** ISO weekdays, 1 Monday to 7 Sunday */
+  workingWeekdays: number[];
   goals: { withinTarget: number | null; beforeCutoff: number | null };
   words: { title: string; within: string; before: string; goalWithin: string; goalBefore: string; weekend: string; share: string; empty: string; legendLabel: string };
   locale: Locale;
@@ -145,7 +151,7 @@ export function TrendCard({ rows, group, from, to, goals, words, locale }: {
   const step = Math.max(1, Math.ceil(keys.length / 12));
   const xLabels = keys.map((k, i) => ({ x: i, text: fmtDate(k, locale, "compact") })).filter((_, i) => i % step === 0);
   const bands = group === "day"
-    ? keys.flatMap((k, i) => (isWeekend(k) ? [{ from: i - 0.5, to: i + 0.5, title: `${words.weekend} · ${fmtDate(k, locale, "compact")}` }] : []))
+    ? keys.flatMap((k, i) => (!workingWeekdays.includes(isoDow(k)) ? [{ from: i - 0.5, to: i + 0.5, title: `${words.weekend} · ${fmtDate(k, locale, "compact")}` }] : []))
     : [];
   const refLines = [
     ...(goals.withinTarget !== null ? [{ y: goals.withinTarget / 100, text: words.goalWithin, colour: 0 }] : []),
@@ -174,7 +180,7 @@ export function TrendCard({ rows, group, from, to, goals, words, locale }: {
 const DAY = 86_400_000;
 const addDaysKey = (k: string, n: number) => new Date(Date.parse(`${k}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 const dowOf = (k: string) => new Date(`${k}T00:00:00Z`).getUTCDay();
-const isWeekend = (k: string) => dowOf(k) === 0 || dowOf(k) === 6;
+const isoDow = (k: string) => (dowOf(k) === 0 ? 7 : dowOf(k));
 const mondayOf = (k: string) => addDaysKey(k, dowOf(k) === 0 ? -6 : 1 - dowOf(k));
 
 /** The Group by table: the summary's groups with the cockpit's two new columns; No attempt yet shows – for its shares */

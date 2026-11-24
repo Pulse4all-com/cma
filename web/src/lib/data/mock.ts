@@ -4722,6 +4722,8 @@ export const mockData: CmaData = {
       markets: groupSpeedToLead(rows, "market", nameOf),
       trendGroup,
       trend: groupSpeedToLead(narrowed, trendGroup, nameOf),
+      // the mock's markets work Monday to Friday
+      workingWeekdays: [1, 2, 3, 4, 5],
       group,
       groups: groupSpeedToLead(narrowed, group, nameOf),
       deals: mockSpeedDeals(me, range, market, view, SPEED_DEALS_PAGE, offset),

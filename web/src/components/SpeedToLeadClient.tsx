@@ -18,13 +18,17 @@ import { PENDING_ROW, usePendingChoice } from "./usePendingPush";
 
 export const SPEED_REFRESH_MS = 60_000;
 
-/** The page read again every 60 seconds while visible, and once when the tab comes back (as LiveRefresh, at a minute) */
+/** The page read again every 60 seconds while visible, and when the tab comes back a minute or more after the last read */
 export function SpeedRefresh() {
   const router = useRouter();
   useEffect(() => {
     let id: ReturnType<typeof setTimeout> | null = null;
+    // the page's read is a full one (about half a second at three times prod's volume): never more than once a minute,
+    // also when the tab comes back sooner
+    let last = Date.now();
     const tick = () => {
       router.refresh();
+      last = Date.now();
       id = setTimeout(tick, SPEED_REFRESH_MS);
     };
     const start = () => {
@@ -36,7 +40,10 @@ export function SpeedRefresh() {
     };
     const onVisibility = () => {
       if (document.visibilityState === "visible") {
-        router.refresh();
+        if (Date.now() - last >= SPEED_REFRESH_MS) {
+          router.refresh();
+          last = Date.now();
+        }
         start();
       } else {
         stop();

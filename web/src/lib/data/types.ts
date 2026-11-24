@@ -1098,6 +1098,8 @@ export interface SpeedToLeadPage {
   markets: SpeedToLeadSummaryRow[];
   trendGroup: "day" | "week";
   trend: SpeedToLeadSummaryRow[];
+  /** The ISO weekdays (1 Monday to 7 Sunday) with office hours in the market, or in any market: the trend shades the others */
+  workingWeekdays: number[];
   group: SpeedToLeadGroup;
   groups: SpeedToLeadSummaryRow[];
   deals: SpeedToLeadDeals;

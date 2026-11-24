@@ -924,9 +924,12 @@ as $$
                where l.tenant_id = p_tenant_id and l.crm_call_id = z.call_id and l.unlinked_at is null and tg.meaning is not null), '[]'::jsonb),
              'agent_user_id', xa.user_id,
              'agent_name', ua.display_name) order by z.n) as attempts
-    from v
+    -- only the called deals: a deal not called yet has no Attempt in its window by definition (no first one), so its
+    -- calls are not read again (the Not called yet view and its refresh every minute)
+    from (select * from v where v.status = 'called') v
     join cma.crm_record cr on cr.tenant_id = p_tenant_id and cr.id = v.deal_id
-    -- the deal's contacts as cma.counted_deals_of gives them (the record's own contact and its associated ones), a
+    -- the deal's contacts as cma.counted_deals_of (92) gives them (the record's own contact and its associated ones; a
+    -- change of that expression there must change it here too: 237 W10 compares the attempts read with them), a
     -- lateral of the deal itself: a join of its own (a CTE over the page) ran the attempts once per pair of page deals
     cross join lateral (
       select array(select y from (select cr.contact_source_id as y where cr.contact_source_id is not null
@@ -936,10 +939,12 @@ as $$
                                     and a.from_type = cr.record_type and a.from_id = cr.source_id
                                     and a.to_type = 'contact' and a.removed_at is null) q
                    order by y) as contacts) dk
-    cross join s
     left join cal bc on bc.market = nullif(v.market, 'unknown')
+    -- the settings as scalar subqueries, not a cross join of the one-row CTE (N06: under the application role it ends up
+    -- inside a per-row loop)
     cross join lateral cma.deal_attempts_of(p_tenant_id, v.connection_id, cr.record_type, v.deal_source_id, dk.contacts,
-                                            v.created_at - make_interval(mins => s.pre_min), v.window_end, s.source) z
+                                            v.created_at - make_interval(mins => (select s.pre_min from s)), v.window_end,
+                                            (select s.source from s)) z
     left join cma.app_user_external_id xa
       on xa.tenant_id = p_tenant_id and xa.system = z.telephony_source_system || '_user' and xa.external_id = z.telephony_user_ref
     left join cma.app_user ua on ua.tenant_id = p_tenant_id and ua.id = xa.user_id
@@ -1084,7 +1089,8 @@ $$;
 -- and its per-market card), the trend (per day, per week over 31 days; narrowed) with its grouping, the Group by
 -- table's groups (p_group; narrowed) and a page of the deals list (p_view, p_limit from p_offset; narrowed). The parts
 -- are the same functions' as the summary's, the figures' and the deals list's, so the page and the API agree (237).
--- One jsonb object: figures (an object), markets, trend, groups and deals (arrays of rows), trend_group
+-- One jsonb object: figures (an object), markets, trend, groups and deals (arrays of rows), trend_group, and
+-- working_weekdays (the weekdays with office hours in the market, or in any market: the trend shades the others)
 create or replace function cma.speed_to_lead_page(p_from date, p_to date, p_market text, p_group text, p_view text,
                                                  p_limit integer default 50, p_offset integer default 0)
 returns jsonb
@@ -1099,6 +1105,7 @@ declare
   v_zone   text;
   v_rows   cma.speed_to_lead_row[];
   v_trend  text := case when p_to - p_from + 1 > 31 then 'week' else 'day' end;
+  v_trend_rows jsonb;
 begin
   perform cma.assert_any_permission(array['reports.view', 'performance.team']);
   if p_group is null or p_group not in ('day', 'week', 'market', 'agent', 'pipeline') then
@@ -1110,20 +1117,37 @@ begin
   select t.timezone into v_zone from cma.tenant t where t.id = v_tenant;
   select coalesce(array_agg(x), '{}') into v_rows
   from cma.speed_to_lead_of(v_tenant, v_prev.prev_from::timestamp at time zone v_zone, v_range.to_at) x;
+  select coalesce(jsonb_agg(to_jsonb(g) order by g.group_key), '[]'::jsonb) into v_trend_rows
+  from cma.speed_to_lead_groups_from(v_rows, p_from, p_to, v_trend, p_market) g;
   return jsonb_build_object(
     'figures', (select to_jsonb(f) from cma.speed_to_lead_figures_from(v_tenant, v_rows, p_from, p_to, v_prev.prev_from,
                                                                        v_prev.prev_to, v_prev.until, v_zone, p_market) f),
     'markets', (select coalesce(jsonb_agg(to_jsonb(g) order by g.group_key), '[]'::jsonb)
                 from cma.speed_to_lead_groups_from(v_rows, p_from, p_to, 'market', null) g),
     'trend_group', v_trend,
-    'trend', (select coalesce(jsonb_agg(to_jsonb(g) order by g.group_key), '[]'::jsonb)
-              from cma.speed_to_lead_groups_from(v_rows, p_from, p_to, v_trend, p_market) g),
-    'groups', (select coalesce(jsonb_agg(to_jsonb(g) order by g.group_key), '[]'::jsonb)
-               from cma.speed_to_lead_groups_from(v_rows, p_from, p_to, p_group, p_market) g),
+    -- the weekdays (ISO, 1 Monday to 7 Sunday) on which the market works, or any market of the tenant when not narrowed:
+    -- the trend shades the other days (no fixed weekend; the markets' calendars, cma.business_calendar_of)
+    'working_weekdays', (select coalesce(jsonb_agg(distinct w order by w), '[]'::jsonb)
+                         from cma.business_calendar_of(v_tenant) c cross join unnest(c.weekdays) w
+                         where p_market is null or c.market = p_market),
+    'trend', v_trend_rows,
+    -- the Group by table: the trend's rows when it groups alike (by day over a month: the default)
+    'groups', case when p_group = v_trend then v_trend_rows
+                   else (select coalesce(jsonb_agg(to_jsonb(g) order by g.group_key), '[]'::jsonb)
+                         from cma.speed_to_lead_groups_from(v_rows, p_from, p_to, p_group, p_market) g) end,
     'deals', (select coalesce(jsonb_agg(to_jsonb(d) order by d.created_at desc, d.deal_id), '[]'::jsonb)
               from cma.speed_to_lead_deals_from(v_tenant, v_rows, p_from, p_to, p_market, p_view, p_limit, p_offset) d));
 end
 $$;
+
+-- The reads' row estimates (a set-returning function's default is 1,000; a rows clause does not stop inlining): one row
+-- of figures, a page of deals, a period's groups
+alter function cma.speed_to_lead_figures(date, date, text) rows 1;
+alter function cma.speed_to_lead_figures_from(uuid, cma.speed_to_lead_row[], date, date, date, date, timestamptz, text, text) rows 1;
+alter function cma.speed_to_lead_deals_of(date, date, text, text, integer, integer) rows 50;
+alter function cma.speed_to_lead_deals_from(uuid, cma.speed_to_lead_row[], date, date, text, text, integer, integer) rows 50;
+alter function cma.speed_to_lead_summary(date, date, text, text) rows 40;
+alter function cma.speed_to_lead_groups_from(cma.speed_to_lead_row[], date, date, text, text) rows 40;
 
 -- The page's rows (0007d's, unchanged): the same two settings. jit off: the inlined body's cost passes jit_above_cost
 -- (about 130 ms of compiling per call); force_custom_plan: a plpgsql statement turns to the generic plan after five
@@ -1169,7 +1193,7 @@ $$;
 -- 10. Record the migration
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009zr', 'Speed to lead as a cockpit (Martin, 24 Nov 2026; brief B40b; D36): cma.speed_to_lead_row loses first_call_* and gains last_attempt_at, last_call_at, deal_owner_ref, conversations_so_far and window_end; cma.speed_to_lead_of reads each deal''s calls once (jit off); cma.open_leads_of reads the owner reference and the last call from its rows; cma.speed_to_lead_summary gains attempts_mean, attempts_median, conversation_share and the group week, null shares in no_attempt; new cma.speed_to_lead_figures (the period and the previous one) and cma.speed_to_lead_deals_of (a view of the deals with their attempts, stale after speed_to_lead.stale_business_days); settings speed_to_lead.goal_within_target_pct, speed_to_lead.goal_before_cutoff_pct (0 to 100 or empty) and speed_to_lead.stale_business_days (1 to 30, default 2) checked by cma.check_tenant_setting')
+values ('0009zr', 'Speed to lead as a cockpit (Martin, 24 Nov 2026; brief B40b; D36): cma.speed_to_lead_row loses first_call_* and gains last_attempt_at, last_call_at, deal_owner_ref, conversations_so_far and window_end; cma.speed_to_lead_of reads each deal''s calls once; cma.open_leads_of (jit off) reads the owner reference and the last call from its rows; cma.speed_to_lead_summary gains attempts_mean, attempts_median, conversation_share and the group week, null shares in no_attempt; new cma.speed_to_lead_figures (the period and the previous one) and cma.speed_to_lead_deals_of (a view of the deals with their attempts, stale after speed_to_lead.stale_business_days); settings speed_to_lead.goal_within_target_pct, speed_to_lead.goal_before_cutoff_pct (0 to 100 or empty) and speed_to_lead.stale_business_days (1 to 30, default 2) checked by cma.check_tenant_setting')
 on conflict (version) do nothing;
 
 commit;

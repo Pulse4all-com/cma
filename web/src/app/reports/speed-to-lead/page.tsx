@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { DeltaLine, previousLabel } from "@/components/CallsParts";
+import { LinkPending } from "@/components/PendingMark";
 import { PeriodBar } from "@/components/PeriodBar";
 import { GroupSwitch, NoReportPermission } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
@@ -12,7 +13,7 @@ import { data, dataIsMock, type SpeedToLeadDeal, type SpeedToLeadGroup } from "@
 import { holdsAny } from "@/lib/nav";
 import { resolvePeriod } from "@/lib/period";
 import {
-  fillHint, fmtBusinessMinutes, fmtCount, fmtPct, MAX_REPORT_DAYS, parseCallsFilter, parseGroup, parseSpeedView, REPORT_PERMISSIONS,
+  fillHint, fmtBusinessMinutes, fmtCount, fmtPct, goalTone, MAX_REPORT_DAYS, parseCallsFilter, parseGroup, parseSpeedView, REPORT_PERMISSIONS,
   SPEED_DEALS_PAGE, speedTimeline, summaryTotals,
 } from "@/lib/reports";
 import { dateKeyInZone, fmtDate, fmtTime } from "@/lib/time";
@@ -80,7 +81,13 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
     <DeltaLine current={current} previous={previous} compared={prevLabel} previousFrom={f.previousFrom} historyStart={null}
       copy={copy} locale={me.locale} better={better} />;
   const minutes = (seconds: number | null) => fmtBusinessMinutes(seconds === null ? null : Math.floor(seconds / 60), me.locale);
-  const goalText = (goal: number | null) => (goal === null ? "" : ` · ${t.goal.replace("{pct}", fmtPct(goal, me.locale))}`);
+  // the goal in words beside its colour: met or below it
+  const goalText = (pct: number | null, goal: number | null) => {
+    const tone = goalTone(pct, goal);
+    if (goal === null) return "";
+    const g = fmtPct(goal, me.locale);
+    return ` · ${tone === "met" ? t.goalMet.replace("{pct}", g) : tone === "below" ? t.goalBelow.replace("{pct}", g) : t.goal.replace("{pct}", g)}`;
+  };
   const cur = f.current;
   const prev = f.previous;
   const unknownMarket = copy.reports.unknownMarket;
@@ -91,7 +98,8 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
   const dealLine = (d: SpeedToLeadDeal): DealLine => {
     const tl = speedTimeline(d, s.targetMinutes === null ? null : s.targetMinutes * 60);
     const called = d.status === "called";
-    const speed = d.businessSeconds === null ? (called ? "–" : t.clockNotStarted)
+    // no business time: the market is unknown, so it has no office hours to count
+    const speed = d.businessSeconds === null ? t.noBusinessHours
       : called ? minutes(d.businessSeconds) : t.waitingFor.replace("{time}", minutes(d.businessSeconds));
     return {
       id: d.dealId, sourceId: d.dealSourceId, recordUrl: d.recordUrl, recordLabel: t.openRecord.replace("{id}", d.dealSourceId),
@@ -99,7 +107,7 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
       owner: d.ownerName ?? t.noOwner, ownerMuted: d.ownerName === null,
       created: `${fmtDate(dateKeyInZone(d.createdAt, me.timeZone), me.locale, "compact")} ${fmtTime(d.createdAt, me.timeZone, me.locale)}`,
       attempts: n(d.attemptsSoFar), speed,
-      speedTone: d.businessSeconds === null ? "muted" : d.withinTarget === true ? "good" : d.withinTarget === false ? "bad" : called ? "good" : "muted",
+      speedTone: d.withinTarget === true ? "good" : d.withinTarget === false ? "bad" : "muted",
       stale: d.stale ? t.staleNote.replace("{n}", n(s.staleBusinessDays)) : null,
       timeline: tl === null ? null : {
         label: t.timelineLabel.replace("{id}", d.dealSourceId), target: tl.target, cutoff: tl.cutoff, waiting: tl.waiting, beyond: tl.beyond,
@@ -147,7 +155,10 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
   const dh = (label: string, text: string, className?: string) => ({ label, about: h.about.replace("{label}", label), hint: fill(text), className });
   const dealHeaders = [
     dh(t.deal, h.deal), dh(copy.reports.market, h.market), dh(t.owner, h.stlOwner), dh(t.created, h.created),
-    dh(t.attempts, h.stlAttempts, "text-right"), dh(t.speedOrWaiting, h.stlSpeed, "text-right"), dh(t.timeline, h.stlTimeline),
+    // Speed to lead is creation to the first attempt: the Not called yet view shows the wait instead, under its own name
+    dh(t.attempts, h.stlAttempts, "text-right"),
+    view === "called" ? dh(t.speedOrWaiting, h.stlSpeed, "text-right") : dh(t.waiting, h.waiting, "text-right"),
+    dh(t.timeline, h.stlTimeline),
   ];
   const attemptHeaders = [
     dh(t.attemptNumber, h.stlAttemptNumber), dh(t.attemptStart, h.stlAttemptStart), dh(t.attemptAfter, h.stlAttemptAfter),
@@ -155,7 +166,9 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
     dh(t.attemptTag, h.stlAttemptTag), dh(t.attemptAgent, h.stlAttemptAgent),
   ];
   const deals = page.deals;
-  const pages = Math.max(1, Math.ceil(deals.total / SPEED_DEALS_PAGE));
+  // a page past the last (a refresh moved deals between the views) holds no row to count from: the view's count is the figures'
+  const total = deals.rows.length > 0 ? deals.total : view === "called" ? cur.called : cur.openNotCalled;
+  const pages = Math.max(1, Math.ceil(total / SPEED_DEALS_PAGE));
   const groupWords = { notMapped: t.notMapped, noAttempt: t.noAttempt, unknownMarket, unknownPipeline: t.unknownPipeline };
   const tabs = [
     { view: "not_called", label: t.tabNotCalled.replace("{n}", n(cur.openNotCalled)) },
@@ -195,10 +208,10 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
       <div className="flex flex-col gap-6">
         <section className="grid grid-cols-3 gap-4 xl:grid-cols-6" aria-label={t.title} data-testid="speed-tiles">
           <SpeedTile testId="speed-within" label={t.withinTarget} value={fmtPct(cur.withinTargetPct, me.locale)} info={info(t.withinTarget, h.stlTileWithinTarget)}
-            detail={t.withinTargetDetail.replace("{target}", s.targetMinutes === null ? "–" : n(s.targetMinutes)) + goalText(s.goalWithinTargetPct)}
+            detail={t.withinTargetDetail.replace("{target}", s.targetMinutes === null ? "–" : n(s.targetMinutes)) + goalText(cur.withinTargetPct, s.goalWithinTargetPct)}
             delta={delta(cur.withinTargetPct, prev.withinTargetPct, "up")} pct={cur.withinTargetPct} goal={s.goalWithinTargetPct} />
           <SpeedTile testId="speed-before" label={beforeLabel} value={fmtPct(cur.beforeNextNoonPct, me.locale)} info={info(beforeLabel, h.stlTileBeforeCutoff)}
-            detail={t.beforeNoonDetail + goalText(s.goalBeforeCutoffPct)} delta={delta(cur.beforeNextNoonPct, prev.beforeNextNoonPct, "up")}
+            detail={t.beforeNoonDetail + goalText(cur.beforeNextNoonPct, s.goalBeforeCutoffPct)} delta={delta(cur.beforeNextNoonPct, prev.beforeNextNoonPct, "up")}
             pct={cur.beforeNextNoonPct} goal={s.goalBeforeCutoffPct} />
           <SpeedTile testId="speed-median" label={t.median} value={fmtBusinessMinutes(cur.medianBusinessMinutes, me.locale)} info={info(t.median, h.stlTileMedian)}
             detail={t.medianDetail} delta={delta(cur.medianBusinessMinutes, prev.medianBusinessMinutes, "down")} />
@@ -208,7 +221,7 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
           <SpeedTile testId="speed-closed" label={t.closedBeforeFirstCall} value={n(cur.closedBeforeFirstCall)} info={info(t.closedBeforeFirstCall, h.stlTileClosed)}
             detail={t.closedDetail} delta={delta(cur.closedBeforeFirstCall, prev.closedBeforeFirstCall, "down")} />
           <SpeedTile testId="speed-attempts" label={t.attemptsPerDeal} value={fmtAttempts(cur.attemptsMean, me.locale)} info={info(t.attemptsPerDeal, h.stlTileAttempts)}
-            detail={t.attemptsDetail.replace("{median}", fmtAttempts(cur.attemptsMedian, me.locale))} delta={delta(cur.attemptsMean, prev.attemptsMean, "up")} />
+            detail={t.attemptsDetail.replace("{median}", fmtAttempts(cur.attemptsMedian, me.locale))} delta={delta(cur.attemptsMean, prev.attemptsMean)} />
         </section>
 
         {page.markets.length > 0 ? (
@@ -225,13 +238,13 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
             }} />
         ) : null}
 
-        <TrendCard rows={page.trend} group={page.trendGroup} from={period.from} to={period.to} locale={me.locale}
+        <TrendCard rows={page.trend} group={page.trendGroup} from={period.from} to={period.to} workingWeekdays={page.workingWeekdays} locale={me.locale}
           goals={{ withinTarget: s.goalWithinTargetPct, beforeCutoff: s.goalBeforeCutoffPct }}
           words={{
             title: page.trendGroup === "week" ? t.trendTitleWeek : t.trendTitleDay, within: t.withinTarget, before: beforeLabel,
             goalWithin: `${t.withinTarget}: ${t.goalLine.replace("{pct}", fmtPct(s.goalWithinTargetPct, me.locale))}`,
             goalBefore: `${beforeLabel}: ${t.goalLine.replace("{pct}", fmtPct(s.goalBeforeCutoffPct, me.locale))}`,
-            weekend: t.weekend, share: t.trendShare, empty: t.trendEmpty, legendLabel: t.trendTitleDay,
+            weekend: t.noOfficeHours, share: t.trendShare, empty: t.trendEmpty, legendLabel: t.trendTitleDay,
           }} />
 
         <Card title={t.groupTable}>
@@ -255,9 +268,9 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
             <nav aria-label={t.dealsTabs} className="flex gap-2" data-testid="speed-tabs">
               {tabs.map((x) => (
                 <Link key={x.view} href={href({ view: x.view, page: null }) as Route} scroll={false} aria-current={x.view === view ? "page" : undefined}
-                  className={["inline-flex h-10 items-center rounded-button border px-4 text-body font-semibold",
+                  className={["relative inline-flex h-10 items-center rounded-button border px-4 text-body font-semibold",
                     x.view === view ? "border-p4a-deepblue bg-p4a-deepblue text-white" : "border-p4a-border text-p4a-deepblue hover:bg-p4a-bgblue"].join(" ")}>
-                  {x.label}
+                  {x.label}<LinkPending />
                 </Link>
               ))}
             </nav>
@@ -277,10 +290,10 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
           {pages > 1 ? (
             <nav aria-label={t.pager} className="mt-4 flex items-center justify-end gap-4 text-small" data-testid="speed-pager">
               <span className="text-p4a-muted">
-                {t.pageOf.replace("{from}", n(deals.offset + 1)).replace("{to}", n(Math.min(deals.total, deals.offset + SPEED_DEALS_PAGE))).replace("{n}", n(deals.total))}
+                {t.pageOf.replace("{from}", n(Math.min(total, deals.offset + 1))).replace("{to}", n(Math.min(total, deals.offset + SPEED_DEALS_PAGE))).replace("{n}", n(total))}
               </span>
-              {pageNo > 1 ? <Link href={href({ page: String(pageNo - 1) }) as Route} scroll={false} className="font-semibold text-p4a-deepblue">{t.previousPage}</Link> : null}
-              {pageNo < pages ? <Link href={href({ page: String(pageNo + 1) }) as Route} scroll={false} className="font-semibold text-p4a-deepblue">{t.nextPage}</Link> : null}
+              {pageNo > 1 ? <Link href={href({ page: String(pageNo - 1) }) as Route} scroll={false} className="relative pr-3 font-semibold text-p4a-deepblue">{t.previousPage}<LinkPending /></Link> : null}
+              {pageNo < pages ? <Link href={href({ page: String(pageNo + 1) }) as Route} scroll={false} className="relative pr-3 font-semibold text-p4a-deepblue">{t.nextPage}<LinkPending /></Link> : null}
             </nav>
           ) : null}
         </section>

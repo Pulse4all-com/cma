@@ -3514,7 +3514,7 @@ export const postgresData: CmaData = {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
       // one statement: the page's object and the record links of its deals (cma.record_url, the connection's template)
-      const r = await q.query<{ j: { figures: FiguresDb; markets: Record<string, unknown>[]; trend_group: "day" | "week"; trend: Record<string, unknown>[];
+      const r = await q.query<{ j: { figures: FiguresDb; markets: Record<string, unknown>[]; trend_group: "day" | "week"; trend: Record<string, unknown>[]; working_weekdays: number[];
         groups: Record<string, unknown>[]; deals: DealDb[] }; urls: Record<string, string | null> | null }>(
         `select x.j, (select jsonb_object_agg(e ->> 'deal_id', cma.record_url((e ->> 'connection_id')::uuid, 'deal', e ->> 'deal_source_id'))
                         from jsonb_array_elements(x.j -> 'deals') e) as urls
@@ -3526,6 +3526,7 @@ export const postgresData: CmaData = {
         markets: j.markets.map((x) => toSummaryRowJson(x, "market")),
         trendGroup: j.trend_group,
         trend: j.trend.map((x) => toSummaryRowJson(x, j.trend_group)),
+        workingWeekdays: j.working_weekdays,
         group,
         groups: j.groups.map((x) => toSummaryRowJson(x, group)),
         deals: {

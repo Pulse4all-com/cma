@@ -2,7 +2,7 @@
 -- 237_verify_speed_to_lead_cockpit.sql: verifies addition 0009zr, Sales → Speed to lead as a cockpit
 -- (24 November 2026; brief B40b)
 -- =============================================================================================
--- Universal: no seed is assumed. W1 checks the structure on the database itself; W2 to W13 work on two throwaway tenants
+-- Universal: no seed is assumed. W1 checks the structure on the database itself; W2 to W14 work on two throwaway tenants
 -- inside a subtransaction that is always rolled back, so nothing stays and the script runs in dev and in prod. W3, W4
 -- and W5 compare besides on every tenant of the database (the seeds, dev's and prod's own data), as the application
 -- acting for the tenant (row-level security). Synthetic data only (example.invalid people, invented ids, no name,
@@ -12,7 +12,7 @@
 -- Studio shows no notices; the block ends with a row of its own ("ran to the end"), which the verdict requires, so a
 -- block that an error ended reads FAIL. Run as your own IAM login after 236_speed_to_lead_cockpit.sql, dev first, then
 -- prod.
--- Expected: W1 to W13 OK, then the verdict "PASS 0009zr". Provoked (verify.provoke true at the top): every row reads
+-- Expected: W1 to W14 OK, then the verdict "PASS 0009zr". Provoked (verify.provoke true at the top): every row reads
 -- FAIL with its own id, and the verdict PROVOKED, NOT A PASS.
 --
 --   W1  structure: 0009zr recorded after 0009zq; cma.speed_to_lead_row has no first_call_* (D36) and ends in
@@ -31,15 +31,15 @@
 --       cma.lead_calls_of from the window's start; deal_owner_ref the deal's CRM owner; on both fixture tenants and on
 --       every tenant of the database
 --   W5  cma.open_leads_of gives 234's rows (kept here verbatim), in its order, on both fixture tenants and every tenant
---   W6  the figures of a period equal the summary's total of it, column by column, and the previous period's equal the
---       summary's total of that period; the page's figures, markets (never narrowed), trend, groups and deals equal the
+--   W6  the figures of a period equal the summary's total of it, column by column, and the previous period's (dS, closed
+--       before its first call) equal the summary's total of that period; the page's figures, markets (never narrowed), trend, groups and deals equal the
 --       figures', the summary's and the deals list's
 --   W7  the previous period ends the day before the period at the same length (a past week: no cut); a period reaching
---       today: the same length before, cut at now's time of day
+--       today: the same length before, cut at now's time of day (dQ1 a minute before it counts, dQ2 a minute after not)
 --   W8  stale follows speed_to_lead.stale_business_days: dO (three working days old in a market open every day) stale at
 --       2, not at 3; dN (a minute old) never
 --   W9  the summary's no_attempt group: shares, median and 80th percentile null, attempts 0; the week group's keys are
---       Mondays and its deals add up to the total over four weeks (the fixture's deals all in one of them)
+--       Mondays and its deals add up to the total over four weeks (the fixture's deals in two of them)
 --   W10 the deals list: the views partition the period's not called and called deals, newest first; pages of 2 give
 --       every deal once with the view's count; the view, the limit and the offset checked (CMA04); each deal's attempts
 --       are cma.deal_attempts_of's (number, start, connected, talk, conversation), at most 20 with the true count (dM: 22),
@@ -48,6 +48,10 @@
 --       the summary's conversation_share and the figures'
 --   W12 tenant isolation: tenant two's figures, deals list, page and summary hold none of tenant one's deals
 --   W13 the database refuses the summary, the figures, the deals list and the page to an agent (CMA06)
+--   W14 cma.speed_to_lead_summary answers as 234's (kept here verbatim) in every column 234 has, every group (day,
+--       market, agent, pipeline, total), on both fixture tenants and every tenant of the database (the last 92 days, as a
+--       person holding reports.view); no_attempt's median, 80th percentile and shares aside (null since 0009zr)
+-- Provoked, W3, W4, W5 and W14 also drop the first row of their older side, so each comparison shows a difference.
 -- =============================================================================================
 
 do $$
@@ -269,7 +273,9 @@ as $$
                     x.inbound_first, x.first_connected_at, x.agent_user_id, x.agent_ref, x.agent_from, x.elapsed_seconds,
                     x.business_seconds, x.target_seconds, x.within_target, x.next_business_noon, x.before_next_noon,
                     x.waiting_business_seconds, x.first_attempt_call_id, x.first_attempt_at, x.attempts_so_far, x.deal_owner_user_id
-             from pg_temp.v9zr_stl_234(p_tenant, null, null) x)
+             -- provoked: the old side loses its first deal, so the comparison must find a difference (133's pattern)
+             from (select y.*, row_number() over (order by y.deal_id) as rn from pg_temp.v9zr_stl_234(p_tenant, null, null) y) x
+             where not (current_setting('verify.provoke')::boolean and x.rn = 1))
   select (select count(*) from a),
          (select count(*) from (select * from a except all select * from b) y) + (select count(*) from (select * from b except all select * from a) y)
 $$;
@@ -305,6 +311,8 @@ as $$
              left join sd on sd.deal_id = r.deal_id
              left join lc on lc.deal_id = r.deal_id
              left join cma.crm_record cr on cr.tenant_id = p_tenant and cr.id = r.deal_id
+             -- provoked: the made-of side loses its first deal, so the comparison must find a difference
+             where not (current_setting('verify.provoke')::boolean and r.deal_id = (select r2.deal_id from r r2 order by r2.deal_id limit 1))
              group by r.deal_id, sd.window_end, ld.is_closed, cr.closed_at, lc.last_at, ld.owner_ref)
   select (select count(*) from x),
          (select count(*) from (select * from x except all select * from y) q) + (select count(*) from (select * from y except all select * from x) q)
@@ -319,9 +327,112 @@ as $$
             deal_source_id, pipeline_id, pipeline_label, owner_user_id, owner_ref, market, created_at, waiting_business_seconds,
             age_business_days, bucket_from, bucket_to, past_target, last_call_at, last_call_days, o))
          is not distinct from
+         -- provoked: 234's side loses its first lead, so the comparison must find a difference
          (select string_agg(x::text, '|' order by o) from pg_temp.v9zr_open_leads_234(p_tenant) with ordinality x(tenant_id, deal_id, connection_id,
             deal_source_id, pipeline_id, pipeline_label, owner_user_id, owner_ref, market, created_at, waiting_business_seconds,
-            age_business_days, bucket_from, bucket_to, past_target, last_call_at, last_call_days, o))
+            age_business_days, bucket_from, bucket_to, past_target, last_call_at, last_call_days, o)
+          where not (current_setting('verify.provoke')::boolean and o = 1))
+$$;
+
+-- 234's cma.speed_to_lead_summary, verbatim: W14 compares 0009zr's with it in every column 234 has
+create or replace function pg_temp.v9zr_summary_234(p_from date, p_to date, p_group text, p_market text default null)
+returns table (
+  group_key                 text,
+  group_label               text,
+  deals                     integer,
+  called                    integer,
+  median_business_minutes   numeric,
+  p80_business_minutes      numeric,
+  within_target_pct         numeric,
+  before_next_noon_pct      numeric,
+  open_not_called           integer,
+  closed_before_first_call  integer
+)
+language plpgsql stable
+as $$
+#variable_conflict use_column
+declare
+  v_tenant uuid := cma.current_tenant_id();
+  v_range  record;
+begin
+  perform cma.assert_any_permission(array['reports.view', 'performance.team']);
+  if p_group is null or p_group not in ('day', 'market', 'agent', 'pipeline', 'total') then
+    raise exception 'group by day, market, agent, pipeline or total, not %', p_group using errcode = 'CMA04';
+  end if;
+  select * into v_range from cma.report_range(v_tenant, p_from, p_to);
+  if p_group = 'total' then
+    -- no grouping: one row also when there is no deal
+    return query
+      select 'total'::text, null::text, count(*)::integer, (count(*) filter (where r.status = 'called'))::integer,
+             round((percentile_cont(0.5) within group (order by r.business_seconds))::numeric / 60, 1),
+             round((percentile_cont(0.8) within group (order by r.business_seconds))::numeric / 60, 1),
+             round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1),
+             round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1),
+             (count(*) filter (where r.status = 'not_called_open'))::integer,
+             (count(*) filter (where r.status = 'closed_before_first_call'))::integer
+      from cma.speed_to_lead_of(v_tenant, v_range.from_at, v_range.to_at) r
+      where p_market is null or r.market = p_market;
+    return;
+  end if;
+  return query
+    select g.k, g.l, count(*)::integer, (count(*) filter (where r.status = 'called'))::integer,
+           round((percentile_cont(0.5) within group (order by r.business_seconds))::numeric / 60, 1),
+           round((percentile_cont(0.8) within group (order by r.business_seconds))::numeric / 60, 1),
+           round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1),
+           round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1),
+           (count(*) filter (where r.status = 'not_called_open'))::integer,
+           (count(*) filter (where r.status = 'closed_before_first_call'))::integer
+    from cma.speed_to_lead_of(v_tenant, v_range.from_at, v_range.to_at) r
+    left join cma.app_user u on u.tenant_id = v_tenant and u.id = r.agent_user_id
+    cross join lateral (
+      select case p_group when 'day' then r.business_date::text
+                          when 'market' then r.market
+                          when 'agent' then case when r.first_attempt_at is null then 'no_attempt'
+                                                 else coalesce(r.agent_user_id::text, 'unknown') end
+                          else r.connection_id::text || ':' || coalesce(r.pipeline_id, '') end as k,
+             case p_group when 'day' then r.business_date::text
+                          when 'market' then r.market
+                          when 'agent' then case when r.first_attempt_at is null then null
+                                                 else coalesce(u.display_name, 'unknown') end
+                          else coalesce(r.pipeline_label, 'unknown') end as l) g
+    where p_market is null or r.market = p_market
+    group by g.k, g.l
+    order by g.k;
+end
+$$;
+
+-- W14: the groups of both summaries that differ (both directions), over 234's columns, for the acting tenant and period:
+-- every group (day, market, agent, pipeline, total); in no_attempt the median, the 80th percentile and both shares are
+-- null by 0009zr's decision (234 gave the late shares there), so they are left out of that group's comparison
+create or replace function pg_temp.v9zr_w14(p_from date, p_to date, out groups_now bigint, out differ bigint)
+language plpgsql
+as $$
+declare
+  g text;
+  v_n bigint;
+  v_g bigint;
+begin
+  groups_now := 0; differ := 0;
+  foreach g in array array['day', 'market', 'agent', 'pipeline', 'total'] loop
+    with a as (select x.group_key, x.group_label, x.deals, x.called,
+                      case when x.group_key <> 'no_attempt' then x.median_business_minutes end, case when x.group_key <> 'no_attempt' then x.p80_business_minutes end,
+                      case when x.group_key <> 'no_attempt' then x.within_target_pct end, case when x.group_key <> 'no_attempt' then x.before_next_noon_pct end,
+                      x.open_not_called, x.closed_before_first_call
+               from cma.speed_to_lead_summary(p_from, p_to, g) x),
+         b as (select x.group_key, x.group_label, x.deals, x.called,
+                      case when x.group_key <> 'no_attempt' then x.median_business_minutes end, case when x.group_key <> 'no_attempt' then x.p80_business_minutes end,
+                      case when x.group_key <> 'no_attempt' then x.within_target_pct end, case when x.group_key <> 'no_attempt' then x.before_next_noon_pct end,
+                      x.open_not_called, x.closed_before_first_call
+               -- provoked: 234's side loses its first group, so the comparison must find a difference
+               from (select y.*, row_number() over (order by y.group_key collate "C") as rn from pg_temp.v9zr_summary_234(p_from, p_to, g) y) x
+               where not (current_setting('verify.provoke')::boolean and x.rn = 1))
+    select (select count(*) from (select * from a except all select * from b) y) + (select count(*) from (select * from b except all select * from a) y),
+           (select count(*) from a)
+      into v_n, v_g;
+    differ := differ + v_n;
+    groups_now := groups_now + v_g;
+  end loop;
+end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
@@ -405,7 +516,7 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- W2 to W13, on two throwaway tenants (rolled back)
+-- W2 to W14, on two throwaway tenants (rolled back)
 -- ---------------------------------------------------------------------------------------------
 do $$
 declare
@@ -489,15 +600,23 @@ begin
       {"recordType": "deal", "sourceId": "dF", "pipelineId": "sales", "stageId": "s1", "ownerRef": "o-1", "contactId": "kF", "market": "NL", "createdAt": "2026-10-09T13:00:00Z", "updatedAt": "2026-10-09T13:00:00Z"},
       {"recordType": "deal", "sourceId": "dM", "pipelineId": "sales", "stageId": "s1", "ownerRef": "o-9", "contactId": "kM", "market": "NL", "createdAt": "2026-10-09T07:00:00Z", "updatedAt": "2026-10-09T07:00:00Z"},
       {"recordType": "deal", "sourceId": "dX", "pipelineId": "sales", "stageId": "s1", "ownerRef": "o-1", "contactId": "kX", "market": "NL", "createdAt": "2026-10-07T09:00:00Z", "updatedAt": "2026-10-07T09:00:00Z"},
-      {"recordType": "deal", "sourceId": "dXo", "pipelineId": "selfserve", "stageId": "o1", "contactId": "kX", "market": "NL", "createdAt": "2026-10-07T09:30:00Z", "closedAt": "2026-10-07T09:30:00Z", "updatedAt": "2026-10-07T09:30:00Z"}]');
+      {"recordType": "deal", "sourceId": "dXo", "pipelineId": "selfserve", "stageId": "o1", "contactId": "kX", "market": "NL", "createdAt": "2026-10-07T09:30:00Z", "closedAt": "2026-10-07T09:30:00Z", "updatedAt": "2026-10-07T09:30:00Z"},
+      {"recordType": "deal", "sourceId": "dS", "pipelineId": "sales", "stageId": "sl", "ownerRef": "o-1", "contactId": "kS", "market": "NL", "createdAt": "2026-09-30T08:00:00Z", "closedAt": "2026-09-30T09:00:00Z", "updatedAt": "2026-09-30T09:00:00Z"}]');
     perform cma.ingest_upsert_records(v_crm, jsonb_build_array(
       jsonb_build_object('recordType', 'deal', 'sourceId', 'dO', 'pipelineId', 'sales', 'stageId', 's1', 'ownerRef', 'o-1', 'contactId', 'kO', 'market', 'GB',
                          'createdAt', now() - interval '3 days', 'updatedAt', now() - interval '3 days'),
       jsonb_build_object('recordType', 'deal', 'sourceId', 'dN', 'pipelineId', 'sales', 'stageId', 's1', 'ownerRef', 'o-1', 'contactId', 'kN', 'market', 'GB',
-                         'createdAt', now() - interval '1 minute', 'updatedAt', now() - interval '1 minute')));
+                         'createdAt', now() - interval '1 minute', 'updatedAt', now() - interval '1 minute'),
+      -- W7's cut: seven days back, a minute before now's time of day (in the previous period of a period reaching today)
+      -- and a minute after it (cut off: on the previous period's last date after now's time, or, past midnight, in the
+      -- period itself); both closed before any call, so no other check sees them
+      jsonb_build_object('recordType', 'deal', 'sourceId', 'dQ1', 'pipelineId', 'sales', 'stageId', 'sl', 'ownerRef', 'o-1', 'contactId', 'kQ', 'market', 'GB',
+                         'createdAt', now() - interval '7 days 1 minute', 'closedAt', now() - interval '7 days', 'updatedAt', now() - interval '7 days'),
+      jsonb_build_object('recordType', 'deal', 'sourceId', 'dQ2', 'pipelineId', 'sales', 'stageId', 'sl', 'ownerRef', 'o-1', 'contactId', 'kQ', 'market', 'GB',
+                         'createdAt', now() - interval '7 days' + interval '1 minute', 'closedAt', now() - interval '6 days', 'updatedAt', now() - interval '6 days')));
     perform cma.ingest_upsert_contacts(v_crm, (
       select jsonb_agg(jsonb_build_object('sourceId', k, 'country', 'NL', 'updatedAt', '2026-10-01T00:00:00Z'))
-      from unnest(array['kA', 'kH', 'kP', 'kC', 'kW', 'kF', 'kM', 'kX', 'kO', 'kN']) k));
+      from unnest(array['kA', 'kH', 'kP', 'kC', 'kW', 'kF', 'kM', 'kX', 'kO', 'kN', 'kS', 'kQ']) k));
     -- the CRM calls, each on its deal's contact, all outbound; a hash where an Aircall call logged it (as 235's), and dM's
     -- 22 calls ten minutes apart from Friday 9 October 07:10 UTC
     perform cma.ingest_upsert_calls(v_crm, (
@@ -588,7 +707,7 @@ begin
       select * into r from pg_temp.v9zr_w3(d::uuid);
       v_ok := v_ok and r.differ = 0;
       v_txt := v_txt || format('%s: %s rows, %s differ; ', case d when v_t1::text then 'one' when v_t2::text then 'two' else 'tenant' end, r.rows_now, r.differ);
-      if d = v_t1::text then v_ok := v_ok and r.rows_now = 10; end if;
+      if d = v_t1::text then v_ok := v_ok and r.rows_now = 13; end if;
     end loop;
     rows_ := rows_ || pg_temp.v9zr_row(3, 'W3', 'cma.speed_to_lead_of answers as 234''s in every column both have', v_ok, v_txt);
 
@@ -647,7 +766,7 @@ begin
          and j -> 'deals' = (select coalesce(jsonb_agg(to_jsonb(x) order by x.created_at desc, x.deal_id), '[]') from cma.speed_to_lead_deals_of('2026-10-05', '2026-10-11', 'NL', 'called', 50, 0) x)
          and jsonb_array_length(j -> 'markets') = 1 and jsonb_array_length(j -> 'deals') > 0;
     rows_ := rows_ || pg_temp.v9zr_row(6, 'W6', 'the figures equal the summary''s total, both periods; the page''s parts equal the reads''',
-      v_ok and v_ok2 and f.deals = 8 and f.prev_deals = 0, v_txt || case when v_ok2 then '; the page''s parts equal' else '; the page''s parts DIFFER' end);
+      v_ok and v_ok2 and f.deals = 8 and f.prev_deals = 1 and f.prev_closed_before_first_call = 1, v_txt || case when v_ok2 then '; the page''s parts equal' else '; the page''s parts DIFFER' end);
 
     -- W7. the previous period: a past week against the week before, uncut; a period reaching today against the same
     --     length before, cut at now's time of day
@@ -657,6 +776,9 @@ begin
     select v_txt || format('; to today: %s..%s until now %s', x.previous_from - v_today, x.previous_to - v_today, x.previous_until = now()),
            v_ok and x.previous_from = v_today - 13 and x.previous_to = v_today - 7 and x.previous_until = now()
       into v_txt, v_ok from cma.speed_to_lead_figures(v_today - 6, v_today) x;
+    -- the cut: of dQ1 and dQ2 (seven days back, a minute either side of now's time of day) the previous period holds dQ1
+    select v_txt || format('; cut: previous %s deal(s) in GB', x.prev_deals), v_ok and x.prev_deals = 1
+      into v_txt, v_ok from cma.speed_to_lead_figures(v_today - 6, v_today, 'GB') x;
     rows_ := rows_ || pg_temp.v9zr_row(7, 'W7', 'the previous period ends the day before the period, at the same length', v_ok, v_txt);
 
     -- W8. stale: dO (GB, open every day, three days old) at 2 and at 3; dN (a minute old) never
@@ -681,7 +803,7 @@ begin
       into v_txt from cma.speed_to_lead_summary('2026-10-05', '2026-10-11', 'agent') x where x.group_key = 'no_attempt';
     select v_txt || format(' | week: %s groups, %s Mondays, %s deals', count(*), count(*) filter (where extract(isodow from x.group_key::date) = 1), sum(x.deals))
       into v_txt from cma.speed_to_lead_summary('2026-09-28', '2026-10-25', 'week') x;
-    v_ok := v_txt = format('3 deals: median - p80 - within - before - conv - attempts 0.00/0.0 | week: 1 groups, 1 Mondays, %s deals',
+    v_ok := v_txt = format('3 deals: median - p80 - within - before - conv - attempts 0.00/0.0 | week: 2 groups, 2 Mondays, %s deals',
                            (select x.deals from cma.speed_to_lead_summary('2026-09-28', '2026-10-25', 'total') x));
     rows_ := rows_ || pg_temp.v9zr_row(9, 'W9', 'no_attempt''s shares and median null; the week group adds up', v_ok, v_txt);
 
@@ -690,11 +812,11 @@ begin
     select string_agg(x.deal_source_id, ',' order by o) into v_txt
     from cma.speed_to_lead_deals_of('2026-10-05', '2026-10-11', null, 'called', 50, 0) with ordinality x(deal_id, connection_id, deal_source_id, market,
       pipeline_id, pipeline_label, created_at, status, business_seconds, within_target, before_next_noon, cutoff_at, owner_user_id, owner_name,
-      attempts_so_far, attempts, stale, view_total, o);
+      attempts_so_far, attempts, stale, cutoff_business_seconds, span_business_seconds, view_total, o);
     select v_txt || ' | ' || string_agg(x.deal_source_id, ',' order by o) into v_txt
     from cma.speed_to_lead_deals_of('2026-10-05', '2026-10-11', null, 'not_called', 50, 0) with ordinality x(deal_id, connection_id, deal_source_id, market,
       pipeline_id, pipeline_label, created_at, status, business_seconds, within_target, before_next_noon, cutoff_at, owner_user_id, owner_name,
-      attempts_so_far, attempts, stale, view_total, o);
+      attempts_so_far, attempts, stale, cutoff_business_seconds, span_business_seconds, view_total, o);
     v_ok := v_txt = 'dF,dM,dW,dP,dA | dH';
     -- pages of 2: every called deal once, with the view's count
     select string_agg(x.deal_source_id || ':' || x.view_total, ',' order by g, x.created_at desc) into v_txt2
@@ -729,7 +851,7 @@ begin
     v_txt := v_txt || ' | attempts ' || coalesce(v_txt2, '-') || format(' (%s differ)', v_n);
     -- dP's tag meaning keys (not the tag's text), the agent by name, only the allowed keys
     select x.attempts into j from cma.speed_to_lead_deals_of('2026-10-05', '2026-10-11', null, 'called', 50, 0) x where x.deal_source_id = 'dP';
-    select string_agg(distinct k, ',' order by k) into v_txt2
+    select string_agg(distinct k collate "C", ',' order by k collate "C") into v_txt2
     from cma.speed_to_lead_deals_of('2026-10-05', '2026-10-11', null, 'called', 50, 0) x
     cross join lateral jsonb_array_elements(x.attempts) a cross join lateral jsonb_object_keys(a) k;
     v_ok := v_ok and j -> 0 -> 'tag_meanings' = '["not_reached"]'::jsonb and j -> 0 ->> 'agent_user_id' = v_anna::text
@@ -766,6 +888,31 @@ begin
     rows_ := rows_ || pg_temp.v9zr_row(12, 'W12', 'tenant isolation on the figures, the deals list, the page and the summary',
       v_txt = 'figures 2 deals; list dA (0 of one); page 2 deals, 0 of one; summary 2; of one as two 0', v_txt);
 
+    -- W14. the summary answers as 234's in every column 234 has (no_attempt's measures aside), every group, on both
+    --      tenants over the fixture's weeks and on every tenant of the database over the last 92 days, acting as a person
+    --      holding reports.view (a tenant without one is named and skipped)
+    v_txt := ''; v_ok := true;
+    for d in select te.id::text from cma.tenant te order by te.id loop
+      perform set_config('app.tenant_id', d, true);
+      perform set_config('app.user_id', coalesce((select u.id::text from cma.app_user u where u.tenant_id = d::uuid and u.status = 'active'
+                                                    and cma.has_permission(u.id, 'reports.view') order by u.id limit 1), ''), true);
+      if current_setting('app.user_id') = '' then
+        v_txt := v_txt || 'tenant: no reader, skipped; ';
+        continue;
+      end if;
+      if d in (v_t1::text, v_t2::text) then
+        select * into r from pg_temp.v9zr_w14('2026-09-28', '2026-10-11');
+      else
+        select * into r from pg_temp.v9zr_w14(((now() at time zone (select te.timezone from cma.tenant te where te.id = d::uuid))::date) - 91,
+                                               (now() at time zone (select te.timezone from cma.tenant te where te.id = d::uuid))::date);
+      end if;
+      v_ok := v_ok and r.differ = 0 and (d <> v_t1::text or r.groups_now > 0);
+      v_txt := v_txt || format('%s: %s groups, %s differ; ', case d when v_t1::text then 'one' when v_t2::text then 'two' else 'tenant' end, r.groups_now, r.differ);
+    end loop;
+    perform set_config('app.tenant_id', v_t1::text, true);
+    perform set_config('app.user_id', v_analyst1::text, true);
+    rows_ := rows_ || pg_temp.v9zr_row(14, 'W14', 'the summary answers as 234''s in every column 234 has, every group', v_ok, v_txt);
+
     -- W13. the database refuses the reads to a person holding neither reports.view nor performance.team (an agent):
     --      CMA06 from the summary, the figures, the deals list and the page, whatever the web checked before
     perform set_config('app.user_id', v_anna::text, true);
@@ -787,7 +934,7 @@ begin
   insert into verify_0009zr (ord, check_name, result, detail)
   select rows_[4 * i - 3]::integer, rows_[4 * i - 2], rows_[4 * i - 1], rows_[4 * i] from generate_series(1, cardinality(rows_) / 4) i;
   insert into verify_0009zr values (98, 'ran to the end',
-    case when v_provoke or cardinality(rows_) / 4 <> 12 or '99' = any (rows_) then 'FAIL' else 'OK' end,
+    case when v_provoke or cardinality(rows_) / 4 <> 13 or '99' = any (rows_) then 'FAIL' else 'OK' end,
     format('%s fixture rows', cardinality(rows_) / 4));
 end
 $$;
@@ -795,6 +942,8 @@ $$;
 drop function if exists pg_temp.v9zr_w3(uuid);
 drop function if exists pg_temp.v9zr_w4(uuid);
 drop function if exists pg_temp.v9zr_w5(uuid);
+drop function if exists pg_temp.v9zr_w14(date, date);
+drop function if exists pg_temp.v9zr_summary_234(date, date, text, text);
 drop function if exists pg_temp.v9zr_open_leads_234(uuid);
 drop function if exists pg_temp.v9zr_stl_234(uuid, timestamptz, timestamptz);
 drop function if exists pg_temp.v9zr_code(text);
@@ -806,7 +955,7 @@ from (select ord, check_name, result, detail from pg_temp.verify_0009zr
       select 1000000, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
                   when exists (select 1 from pg_temp.verify_0009zr where result <> 'OK') then 'FAIL'
-                  when (select count(*) from pg_temp.verify_0009zr where result = 'OK') <> 14 then 'FAIL'
+                  when (select count(*) from pg_temp.verify_0009zr where result = 'OK') <> 15 then 'FAIL'
                   else 'PASS 0009zr' end,
              format('237_verify_speed_to_lead_cockpit: %s OK, %s FAIL', (select count(*) from pg_temp.verify_0009zr where result = 'OK'),
                     (select count(*) from pg_temp.verify_0009zr where result <> 'OK'))) x

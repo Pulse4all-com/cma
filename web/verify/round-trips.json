@@ -182,6 +182,18 @@
     "firstRt": 9
   },
   {
+    "path": "/api/v1/reports/speed-to-lead/figures?from=2026-10-01&to=2026-10-31",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/api/v1/reports/speed-to-lead/deals?from=2026-10-01&to=2026-10-31&view=called",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
     "path": "/api/v1/reports/flash?overview=orders&part=headline",
     "subject": "manager",
     "tx": 2,

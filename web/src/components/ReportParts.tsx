@@ -48,6 +48,7 @@ export function GroupSwitch({
           <Link
             key={g}
             href={{ pathname: "/reports/speed-to-lead", query: { ...query, group: g } }}
+            scroll={false}
             aria-current={g === group ? "page" : undefined}
             data-shortcut={g === next ? "g" : undefined}
             className={[
