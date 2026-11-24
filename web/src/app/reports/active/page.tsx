@@ -25,7 +25,7 @@ import { flashHref } from "@/lib/flash";
 import { metricsMore } from "@/lib/metrics";
 import { holdsAny } from "@/lib/nav";
 import { fmtCount, fmtShare, REPORT_PERMISSIONS } from "@/lib/reports";
-import { dateKeyInZone, fmtDate } from "@/lib/time";
+import { addDays, dateKeyInZone, fmtDate } from "@/lib/time";
 import { resolve } from "../../access";
 
 /**
@@ -162,7 +162,12 @@ export default async function ActivePage({ searchParams }: PageProps<"/reports/a
                     <ChurnRateFigures card={top.churnCard} perMarketOnly={filter.segment !== null || filter.channel !== null} locale={me.locale} t={t}
                       related={top.unitEconomics && top.unitEconomics.churned30d !== null ? (
                         <p data-testid="active-churned">
-                          <Link href={flashHref("/reports/flash", { o: "churn" }) as Route} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline" title={t.openChurn}>
+                          {/* the same 30 business dates the figure counts (cma.flash_churn_of over the take's business date - 29 to
+                              it, in the tenant's zone), as Flash's custom range: resolvePeriod reads from and to with range=custom alone */}
+                          <Link href={flashHref("/reports/flash", {
+                            o: "churn", ...(filter.market ? { market: filter.market } : {}),
+                            ...(top.take ? { range: "custom", from: addDays(top.take.businessDate, -29), to: top.take.businessDate } : {}),
+                          }) as Route} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline" title={t.openChurn}>
                             {t.churned30dLine.replace("{n}", fmtCount(top.unitEconomics.churned30d, me.locale))}
                           </Link>
                         </p>
