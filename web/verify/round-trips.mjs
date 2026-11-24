@@ -67,7 +67,13 @@ for (const row of budget) {
     if (typeof h === "string") { problems.push(`${row.subject} ${row.path}: ${h}`); continue; }
     if (!h) { notes.push(`${row.subject} ${row.path}: not measured, ${row.subject} does not hold ${row.permission}`); continue; }
   }
-  const res = await fetch(BASE + row.path, { headers: { "x-cma-mock-subject": row.subject, accept: "text/html,application/json" }, redirect: "manual" });
+  // a write row (the navigation beacon, brief N07) names its method, headers and body; every other row is a GET
+  const res = await fetch(BASE + row.path, {
+    method: row.method ?? "GET",
+    headers: { "x-cma-mock-subject": row.subject, accept: "text/html,application/json", ...(row.headers ?? {}) },
+    ...(row.body !== undefined ? { body: JSON.stringify(row.body) } : {}),
+    redirect: "manual",
+  });
   const type = res.headers.get("content-type") ?? "";
   let cost = null;
   let first = null;

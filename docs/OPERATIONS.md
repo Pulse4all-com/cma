@@ -458,7 +458,7 @@ Expected: one row per route pattern with p50 to p99 of `totalMs`; `--kind naviga
 ```bash
 gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="cma-web" AND jsonPayload.message="navigation"' --project=p4a-cma-prod --freshness=7d --limit=200000 --format=json | node tools/perf/request-percentiles.mjs --navigation
 ```
-Expected: one row per route and kind with p50, p75 and p95 of both times and the share of each interaction bucket; a growing `without content` count on a route means its content stops arriving (its skeleton stays).
+Expected: one row per route and kind with p50, p75 and p95 of both times and the share of each interaction bucket; a growing `without content` count on a route means its content stops arriving (its skeleton stays). Each beacon also writes a request line of its own (route `/api/v1/telemetry/navigation`, `kind` `api`, no database time): leave that route out when reading the API's percentiles. Known limits: the route checks the identity only (any account IAP admits, without a read of the person's access, so a beacon costs no transaction) and has no rate limit; a tab that sent beacons in a loop would write log lines, nothing else.
 
 **Terminal** (status codes of the public ingest endpoint, no URLs; PROD_RUNBOOK 7.9)
 ```bash

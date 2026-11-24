@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getIdentity } from "@/lib/auth/identity";
+import { dbTraceHeader } from "@/lib/api/respond";
 import { MAX_BEACON_BYTES, navigationLogLine, parseNavigationBeacon } from "@/lib/telemetry";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +29,8 @@ export async function POST(request: Request) {
   const parsed = parseNavigationBeacon(text);
   if (!parsed.ok) return fail(parsed.reason === "too_large" ? 413 : 400, parsed.reason);
   console.log(navigationLogLine(parsed.beacon));
-  return new NextResponse(null, { status: 204, headers: NO_STORE });
+  // x-cma-db only with the verification trace (mock sign-in): verify:round-trips holds the beacon to 0 transactions
+  return new NextResponse(null, { status: 204, headers: { ...NO_STORE, ...dbTraceHeader() } });
 }
 
 function fail(status: number, code: string): NextResponse {
