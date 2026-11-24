@@ -25,12 +25,12 @@ are in `MORNING_RUNBOOK.md`.
 | PR | Branch | What | Base |
 |---|---|---|---|
 | N07a, Pulse4all-com/cma#319 | `claude/clever-goodall-7wnx9z` | WP6, WP5: the jobs off the vCPU, `CMA_DB_SESSION_OPTIONS` | main |
-| N07b | `…-n07b` | WP2, WP3, WP4: persistent shell, optimistic writes, router cache, prefetch | main (web only) |
-| N07c | `…-n07c` | WP7: Email's deals not responding | N07a |
-| N07d | `…-n07d` | WP1: request log `kind`, Server-Timing, navigation beacon | main (web only) |
-| N07e | `…-n07e` | WP8, D11: CSP step 2 alone | N07d |
-| N07g | `…-n07g` | WP8: X-Requested-With and the session-expiry notice, npm audit, Back after Log out | N07e |
-| N07f | `…-n07f` | WP10: D12 (prod waits for Yordi) and D13 | N07c |
+| N07b, Pulse4all-com/cma#322 | `…-n07b` | WP2, WP3, WP4: persistent shell, optimistic writes, router cache, prefetch | main (web only) |
+| N07c, Pulse4all-com/cma#320 | `…-n07c` | WP7: Email's deals not responding | N07a |
+| N07d, Pulse4all-com/cma#323 | `…-n07d` | WP1: request log `kind`, Server-Timing, navigation beacon | main (web only) |
+| N07e, Pulse4all-com/cma#324 | `…-n07e` | WP8, D11: CSP step 2 alone | N07d |
+| N07g, Pulse4all-com/cma#325 | `…-n07g` | WP8: X-Requested-With and the session-expiry notice, npm audit, Back after Log out | N07e |
+| N07f, Pulse4all-com/cma#321 | `…-n07f` | WP10: D12 (prod waits for Yordi) and D13 | N07c |
 
 Night default N07-3 (to confirm): the web PRs are based on main rather than on N07a, because they share no file with it. The
 cma-reviewer's D11 finding split N07e in two, which added N07g. Conflicts between N07b and N07g are mechanical: the call
