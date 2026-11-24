@@ -448,6 +448,18 @@ gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cm
 ```
 Expected: one line per tenant per minute, INFO: `refreshed` True with `rows` and `duration_ms` on the run that computed (every `data_quality.refresh_minutes`, 5 by default), `reason` `fresh` on the runs between; after a failed computation the runs wait `data_quality.refresh_minutes` too, `reason` `backoff`; `reason` `running` as a WARNING when a run found the tenant's lock taken; an ERROR line names the SQLSTATE (section 4, then 5 to pause it: the pages keep the last result).
 
+**Terminal** (`cma-web`'s request lines, one per page, RSC and API request: route pattern, method, status, `kind`, `totalMs`, `dbMs`, `tx`, `rt`; never a path or a query; `src/instrumentation.node.ts`. Since brief N07 (25 November 2026) each carries `kind`: `document` (a page opened or reloaded), `navigation` (the client router's request for a page), `prefetch` (the router's prefetch, Next-Router-Prefetch) or `api`; earlier lines have none. A page's prefetches are cheap and many, so its percentiles are read per kind)
+```bash
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="cma-web" AND jsonPayload.message="request"' --project=p4a-cma-prod --freshness=1d --limit=200000 --format=json | node tools/perf/request-percentiles.mjs --kind document
+```
+Expected: one row per route pattern with p50 to p99 of `totalMs`; `--kind navigation`, `--kind prefetch` and `--kind api` for the others.
+
+**Terminal** (the navigation beacon's lines, since brief N07: `jsonPayload.message="navigation"` with `route` (the pattern, `other` for anything outside the navigation model), `kind` (`document` or `navigation`), `firstFrameMs` (time to first frame), `contentMs` (time to content, null when the content did not come within 30 s) and `interaction` (the latest interaction's delay in buckets); no person, tenant, path or query; `POST /api/v1/telemetry/navigation` stores nothing else)
+```bash
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="cma-web" AND jsonPayload.message="navigation"' --project=p4a-cma-prod --freshness=7d --limit=200000 --format=json | node tools/perf/request-percentiles.mjs --navigation
+```
+Expected: one row per route and kind with p50, p75 and p95 of both times and the share of each interaction bucket; a growing `without content` count on a route means its content stops arriving (its skeleton stays).
+
 **Terminal** (status codes of the public ingest endpoint, no URLs; PROD_RUNBOOK 7.9)
 ```bash
 gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="cma-ingest" AND httpRequest.status>0' --project=p4a-cma-prod --freshness=1d --format='value(httpRequest.status)' | sort | uniq -c
