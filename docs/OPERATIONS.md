@@ -451,7 +451,7 @@ Expected: nothing.
 ```bash
 gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-reconcile' --project=p4a-cma-prod --freshness=1d --limit=20 --format='value(timestamp,jsonPayload.message,jsonPayload.code)'
 ```
-Expected: the nightly run's lines. `subscriptions_recreated` and `webhook_reactivated` are repairs;
+Expected: the nightly run's lines, ending with `reconcile: sync_run retention` (INFO; `tenant`, `deleted`, `batches`, `more`, `ms`: `more` true means the next night continues). `reconcile: sync_run retention stopped` (WARNING; `code`) means a batch hit its lock or statement timeout or failed: the purge is retried the next night, nothing else is affected. `subscriptions_recreated` and `webhook_reactivated` are repairs;
 `webhook_token_mismatch`, `account_mismatch`, `token_unavailable` and `pepper_unavailable` need a person.
 
 **Terminal** (the forgotten-day job; `docs/scheduler/deploy.sh` prints this form)
