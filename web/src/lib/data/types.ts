@@ -992,8 +992,16 @@ export interface IntakeDay {
   date: DateKey;
   market: string;
   formSubmissions: number;
+  /** Deals created in every counted deal pipeline (kept for analytics; no screen shows it since addition 0009zp) */
   dealsCreated: number;
+  /** Deals closed in every counted deal pipeline (kept for analytics; no screen shows it since addition 0009zp) */
   dealsClosed: number;
+  /** Lead deals in: deals created in a lead pipeline (a pipeline not yet seen counts as one), call center work */
+  leadDealsCreated: number;
+  /** Lead deals closed: deals of a lead pipeline closed, won or lost, by their closing time */
+  leadDealsClosed: number;
+  /** Other deals in: deals created in a counted pipeline that is not a lead pipeline (Overall, not call center work) */
+  otherDealsCreated: number;
   ticketsCreated: number;
   ticketsClosed: number;
   callsIn: number | null;
@@ -4012,10 +4020,9 @@ export interface FollowUpCallbacks {
   callbackOwners: CallbackOwner[] | null;
 }
 
-/** The counts of Reports → Dashboard's Intake row, read in one transaction: the intake of the period, the records created and the callbacks kept */
+/** The counts of Reports → Dashboard's Intake row, read in one transaction: the intake of the period and the callbacks kept */
 export interface DashboardIntake {
   intake: Intake;
-  records: CrmRecordsDay[];
   callbacks: CallbacksKept;
 }
 
@@ -4358,8 +4365,8 @@ export interface CmaData {
   getTeamStatusTime(me: Principal, range: HoursRange, userId: string | null): Promise<TeamStatusTime>;
   /**
    * Reports → Dashboard's reads (12 November 2026), on two connections side by side: one transaction reads the time per
-   * status of everyone (getTeamStatusTime) and hands it over, then the Intake row's counts (getIntake, getCrmRecordsPerDay
-   * and getCallbacksKept, as before); the other reads the speed to lead's rows (getSpeedToLeadRows without each record's
+   * status of everyone (getTeamStatusTime) and hands it over, then the Intake row's counts (getIntake and getCallbacksKept;
+   * since addition 0009zp the deals and tickets come from the intake, no longer from getCrmRecordsPerDay); the other reads the speed to lead's rows (getSpeedToLeadRows without each record's
    * link, which the tile never shows: recordUrl is null), the dearest read, after asking the database for performance.team
    * (cma.speed_to_lead_rows alone takes reports.view too). Each promise settles on its own; a transaction that fails
    * leaves its unanswered parts failed. Needs performance.team (CMA06); at most 92 days (CMA04). Not async: the reads

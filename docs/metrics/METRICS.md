@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-662 figures. Statuses: verified 461 · discrepancy 18 · ambiguous 35 · prerequisite_missing 155 · cadence_unconfirmed 74.
+665 figures. Statuses: verified 466 · discrepancy 16 · ambiguous 35 · prerequisite_missing 155 · cadence_unconfirmed 74.
 
 ## Welcome
 
@@ -3274,7 +3274,7 @@ sum over cma.intake_per_day rows of form_submissions (intakeTotals); counts only
 
 **Who may see it** `performance.team`
 
-**Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
+**Refresh** on page load (server component); two transactions side by side (team time then the intake and the callbacks kept; the speed-to-lead rows); no polling
 
 **Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `IntakeRow` in src/components/IntakeRow.tsx; `intakeTotals` in src/lib/reports.ts
 
@@ -3298,83 +3298,96 @@ where fs.tenant_id = :tenant_id and f.is_counted and cma.form_is_lead(f.lead_con
 
 **Fixture check** Ran against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and matched the page's own function for the last 30 days (2).
 
-**Documented in** api.md, Dashboard (Intake row, since 12 Oct 2026, B11); api.md line 126 (getCrmRecordsPerDay has no route of its own); features.md paragraph 5; kpis.md paragraph 1 and paragraph 11; decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)
+**Documented in** api.md, Dashboard (Intake row, since 12 Oct 2026, B11); features.md paragraph 5; kpis.md paragraph 1 and paragraph 11; decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)
 
 **Notes**
 
 ReportParts.tsx:158 (value = n(totals.formSubmissions ?? 0)). Cross-page consistent with Reports -> Intake by construction (same read). Shows 0, not a not-connected state, for a tenant without forms/CRM (no 'No CRM connected' state exists - low finding). Start-date note under the row applies to this tile.
 
-#### `dashboard.intake.deals_created`
+#### `dashboard.intake.lead_deals_created`
 
-**Deals created** on /reports/dashboard · Deals created (Deals aangemaakt)
+**Lead deals** on /reports/dashboard · Lead deals (Leaddeals)
 
-Deals created in counted pipelines over the period, whole tenant - read from the 0006 Dashboard read, NOT from intake_per_day. Tile links to /reports/intake.
+Lead deals in over the period, whole tenant (call center work), with the lead deals closed in the tile's hint. The same counts as Reports -> Intake's Lead deals in and Lead deals closed, clamped at intake.start_date. Tile links to /reports/intake.
 
 **Formula as computed**
 
 ```
-recordsOfType(getCrmRecordsPerDay(period), 'deal') = sum of records over cma.crm_records_per_day rows with record_type = 'deal': count(*) of not-deleted crm_record in counted pipelines with source_created_at in [:from, :to+1) (tenant zone). NO intake.start_date clamp.
+intakeTotals(getIntake(period)).leadDealsCreated = sum of lead_deals_created over cma.intake_per_day rows; the hint's closed = sum of lead_deals_closed. Lead pipelines: coalesce(connection_pipeline.is_lead, true) among the counted deal pipelines.
 ```
 
-**Unit** count · **Grain** period · **Status** discrepancy
+**Unit** count · **Grain** period · **Status** verified
 
 **Sources**
 
 | Table | Columns | Owner | Fed by | Cadence |
 |---|---|---|---|---|
-| `cma.crm_record` | record_type, source_created_at, source_deleted_at, pipeline_id | HubSpot | HubSpot webhook -> ingest POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_records() | webhook read-back within seconds; sweep every minute; reconcile 03:30 (docs/ingest/deploy.sh) |
-| `cma.connection_pipeline` | is_counted | CMA | catalog by refresh; is_counted on Sources | with each read-back / on demand |
+| `cma.crm_record` | record_type, source_created_at, closed_at, is_closed, source_deleted_at, pipeline_id, market, contact_source_id | HubSpot | HubSpot webhook (deal/ticket events) -> ingest POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_records(); sweep, reconcile 03:30, backfill | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
+| `cma.connection_pipeline` | is_counted, is_lead | CMA | pipeline catalog by the source's refresh; is_counted and is_lead set on Configuration -> Sources | catalog with each read-back; configuration on demand |
+| `cma.crm_contact` | country | HubSpot | HubSpot webhook contact events -> ingest read-back -> cma.ingest_upsert_crm_contacts() (country slots, 0008m) | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
 
 **Filters**
 
 - tenant: every read under RLS for the current tenant
 - page gate: performance.team only (page.tsx:34); the intake/speed/callbacks SQL functions would also accept reports.view, but this page never renders without performance.team
 - the Dashboard's person filter does NOT apply to the Intake row (whole tenant)
+- lead pipelines only: coalesce(connection_pipeline.is_lead, true) among the counted deal pipelines (coalesce(is_counted, true)): a pipeline not yet seen counts as a lead pipeline, is_order plays no part (a pipeline marked lead and order counts as lead), as cma.lead_deals_of reads it
 
 **Time** period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
 
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `intake.start_date` | 2026-10-01 | 2026-10-01 (catalog default; seed 02 sets none) |
+
 **Who may see it** `performance.team`
 
-**Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
+**Refresh** on page load (server component); two transactions side by side (team time then the intake and the callbacks kept; the speed-to-lead rows); no polling
 
-**Computed in** `cma.crm_records_per_day` (0006); `IntakeRow` in src/components/IntakeRow.tsx; `recordsOfType` in src/lib/reports.ts
+**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0009zp); `IntakeRow` in src/components/IntakeRow.tsx; `intakeTotals` in src/lib/reports.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with s as (select t.timezone as zone from cma.tenant t where t.id = :tenant_id)
-select count(*) from cma.crm_record cr
+with s as (
+  select t.timezone as zone,
+         greatest((:from)::date::timestamp at time zone t.timezone,
+                  cma.setting_of(:tenant_id, 'intake.start_date')::date::timestamp at time zone t.timezone) as from_at,
+         ((:to)::date + 1)::timestamp at time zone t.timezone as to_at
+  from cma.tenant t where t.id = :tenant_id)
+select count(*)
+from cma.crm_record cr
 left join cma.connection_pipeline p
   on p.tenant_id = :tenant_id and p.connection_id = cr.connection_id
  and p.record_type = cr.record_type and p.source_pipeline_id = cr.pipeline_id
 cross join s
 where cr.tenant_id = :tenant_id and cr.record_type = 'deal' and cr.source_deleted_at is null
-  and coalesce(p.is_counted, true)
-  and cr.source_created_at >= ((:from)::date::timestamp at time zone s.zone)
-  and cr.source_created_at < (((:to)::date + 1)::timestamp at time zone s.zone)
+  and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)
+  and cr.source_created_at >= s.from_at and cr.source_created_at < s.to_at
 ```
 
-**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.
+**Fixture check** Not run yet: written for addition 0009zp (232_intake_call_center.sql), which Martin runs in dev and then prod; db/233_verify_intake_call_center.sql checks the counts on a throwaway tenant (B1, B2) and, per active tenant, the rule lead + other = deals in and the agreement with cma.lead_deals_of (R1, R3).
 
-**Documented in** api.md, Dashboard (Intake row, since 12 Oct 2026, B11); api.md line 126 (getCrmRecordsPerDay has no route of its own); features.md paragraph 5; kpis.md paragraph 1 and paragraph 11; decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)
+**Documented in** api.md, Dashboard (Intake row, since 12 Oct 2026, B11); features.md paragraph 5; kpis.md paragraph 1 and paragraph 11; decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped); definitions.md, Lead deal in and Lead deal closed; decisions.md 24 Nov 2026 (Intake separates call center work from the overall picture, 0009zp)
 
 **Notes**
 
-cma.crm_records_per_day (db/30:997-1032, migration 0006) does NOT clamp at intake.start_date and takes the record's RAW market string (unused by the tile, which sums all rows). The neighbouring Intake report and the row's other tiles use cma.intake_per_day (clamped); with a period starting before intake.start_date the two disagree while the note under the row claims 'Intake is counted from {date}' - see findings. Deleted records and uncounted pipelines are excluded alike; dated on source_created_at in the tenant zone. cma.crm_records_per_day checks performance.team itself (db/30:1013), matching the page gate.
+Since addition 0009zp (Martin, 24 Nov 2026) the tile reads the intake (cma.intake_per_day, clamped at intake.start_date like the row's other counts), no longer cma.crm_records_per_day, which counted every counted deal pipeline without the clamp; this closes the catalog finding that the row's tiles disagreed before intake.start_date. Deals of other pipelines (such as an order pipeline) are not call center work and are left out; Reports -> Intake shows them once under Overall.
 
 #### `dashboard.intake.tickets_created`
 
 **Tickets created** on /reports/dashboard · Tickets created (Tickets aangemaakt)
 
-Tickets created in counted pipelines over the period, whole tenant - read from the 0006 Dashboard read, NOT from intake_per_day. Tile links to /reports/intake.
+Tickets created in counted ticket pipelines over the period, whole tenant, from the intake read (the same count as Reports -> Intake's Tickets in), clamped at intake.start_date. Tile links to /reports/intake.
 
 **Formula as computed**
 
 ```
-recordsOfType(getCrmRecordsPerDay(period), 'ticket') = sum of records over cma.crm_records_per_day rows with record_type = 'ticket': count(*) of not-deleted crm_record in counted pipelines with source_created_at in [:from, :to+1) (tenant zone). NO intake.start_date clamp.
+intakeTotals(getIntake(period)).ticketsCreated = sum of tickets_created over cma.intake_per_day rows: count(crm_record) where record_type = 'ticket', not deleted, counted pipeline, source_created_at in [:from, :to+1) clamped at intake.start_date (tenant zone).
 ```
 
-**Unit** count · **Grain** period · **Status** discrepancy
+**Unit** count · **Grain** period · **Status** verified
 
 **Sources**
 
@@ -3391,16 +3404,26 @@ recordsOfType(getCrmRecordsPerDay(period), 'ticket') = sum of records over cma.c
 
 **Time** period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
 
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `intake.start_date` | 2026-10-01 | 2026-10-01 (catalog default; seed 02 sets none) |
+
 **Who may see it** `performance.team`
 
-**Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
+**Refresh** on page load (server component); two transactions side by side (team time then the intake and the callbacks kept; the speed-to-lead rows); no polling
 
-**Computed in** `cma.crm_records_per_day` (0006); `IntakeRow` in src/components/IntakeRow.tsx; `recordsOfType` in src/lib/reports.ts
+**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0009zp); `IntakeRow` in src/components/IntakeRow.tsx; `intakeTotals` in src/lib/reports.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with s as (select t.timezone as zone from cma.tenant t where t.id = :tenant_id)
+with s as (select t.timezone as zone,
+  greatest((:from)::date::timestamp at time zone t.timezone,
+           cma.setting_of(:tenant_id, 'intake.start_date')::date::timestamp at time zone t.timezone) as from_at,
+  ((:to)::date + 1)::timestamp at time zone t.timezone as to_at
+  from cma.tenant t where t.id = :tenant_id)
 select count(*) from cma.crm_record cr
 left join cma.connection_pipeline p
   on p.tenant_id = :tenant_id and p.connection_id = cr.connection_id
@@ -3408,17 +3431,16 @@ left join cma.connection_pipeline p
 cross join s
 where cr.tenant_id = :tenant_id and cr.record_type = 'ticket' and cr.source_deleted_at is null
   and coalesce(p.is_counted, true)
-  and cr.source_created_at >= ((:from)::date::timestamp at time zone s.zone)
-  and cr.source_created_at < (((:to)::date + 1)::timestamp at time zone s.zone)
+  and cr.source_created_at >= s.from_at and cr.source_created_at < s.to_at
 ```
 
-**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.
+**Fixture check** Not run yet: written for addition 0009zp (232_intake_call_center.sql), which Martin runs in dev and then prod; db/233_verify_intake_call_center.sql checks the counts on a throwaway tenant (B1, B2) and, per active tenant, the rule lead + other = deals in and the agreement with cma.lead_deals_of (R1, R3).
 
-**Documented in** api.md, Dashboard (Intake row, since 12 Oct 2026, B11); api.md line 126 (getCrmRecordsPerDay has no route of its own); features.md paragraph 5; kpis.md paragraph 1 and paragraph 11; decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)
+**Documented in** api.md, Dashboard (Intake row, since 12 Oct 2026, B11); features.md paragraph 5; kpis.md paragraph 1 and paragraph 11; decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped); decisions.md 24 Nov 2026 (Intake separates call center work from the overall picture, 0009zp)
 
 **Notes**
 
-cma.crm_records_per_day (db/30:997-1032, migration 0006) does NOT clamp at intake.start_date and takes the record's RAW market string (unused by the tile, which sums all rows). The neighbouring Intake report and the row's other tiles use cma.intake_per_day (clamped); with a period starting before intake.start_date the two disagree while the note under the row claims 'Intake is counted from {date}' - see findings. Deleted records and uncounted pipelines are excluded alike; dated on source_created_at in the tenant zone. cma.crm_records_per_day checks performance.team itself (db/30:1013), matching the page gate.
+Since addition 0009zp the tile reads the intake (cma.intake_per_day, clamped at intake.start_date like the row's other counts), no longer cma.crm_records_per_day (0006, no clamp); this closes the catalog finding that the row's tiles disagreed before intake.start_date. Deleted records and uncounted pipelines are excluded; dated on source_created_at in the tenant zone.
 
 #### `dashboard.intake.speed_to_lead`
 
@@ -3461,7 +3483,7 @@ value = round1(percentileCont(businessSeconds of the rows, 0.5) / 60) over getSp
 
 **Who may see it** `performance.team`
 
-**Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
+**Refresh** on page load (server component); two transactions side by side (team time then the intake and the callbacks kept; the speed-to-lead rows); no polling
 
 **Computed in** `cma.speed_to_lead_rows` (0007d); `cma.speed_to_lead_of` (0007d); `speedFigures` in src/lib/reports.ts; `percentileCont` in src/lib/reports.ts; `IntakeRow` in src/components/IntakeRow.tsx
 
@@ -3521,7 +3543,7 @@ from m
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.
 
-**Documented in** api.md, Dashboard (Intake row, since 12 Oct 2026, B11); api.md line 126 (getCrmRecordsPerDay has no route of its own); features.md paragraph 5; kpis.md paragraph 1 and paragraph 11; decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)
+**Documented in** api.md, Dashboard (Intake row, since 12 Oct 2026, B11); features.md paragraph 5; kpis.md paragraph 1 and paragraph 11; decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)
 
 **Notes**
 
@@ -3564,7 +3586,7 @@ value = (totals.callsIn ?? 0) + (totals.callsOut ?? 0) over cma.intake_per_day, 
 
 **Who may see it** `performance.team`
 
-**Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
+**Refresh** on page load (server component); two transactions side by side (team time then the intake and the callbacks kept; the speed-to-lead rows); no polling
 
 **Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `IntakeRow` in src/components/IntakeRow.tsx; `intakeTotals` in src/lib/reports.ts
 
@@ -3590,7 +3612,7 @@ where tc.tenant_id = :tenant_id and tc.source_deleted_at is null and coalesce(n.
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.
 
-**Documented in** api.md, Dashboard (Intake row, since 12 Oct 2026, B11); api.md line 126 (getCrmRecordsPerDay has no route of its own); features.md paragraph 5; kpis.md paragraph 1 and paragraph 11; decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)
+**Documented in** api.md, Dashboard (Intake row, since 12 Oct 2026, B11); features.md paragraph 5; kpis.md paragraph 1 and paragraph 11; decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)
 
 **Notes**
 
@@ -3635,7 +3657,7 @@ value = totals.firstOrders over cma.intake_per_day when connections.commerce; hi
 
 **Who may see it** `performance.team`
 
-**Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
+**Refresh** on page load (server component); two transactions side by side (team time then the intake and the callbacks kept; the speed-to-lead rows); no polling
 
 **Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `IntakeRow` in src/components/IntakeRow.tsx; `intakeTotals` in src/lib/reports.ts
 
@@ -3658,11 +3680,11 @@ where co.tenant_id = :tenant_id and co.source_deleted_at is null and not co.is_t
 
 **Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.
 
-**Documented in** api.md, Dashboard (Intake row, since 12 Oct 2026, B11); api.md line 126 (getCrmRecordsPerDay has no route of its own); features.md paragraph 5; kpis.md paragraph 1 and paragraph 11; decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)
+**Documented in** api.md, Dashboard (Intake row, since 12 Oct 2026, B11); features.md paragraph 5; kpis.md paragraph 1 and paragraph 11; decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)
 
 **Notes**
 
-ReportParts.tsx:178-188. CROSS-PAGE: Reports -> First orders (0008u/0008x) is a DEAL-based definition (order pipeline, won stages) - a different concept with the same name; this tile is the commerce_order count. Orders with order_kind 'unknown' are in none of the three figures (see findings). Counts only; no currency sums (audit rule 10).
+ReportParts.tsx:178-188. CROSS-PAGE: Reports -> First orders (0008u/0008x) is a DEAL-based definition (order pipeline, won stages) - a different concept with the same name; this tile is the commerce_order count. Orders with order_kind 'unknown' are in none of the three figures (see findings). Counts only; no currency sums (audit rule 10). Since addition 0009zp the tile stands apart at the row's end under Overall (not call center work).
 
 #### `dashboard.intake.callbacks_kept`
 
@@ -3705,7 +3727,7 @@ value = keptShare(total) = kept / (kept + not_kept), null (dash) when none decid
 
 **Who may see it** `performance.team`
 
-**Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
+**Refresh** on page load (server component); two transactions side by side (team time then the intake and the callbacks kept; the speed-to-lead rows); no polling
 
 **Computed in** `cma.callbacks_kept_report` (0008w); `cma.callbacks_kept_report_of` (0008w); `cma.callbacks_kept_figures_of` (0008w); `cma.callbacks_kept_of` (0008w); `cma.callbacks_kept_connected` (0008w); `keptShare` in src/lib/callbacks.ts; `IntakeRow` in src/components/IntakeRow.tsx; `getDashboardReads` in src/lib/data/postgres.ts
 
@@ -3755,7 +3777,7 @@ from c cross join s
 - Every callback task typed as a callback in HubSpot, the type marked on Sources, with a due time and the contact associated (kpis.md paragraph 11) (data quality check `crm_task_owner_unlinked`)
 - Tasks' due/association webhooks complete; until then changes arrive via the 03:30 reconcile and deletions not at all (decisions.md 16 Oct 2026)
 
-**Documented in** api.md, Dashboard (Intake row, since 12 Oct 2026, B11); api.md line 126 (getCrmRecordsPerDay has no route of its own); features.md paragraph 5; kpis.md paragraph 1 and paragraph 11; decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)
+**Documented in** api.md, Dashboard (Intake row, since 12 Oct 2026, B11); features.md paragraph 5; kpis.md paragraph 1 and paragraph 11; decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)
 
 **Notes**
 
@@ -27900,16 +27922,16 @@ group by 1, 2 order by 1, 2
 
 db/74_forms_reporting.sql:1014-1032 (form branch), :342-361 (form_is_lead). The column header says 'Leads' while the API field is formSubmissions - since 0008p they coincide (only lead submissions are counted). CROSS-PAGE: this market is the form's configured market ONLY, while Reports -> Forms resolves a submission's market as form -> market-field answer -> contact country (cma.form_submission_market_of); a counted form without a market puts its leads under 'unknown' here even when the Forms report can place them. Header hint (hints.leads): 'Submissions of forms marked as lead forms in the configuration.' - does not mention the lead condition; the KPI text (kpis.md paragraph 1) does.
 
-#### `intake.deals_created`
+#### `intake.lead_deals_created`
 
-**Deals in** on /reports/intake · Deals in (Deals in)
+**Lead deals in** on /reports/intake · Lead deals in (Leaddeals in)
 
-New deals created in counted pipelines, per business date and market.
+New deals in lead pipelines, per business date and market: every new deal in a lead pipeline, created by hand or automatically (Lead deal in). Call center work.
 
 **Formula as computed**
 
 ```
-count(crm_record) where record_type = 'deal', not deleted, counted pipeline, source_created_at in the clamped window; dated on source_created_at (tenant zone). Market via cma.record_market_of: the record's own mapped market, else its primary contact's country, each through the aliases and only when a catalog market; 'unknown' otherwise.
+count(crm_record) where record_type = 'deal', not deleted, counted pipeline and coalesce(connection_pipeline.is_lead, true), source_created_at in the clamped window; dated on source_created_at (tenant zone). Market: the record's own catalog market, else its primary contact's country, through the aliases; 'unknown' otherwise. Equals the count of cma.lead_deals_of per date and market (233 R3).
 ```
 
 **Unit** count · **Grain** period, per_day, per_market · **Status** verified
@@ -27919,16 +27941,16 @@ count(crm_record) where record_type = 'deal', not deleted, counted pipeline, sou
 | Table | Columns | Owner | Fed by | Cadence |
 |---|---|---|---|---|
 | `cma.crm_record` | record_type, source_created_at, closed_at, is_closed, source_deleted_at, pipeline_id, market, contact_source_id | HubSpot | HubSpot webhook (deal/ticket events) -> ingest POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_records(); sweep, reconcile 03:30, backfill | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
-| `cma.connection_pipeline` | is_counted | CMA | pipeline catalog by the source's refresh; is_counted set on Configuration -> Sources | catalog with each read-back; configuration on demand |
+| `cma.connection_pipeline` | is_counted, is_lead | CMA | pipeline catalog by the source's refresh; is_counted and is_lead set on Configuration -> Sources | catalog with each read-back; configuration on demand |
 | `cma.crm_contact` | country | HubSpot | HubSpot webhook contact events -> ingest read-back -> cma.ingest_upsert_crm_contacts() (country slots, 0008m) | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
 
 **Filters**
 
 - tenant: explicit tenant under RLS; permission checked in cma.intake_per_day (CMA06)
 - record_type in ('deal','ticket'), not deleted (source_deleted_at is null)
-- counted pipelines only: coalesce(connection_pipeline.is_counted, true) - a pipeline never reviewed counts (pipeline_unreviewed); is_lead does NOT matter here (Self Serve counts in Intake but not in Speed to lead, Decision log 12 Oct 2026)
+- lead pipelines only: coalesce(connection_pipeline.is_lead, true) among the counted deal pipelines (coalesce(is_counted, true)): a pipeline not yet seen counts as a lead pipeline, is_order plays no part (a pipeline marked lead and order counts as lead), as cma.lead_deals_of reads it
 - period clamped at intake.start_date; created events on source_created_at, closed events on closed_at where is_closed
-- test deals: no filter - a prerequisite, not code (kpis.md paragraph 11)
+- test deals: no filter - they count until D25 closes (definitions.md, Lead deal in; kpis.md paragraph 11)
 
 **Time** Every count is dated by its event instant in the TENANT's zone ((at at time zone tenant.timezone)::date) - unlike Inbound/Calls, which date calls in the line's market zone; period = business dates [:from, :to] in the tenant zone, clamped to start at intake.start_date; max 92 days (CMA04); no time-of-day cut for a running period
 
@@ -27942,7 +27964,7 @@ count(crm_record) where record_type = 'deal', not deleted, counted pipeline, sou
 
 **Refresh** on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), polls (minute), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `intakeTotals` in src/lib/reports.ts; `applyConnections` in src/lib/reports.ts; `getIntake` in src/lib/data/postgres.ts
+**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0009zp); `intakeTotals` in src/lib/reports.ts; `applyConnections` in src/lib/reports.ts; `getIntake` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -27961,12 +27983,12 @@ left join cma.connection_pipeline p
 cross join lateral cma.record_market_of(:tenant_id, cr.connection_id, cr.market, cr.contact_source_id) rm
 cross join s
 where cr.tenant_id = :tenant_id and cr.record_type = 'deal' and cr.source_deleted_at is null
-  and coalesce(p.is_counted, true)
+  and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)
   and cr.source_created_at >= s.from_at and cr.source_created_at < s.to_at
 group by 1, 2 order by 1, 2
 ```
 
-**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 87 row(s); Martin compares the value with the page in Studio.
+**Fixture check** Not run yet: written for addition 0009zp (232_intake_call_center.sql), which Martin runs in dev and then prod; db/233_verify_intake_call_center.sql checks the counts on a throwaway tenant (B1, B2) and, per active tenant, the rule lead + other = deals in and the agreement with cma.lead_deals_of (R1, R3).
 
 **Data prerequisites**
 
@@ -27974,22 +27996,22 @@ group by 1, 2 order by 1, 2
 - No test deals in the live pipeline
 - Test/other pipelines reviewed and unticked on Sources (data quality check `pipeline_unreviewed`)
 
-**Documented in** features.md paragraph 5 (Reports -> Intake); kpis.md paragraph 1 (Leads per day per country and source); api.md, GET /api/v1/reports/intake; data-model (lead metrics 0007d; forms reporting 0008p); decisions.md 12 Oct 2026 (lead forms), 16 Oct 2026 (lead rule, polled apart from counted), 17 Oct 2026 (lead rule live in prod)
+**Documented in** features.md (Reports -> Intake); api.md, GET /api/v1/reports/intake (leadDealsCreated); definitions.md, Lead deal in; decisions.md 24 Nov 2026 (Intake separates call center work from the overall picture, 0009zp)
 
 **Notes**
 
-db/74:1034-1046. Dated on creation; a deal created before intake.start_date never appears, even when closed later. Counted whatever its lead flag (differs from Speed to lead's population on is_lead). The Dashboard's 'Deals created' tile uses cma.crm_records_per_day (0006) instead, which does NOT clamp at intake.start_date - see findings.
+db/232 (cma.intake_per_day_of, addition 0009zp). Dated on creation; a deal created before intake.start_date never appears, even when closed later. The deals of the other counted pipelines (such as an order pipeline) are Other deals in (intake.other_deals_created), under Overall; together they make the deals of every counted pipeline, which the API keeps as dealsCreated (intake.deals_created). Under Call center work, Customer records.
 
-#### `intake.deals_closed`
+#### `intake.lead_deals_closed`
 
-**Deals closed** on /reports/intake · Deals closed (Deals gesloten)
+**Lead deals closed** on /reports/intake · Lead deals closed (Leaddeals gesloten)
 
-Deals in counted pipelines that reached a closed state, per business date (of the close) and market.
+Deals in lead pipelines that closed, won or lost, per business date of the closing (tenant zone) and market (Lead deal closed). Call center work.
 
 **Formula as computed**
 
 ```
-count(crm_record) where record_type = 'deal', not deleted, counted pipeline, is_closed and closed_at not null, closed_at in the clamped window; dated on closed_at (tenant zone); market as for created.
+count(crm_record) where record_type = 'deal', not deleted, counted pipeline and coalesce(connection_pipeline.is_lead, true), is_closed and closed_at not null, closed_at in the clamped window; dated on closed_at (tenant zone); market as for Lead deals in. lead_deals_closed <= deals_closed on every row (233 R1).
 ```
 
 **Unit** count · **Grain** period, per_day, per_market · **Status** verified
@@ -27999,14 +28021,14 @@ count(crm_record) where record_type = 'deal', not deleted, counted pipeline, is_
 | Table | Columns | Owner | Fed by | Cadence |
 |---|---|---|---|---|
 | `cma.crm_record` | record_type, source_created_at, closed_at, is_closed, source_deleted_at, pipeline_id, market, contact_source_id | HubSpot | HubSpot webhook (deal/ticket events) -> ingest POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_records(); sweep, reconcile 03:30, backfill | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
-| `cma.connection_pipeline` | is_counted | CMA | pipeline catalog by the source's refresh; is_counted set on Configuration -> Sources | catalog with each read-back; configuration on demand |
+| `cma.connection_pipeline` | is_counted, is_lead | CMA | pipeline catalog by the source's refresh; is_counted and is_lead set on Configuration -> Sources | catalog with each read-back; configuration on demand |
 | `cma.crm_contact` | country | HubSpot | HubSpot webhook contact events -> ingest read-back -> cma.ingest_upsert_crm_contacts() (country slots, 0008m) | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
 
 **Filters**
 
 - tenant: explicit tenant under RLS; permission checked in cma.intake_per_day (CMA06)
 - record_type in ('deal','ticket'), not deleted (source_deleted_at is null)
-- counted pipelines only: coalesce(connection_pipeline.is_counted, true) - a pipeline never reviewed counts (pipeline_unreviewed); is_lead does NOT matter here (Self Serve counts in Intake but not in Speed to lead, Decision log 12 Oct 2026)
+- lead pipelines only: coalesce(connection_pipeline.is_lead, true) among the counted deal pipelines (coalesce(is_counted, true)): a pipeline not yet seen counts as a lead pipeline, is_order plays no part (a pipeline marked lead and order counts as lead), as cma.lead_deals_of reads it
 - period clamped at intake.start_date; created events on source_created_at, closed events on closed_at where is_closed
 - test deals: no filter - a prerequisite, not code (kpis.md paragraph 11)
 
@@ -28022,7 +28044,7 @@ count(crm_record) where record_type = 'deal', not deleted, counted pipeline, is_
 
 **Refresh** on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), polls (minute), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `intakeTotals` in src/lib/reports.ts; `applyConnections` in src/lib/reports.ts; `getIntake` in src/lib/data/postgres.ts
+**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0009zp); `intakeTotals` in src/lib/reports.ts; `applyConnections` in src/lib/reports.ts; `getIntake` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -28041,12 +28063,12 @@ left join cma.connection_pipeline p
 cross join lateral cma.record_market_of(:tenant_id, cr.connection_id, cr.market, cr.contact_source_id) rm
 cross join s
 where cr.tenant_id = :tenant_id and cr.record_type = 'deal' and cr.source_deleted_at is null
-  and coalesce(p.is_counted, true) and cr.is_closed and cr.closed_at is not null
+  and coalesce(p.is_counted, true) and coalesce(p.is_lead, true) and cr.is_closed and cr.closed_at is not null
   and cr.closed_at >= s.from_at and cr.closed_at < s.to_at
 group by 1, 2 order by 1, 2
 ```
 
-**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 2 row(s); Martin compares the value with the page in Studio.
+**Fixture check** Not run yet: written for addition 0009zp (232_intake_call_center.sql), which Martin runs in dev and then prod; db/233_verify_intake_call_center.sql checks the counts on a throwaway tenant (B1, B2) and, per active tenant, the rule lead + other = deals in and the agreement with cma.lead_deals_of (R1, R3).
 
 **Data prerequisites**
 
@@ -28054,11 +28076,91 @@ group by 1, 2 order by 1, 2
 - No test deals in the live pipeline
 - Test/other pipelines reviewed and unticked on Sources (data quality check `pipeline_unreviewed`)
 
-**Documented in** features.md paragraph 5 (Reports -> Intake); kpis.md paragraph 1 (Leads per day per country and source); api.md, GET /api/v1/reports/intake; data-model (lead metrics 0007d; forms reporting 0008p); decisions.md 12 Oct 2026 (lead forms), 16 Oct 2026 (lead rule, polled apart from counted), 17 Oct 2026 (lead rule live in prod)
+**Documented in** features.md (Reports -> Intake); api.md, GET /api/v1/reports/intake (leadDealsClosed); definitions.md, Lead deal closed; decisions.md 24 Nov 2026 (Intake separates call center work from the overall picture, 0009zp)
 
 **Notes**
 
-db/74:1037-1038 (closed branch). 'Closed' is whatever the source marks closed (is_closed from the stage's outcome); won and lost are not separated here (the Funnel report does that). A record closed inside the window but created before intake.start_date still counts as closed (the clamp applies to the event's own instant, closed_at).
+db/232 (cma.intake_per_day_of, addition 0009zp). Closed is whatever the source marks closed (is_closed from the stage), won and lost alike (the Funnel report separates them). A lead deal created before intake.start_date and closed inside the window counts here (the clamp applies to closed_at). Under Call center work, Customer records.
+
+#### `intake.other_deals_created`
+
+**Other deals in** on /reports/intake · Other deals in (Overige deals in)
+
+New deals in counted pipelines that are not lead pipelines (such as an order pipeline), per business date and market (Other deal in). Not call center work: shown once, under Overall; the orders themselves count under Shop.
+
+**Formula as computed**
+
+```
+count(crm_record) where record_type = 'deal', not deleted, counted pipeline and not coalesce(connection_pipeline.is_lead, true), source_created_at in the clamped window; dated on source_created_at (tenant zone); market as for Lead deals in. lead_deals_created + other_deals_created = deals_created on every row (233 R1).
+```
+
+**Unit** count · **Grain** period, per_day, per_market · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | record_type, source_created_at, closed_at, is_closed, source_deleted_at, pipeline_id, market, contact_source_id | HubSpot | HubSpot webhook (deal/ticket events) -> ingest POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_records(); sweep, reconcile 03:30, backfill | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
+| `cma.connection_pipeline` | is_counted, is_lead | CMA | pipeline catalog by the source's refresh; is_counted and is_lead set on Configuration -> Sources | catalog with each read-back; configuration on demand |
+| `cma.crm_contact` | country | HubSpot | HubSpot webhook contact events -> ingest read-back -> cma.ingest_upsert_crm_contacts() (country slots, 0008m) | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
+
+**Filters**
+
+- tenant: explicit tenant under RLS; permission checked in cma.intake_per_day (CMA06)
+- record_type in ('deal','ticket'), not deleted (source_deleted_at is null)
+- counted deal pipelines that are not lead pipelines: coalesce(is_counted, true) and not coalesce(is_lead, true); a pipeline not yet seen is a lead pipeline, so never here
+- period clamped at intake.start_date; created events on source_created_at, closed events on closed_at where is_closed
+- test deals: no filter - a prerequisite, not code (kpis.md paragraph 11)
+
+**Time** Every count is dated by its event instant in the TENANT's zone ((at at time zone tenant.timezone)::date) - unlike Inbound/Calls, which date calls in the line's market zone; period = business dates [:from, :to] in the tenant zone, clamped to start at intake.start_date; max 92 days (CMA04); no time-of-day cut for a running period
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `intake.start_date` | 2026-10-01 | 2026-10-01 (catalog default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), polls (minute), sweep (minute) and reconcile (03:30)
+
+**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0009zp); `intakeTotals` in src/lib/reports.ts; `applyConnections` in src/lib/reports.ts; `getIntake` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (
+  select t.timezone as zone,
+         greatest((:from)::date::timestamp at time zone t.timezone,
+                  cma.setting_of(:tenant_id, 'intake.start_date')::date::timestamp at time zone t.timezone) as from_at,
+         ((:to)::date + 1)::timestamp at time zone t.timezone as to_at
+  from cma.tenant t where t.id = :tenant_id)
+select (cr.source_created_at at time zone s.zone)::date as business_date, rm.code as market, count(*)
+from cma.crm_record cr
+left join cma.connection_pipeline p
+  on p.tenant_id = :tenant_id and p.connection_id = cr.connection_id
+ and p.record_type = cr.record_type and p.source_pipeline_id = cr.pipeline_id
+cross join lateral cma.record_market_of(:tenant_id, cr.connection_id, cr.market, cr.contact_source_id) rm
+cross join s
+where cr.tenant_id = :tenant_id and cr.record_type = 'deal' and cr.source_deleted_at is null
+  and coalesce(p.is_counted, true) and not coalesce(p.is_lead, true)
+  and cr.source_created_at >= s.from_at and cr.source_created_at < s.to_at
+group by 1, 2 order by 1, 2
+```
+
+**Fixture check** Not run yet: written for addition 0009zp (232_intake_call_center.sql), which Martin runs in dev and then prod; db/233_verify_intake_call_center.sql checks the counts on a throwaway tenant (B1, B2) and, per active tenant, the rule lead + other = deals in and the agreement with cma.lead_deals_of (R1, R3).
+
+**Data prerequisites**
+
+- Country on the deal/ticket or its primary contact (market attribution) (data quality check `market_not_in_catalog`)
+- No test deals in the live pipeline
+- Test/other pipelines reviewed and unticked on Sources (data quality check `pipeline_unreviewed`)
+
+**Documented in** features.md (Reports -> Intake); api.md, GET /api/v1/reports/intake (otherDealsCreated); definitions.md, Other deal in; open-decisions.md, Indirect sales; decisions.md 24 Nov 2026 (Intake separates call center work from the overall picture, 0009zp)
+
+**Notes**
+
+db/232 (cma.intake_per_day_of, addition 0009zp). Martin, 24 Nov 2026, applying Kira's rule (open-decisions.md, Indirect sales): an order pipeline's deals are web orders created and closed as won in one go, so they are not call center work and their orders already count under Shop. No pipeline flag changes: an order pipeline stays counted because Flash (Open deals), First orders, Direct and Indirect orders and Customers -> Active read it. Under Overall, Customer records.
 
 #### `intake.tickets_created`
 
@@ -28747,7 +28849,7 @@ db/74:1073-1080 + :1087-1090: metric = 'order_' || order_kind; only first/repeat
 
 **Total** on /reports/intake · Total (Totaal)
 
-The bottom row: every column summed over the shown rows (after the market filter); a not-connected source stays a not-connected cell, never 0.
+The bottom row: every column summed over the shown rows (after the market filter), in both groups (Call center work and Overall); a not-connected source stays a not-connected cell, never 0.
 
 **Formula as computed**
 
@@ -28784,7 +28886,7 @@ per column: sum(rows[column]) in TS (intakeTotals); a telephony column is null (
 
 **Refresh** on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), polls (minute), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `intakeTotals` in src/lib/reports.ts
+**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0009zp); `intakeTotals` in src/lib/reports.ts
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
@@ -28794,18 +28896,18 @@ per column: sum(rows[column]) in TS (intakeTotals); a telephony column is null (
 
 **Notes**
 
-src/lib/reports.ts:177-185; page.tsx:151-157. The totals respect the market filter (they sum the filtered rows). verify_sql null: the total is a pure TS sum of the twelve columns; the closest check is each column's own entry's query with its GROUP BY dropped (and, with a market filter set, that market pinned). Counts add up exactly (no medians/shares in this table).
+src/lib/reports.ts (intakeTotals over INTAKE_FIELDS); page.tsx. The totals respect the market filter (they sum the filtered rows). Since addition 0009zp the columns are the thirteen of the two groups (Lead deals in and closed and Other deals in in place of Deals in and closed). verify_sql null: the total is a pure TS sum of the columns; the closest check is each column's own entry's query with its GROUP BY dropped (and, with a market filter set, that market pinned). Counts add up exactly.
 
 #### `intake.volume_bar`
 
 **Volume** on /reports/intake · Volume (Volume)
 
-A small inline bar per row: what came in (leads + deals created + tickets created) as a share of the busiest shown row.
+A small inline bar per row: the call center work that came in (leads + lead deals in + tickets in) as a share of the busiest shown row.
 
 **Formula as computed**
 
 ```
-volume(row) = formSubmissions + dealsCreated + ticketsCreated (nulls impossible: CRM fields are never null); share = volume / max(volume over shown rows), 0 when the max is 0; rendered as a width percentage of an 80 px track.
+volume(row) = formSubmissions + leadDealsCreated + ticketsCreated (nulls impossible: CRM fields are never null); share = volume / max(volume over shown rows), 0 when the max is 0; rendered as a width percentage of an 80 px track. Other deals in and the shop are left out (Overall, not call center work).
 ```
 
 **Unit** share · **Grain** per_day, per_market · **Status** verified
@@ -28834,17 +28936,17 @@ volume(row) = formSubmissions + dealsCreated + ticketsCreated (nulls impossible:
 
 **Refresh** on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), polls (minute), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `barShares` in src/lib/reports.ts
+**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0009zp); `barShares` in src/lib/reports.ts
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
 **Fixture check** No independent query runs here (the notes say why and name the closest check); Martin checks it in Studio.
 
-**Documented in** features.md paragraph 5 (Reports -> Intake); kpis.md paragraph 1 (Leads per day per country and source); api.md, GET /api/v1/reports/intake; data-model (lead metrics 0007d; forms reporting 0008p); decisions.md 12 Oct 2026 (lead forms), 16 Oct 2026 (lead rule, polled apart from counted), 17 Oct 2026 (lead rule live in prod)
+**Documented in** features.md paragraph 5 (Reports -> Intake); kpis.md paragraph 1 (Leads per day per country and source); api.md, GET /api/v1/reports/intake; data-model (lead metrics 0007d; forms reporting 0008p); decisions.md 12 Oct 2026 (lead forms), 16 Oct 2026 (lead rule, polled apart from counted), 17 Oct 2026 (lead rule live in prod); decisions.md 24 Nov 2026 (Intake separates call center work from the overall picture, 0009zp)
 
 **Notes**
 
-src/lib/reports.ts:198-205; page.tsx:141-145. verify_sql null: the bar is a pure presentation ratio of three figures verified by their own entries (intake.form_submissions, intake.deals_created, intake.tickets_created); the closest check is re-deriving volume from those columns on screen. Calls and orders deliberately not in the volume (hint: 'Leads, deals and tickets created, against the busiest row'). Bar colour Deep Blue on the bgblue track (style 7.7); the bar is relative to the FILTERED row set (shares change when a market filter is applied - the TS computes shares before filtering? No: page computes shares on the filtered rows, page.tsx:47-49 - consistent).
+src/lib/reports.ts (intakeVolume, barShares); page.tsx. Since addition 0009zp (Martin, 24 Nov 2026, decision 5) the bar is call center work only: leads, lead deals in and tickets in, against the busiest row; before it counted every counted pipeline's deals. verify_sql null: the bar is a pure presentation ratio of three figures verified by their own entries (intake.form_submissions, intake.lead_deals_created, intake.tickets_created). Calls, other deals and orders are not in the volume. Bar colour Deep Blue on the bgblue track (style 7.7); shares are computed on the market-filtered rows.
 
 #### `intake.start_date_note`
 
@@ -47220,6 +47322,168 @@ from eff e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_i
 At most one Yes row per day (the last stretch). Keep only kind start/status rows after the lead().
 
 ## Returned with the data, not shown on a page
+
+### /api/v1/reports/intake
+
+#### `intake.deals_created`
+
+/api/v1/reports/intake, returned with the data and not shown on a page · Deals in (Deals in)
+
+New deals created in counted pipelines, per business date and market (every counted deal pipeline, lead or not). Answered by the API as dealsCreated and kept in cma_read.intake_per_day_v for analytics; since addition 0009zp no screen shows it: Reports -> Intake shows Lead deals in and closed and Other deals in.
+
+**Formula as computed**
+
+```
+count(crm_record) where record_type = 'deal', not deleted, counted pipeline, source_created_at in the clamped window; dated on source_created_at (tenant zone). Market via cma.record_market_of: the record's own mapped market, else its primary contact's country, each through the aliases and only when a catalog market; 'unknown' otherwise.
+```
+
+**Unit** count · **Grain** period, per_day, per_market · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | record_type, source_created_at, closed_at, is_closed, source_deleted_at, pipeline_id, market, contact_source_id | HubSpot | HubSpot webhook (deal/ticket events) -> ingest POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_records(); sweep, reconcile 03:30, backfill | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
+| `cma.connection_pipeline` | is_counted | CMA | pipeline catalog by the source's refresh; is_counted set on Configuration -> Sources | catalog with each read-back; configuration on demand |
+| `cma.crm_contact` | country | HubSpot | HubSpot webhook contact events -> ingest read-back -> cma.ingest_upsert_crm_contacts() (country slots, 0008m) | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
+
+**Filters**
+
+- tenant: explicit tenant under RLS; permission checked in cma.intake_per_day (CMA06)
+- record_type in ('deal','ticket'), not deleted (source_deleted_at is null)
+- counted pipelines only: coalesce(connection_pipeline.is_counted, true) - a pipeline never reviewed counts (pipeline_unreviewed); is_lead does NOT matter here: lead and other pipelines together (since 0009zp split on screen into intake.lead_deals_* and intake.other_deals_created)
+- period clamped at intake.start_date; created events on source_created_at, closed events on closed_at where is_closed
+- test deals: no filter - a prerequisite, not code (kpis.md paragraph 11)
+
+**Time** Every count is dated by its event instant in the TENANT's zone ((at at time zone tenant.timezone)::date) - unlike Inbound/Calls, which date calls in the line's market zone; period = business dates [:from, :to] in the tenant zone, clamped to start at intake.start_date; max 92 days (CMA04); no time-of-day cut for a running period
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `intake.start_date` | 2026-10-01 | 2026-10-01 (catalog default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), polls (minute), sweep (minute) and reconcile (03:30)
+
+**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0009zp); `intakeTotals` in src/lib/reports.ts; `applyConnections` in src/lib/reports.ts; `getIntake` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (
+  select t.timezone as zone,
+         greatest((:from)::date::timestamp at time zone t.timezone,
+                  cma.setting_of(:tenant_id, 'intake.start_date')::date::timestamp at time zone t.timezone) as from_at,
+         ((:to)::date + 1)::timestamp at time zone t.timezone as to_at
+  from cma.tenant t where t.id = :tenant_id)
+select (cr.source_created_at at time zone s.zone)::date as business_date, rm.code as market, count(*)
+from cma.crm_record cr
+left join cma.connection_pipeline p
+  on p.tenant_id = :tenant_id and p.connection_id = cr.connection_id
+ and p.record_type = cr.record_type and p.source_pipeline_id = cr.pipeline_id
+cross join lateral cma.record_market_of(:tenant_id, cr.connection_id, cr.market, cr.contact_source_id) rm
+cross join s
+where cr.tenant_id = :tenant_id and cr.record_type = 'deal' and cr.source_deleted_at is null
+  and coalesce(p.is_counted, true)
+  and cr.source_created_at >= s.from_at and cr.source_created_at < s.to_at
+group by 1, 2 order by 1, 2
+```
+
+**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 87 row(s); Martin compares the value with the page in Studio.
+
+**Data prerequisites**
+
+- Country on the deal/ticket or its primary contact (market attribution) (data quality check `market_not_in_catalog`)
+- No test deals in the live pipeline
+- Test/other pipelines reviewed and unticked on Sources (data quality check `pipeline_unreviewed`)
+
+**Documented in** kpis.md paragraph 1 (Leads per day per country and source); api.md, GET /api/v1/reports/intake; data-model (lead metrics 0007d; forms reporting 0008p); decisions.md 12 Oct 2026 (lead forms), 16 Oct 2026 (lead rule, polled apart from counted), 17 Oct 2026 (lead rule live in prod); api.md, GET /api/v1/reports/intake (dealsCreated); decisions.md 24 Nov 2026 (Intake separates call center work from the overall picture, 0009zp)
+
+**Notes**
+
+db/232 (cma.intake_per_day_of, addition 0009zp; the rule unchanged since 74). Dated on creation; a deal created before intake.start_date never appears, even when closed later. Counted whatever its lead flag. Equals intake.lead_deals_created + intake.other_deals_created on every row (233 R1). The Dashboard's deals tile reads intake.lead_deals_created since 0009zp (dashboard.intake.lead_deals_created), clamped as this is.
+
+#### `intake.deals_closed`
+
+/api/v1/reports/intake, returned with the data and not shown on a page · Deals closed (Deals gesloten)
+
+Deals in counted pipelines that reached a closed state, per business date (of the close) and market (every counted deal pipeline, lead or not). Answered by the API as dealsClosed and kept in cma_read.intake_per_day_v for analytics; since addition 0009zp no screen shows it: Reports -> Intake shows Lead deals in and closed and Other deals in.
+
+**Formula as computed**
+
+```
+count(crm_record) where record_type = 'deal', not deleted, counted pipeline, is_closed and closed_at not null, closed_at in the clamped window; dated on closed_at (tenant zone); market as for created.
+```
+
+**Unit** count · **Grain** period, per_day, per_market · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | record_type, source_created_at, closed_at, is_closed, source_deleted_at, pipeline_id, market, contact_source_id | HubSpot | HubSpot webhook (deal/ticket events) -> ingest POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_records(); sweep, reconcile 03:30, backfill | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
+| `cma.connection_pipeline` | is_counted | CMA | pipeline catalog by the source's refresh; is_counted set on Configuration -> Sources | catalog with each read-back; configuration on demand |
+| `cma.crm_contact` | country | HubSpot | HubSpot webhook contact events -> ingest read-back -> cma.ingest_upsert_crm_contacts() (country slots, 0008m) | webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo |
+
+**Filters**
+
+- tenant: explicit tenant under RLS; permission checked in cma.intake_per_day (CMA06)
+- record_type in ('deal','ticket'), not deleted (source_deleted_at is null)
+- counted pipelines only: coalesce(connection_pipeline.is_counted, true) - a pipeline never reviewed counts (pipeline_unreviewed); is_lead does NOT matter here: lead and other pipelines together (since 0009zp split on screen into intake.lead_deals_* and intake.other_deals_created)
+- period clamped at intake.start_date; created events on source_created_at, closed events on closed_at where is_closed
+- test deals: no filter - a prerequisite, not code (kpis.md paragraph 11)
+
+**Time** Every count is dated by its event instant in the TENANT's zone ((at at time zone tenant.timezone)::date) - unlike Inbound/Calls, which date calls in the line's market zone; period = business dates [:from, :to] in the tenant zone, clamped to start at intake.start_date; max 92 days (CMA04); no time-of-day cut for a running period
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `intake.start_date` | 2026-10-01 | 2026-10-01 (catalog default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), polls (minute), sweep (minute) and reconcile (03:30)
+
+**Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0009zp); `intakeTotals` in src/lib/reports.ts; `applyConnections` in src/lib/reports.ts; `getIntake` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (
+  select t.timezone as zone,
+         greatest((:from)::date::timestamp at time zone t.timezone,
+                  cma.setting_of(:tenant_id, 'intake.start_date')::date::timestamp at time zone t.timezone) as from_at,
+         ((:to)::date + 1)::timestamp at time zone t.timezone as to_at
+  from cma.tenant t where t.id = :tenant_id)
+select (cr.closed_at at time zone s.zone)::date as business_date, rm.code as market, count(*)
+from cma.crm_record cr
+left join cma.connection_pipeline p
+  on p.tenant_id = :tenant_id and p.connection_id = cr.connection_id
+ and p.record_type = cr.record_type and p.source_pipeline_id = cr.pipeline_id
+cross join lateral cma.record_market_of(:tenant_id, cr.connection_id, cr.market, cr.contact_source_id) rm
+cross join s
+where cr.tenant_id = :tenant_id and cr.record_type = 'deal' and cr.source_deleted_at is null
+  and coalesce(p.is_counted, true) and cr.is_closed and cr.closed_at is not null
+  and cr.closed_at >= s.from_at and cr.closed_at < s.to_at
+group by 1, 2 order by 1, 2
+```
+
+**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 2 row(s); Martin compares the value with the page in Studio.
+
+**Data prerequisites**
+
+- Country on the deal/ticket or its primary contact (market attribution) (data quality check `market_not_in_catalog`)
+- No test deals in the live pipeline
+- Test/other pipelines reviewed and unticked on Sources (data quality check `pipeline_unreviewed`)
+
+**Documented in** kpis.md paragraph 1 (Leads per day per country and source); api.md, GET /api/v1/reports/intake; data-model (lead metrics 0007d; forms reporting 0008p); decisions.md 12 Oct 2026 (lead forms), 16 Oct 2026 (lead rule, polled apart from counted), 17 Oct 2026 (lead rule live in prod); api.md, GET /api/v1/reports/intake (dealsClosed); decisions.md 24 Nov 2026 (Intake separates call center work from the overall picture, 0009zp)
+
+**Notes**
+
+db/74:1037-1038 (closed branch). 'Closed' is whatever the source marks closed (is_closed from the stage's outcome); won and lost are not separated here (the Funnel report does that). A record closed inside the window but created before intake.start_date still counts as closed (the clamp applies to the event's own instant, closed_at). Since addition 0009zp no screen shows it; intake.lead_deals_closed is the column, and lead_deals_closed <= deals_closed on every row (233 R1).
 
 ### /api/v1/me/day
 

@@ -90,7 +90,7 @@
  */
 import {
   ANSWERED_CLASS, applyConnections, barShares, cellOf, fillHint, filterMarket, fmtAnswerSeconds, fmtBusinessMinutes, fmtCount, fmtPct, groupDisplay,
-  groupInbound, groupSpeedToLead, inboundBar, inboundCalls, inboundFigures, inboundGroupDisplay, intakeMarkets, intakeTotals, isMuted, missedReasonOf,
+  groupInbound, groupSpeedToLead, inboundBar, inboundCalls, inboundFigures, inboundGroupDisplay, INTAKE_FIELDS, intakeMarkets, intakeTotals, isMuted, missedReasonOf,
   nextGroup, nextInboundGroup, openNotCalled, orderChecks, parseGroup, parseInboundGroup, percentileCont, personalDataIn, rangeProblem, REASON_SERIES,
   reasonColumns, recordsOfType, speedFigures, summaryTotals, unansweredPct, WAITING_CLASS,
   barShare, callRecords, callsChange, callsDelta, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, chartGroups, columnMaxima, CONVERSATION_CLASS, countAxis, filterQuery,
@@ -215,7 +215,10 @@ expect("no row carries an owner id or a personal field",
   [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((k) => /^(email|phone|name|firstname|ownerRef|agentRef)$/i.test(k)), [], ["agentRef"]);
 
 // ---- intake and the not-connected states -------------------------------------------------------
-const counts = (date, market, n) => ({ date, market, formSubmissions: n, dealsCreated: n, dealsClosed: 0, ticketsCreated: 1, ticketsClosed: 0,
+// each row: n leads and n lead deals in, three other deals in (an order pipeline's, created and closed in one go), so
+// the deals of every counted pipeline are n + 3 in and 3 closed (addition 0009zp)
+const counts = (date, market, n) => ({ date, market, formSubmissions: n, dealsCreated: n + 3, dealsClosed: 3, leadDealsCreated: n,
+  leadDealsClosed: 0, otherDealsCreated: 3, ticketsCreated: 1, ticketsClosed: 0,
   callsIn: 0, callsOut: 0, taggedCalls: 0, newCustomers: 0, firstOrders: 0, repeatOrders: 0, renewals: 0 });
 const raw = [counts("2026-10-05", "NL", 4), counts("2026-10-05", "unknown", 1), counts("2026-10-06", "GB", 2), counts("2026-10-06", "BE", 0)];
 const none = applyConnections(raw, { telephony: false, commerce: false });
@@ -238,8 +241,18 @@ expect("a missing figure says which source is not there",
 expect("markets in order, unknown last", intakeMarkets(raw), ["BE", "GB", "NL", "unknown"], ["BE", "GB", "NL"]);
 expect("the market filter keeps one market, none keeps all",
   [filterMarket(both, "GB").length, filterMarket(both, "").length], [1, 4], [4, 4]);
-expect("bars against the busiest row (leads, deals and tickets)",
-  barShares(both).map((x) => Math.round(x * 100)), [100, 33, 56, 11], [100, 25, 50, 0]);
+expect("bars against the busiest row (call center work: leads, lead deals and tickets in; other deals left out)",
+  barShares(both).map((x) => Math.round(x * 100)), [100, 33, 56, 11], [100, 50, 67, 33]);
+expect("the columns in two groups: call center work first, then overall",
+  INTAKE_FIELDS, ["formSubmissions", "leadDealsCreated", "leadDealsClosed", "ticketsCreated", "ticketsClosed", "callsIn", "callsOut",
+    "taggedCalls", "otherDealsCreated", "newCustomers", "firstOrders", "repeatOrders", "renewals"],
+  ["formSubmissions", "dealsCreated", "dealsClosed", "ticketsCreated", "ticketsClosed", "callsIn", "callsOut",
+    "taggedCalls", "newCustomers", "firstOrders", "repeatOrders", "renewals"]);
+expect("the total row covers lead deals and other deals; the deals of every pipeline are no column",
+  (() => { const x = intakeTotals(both, { telephony: true, commerce: true }); return [x.leadDealsCreated, x.leadDealsClosed, x.otherDealsCreated, "dealsCreated" in x]; })(),
+  [7, 0, 12, false], [7, 0, 12, true]);
+expect("the market filter keeps the overall group's figures with their row",
+  intakeTotals(filterMarket(both, "GB"), { telephony: true, commerce: true }).otherDealsCreated, 3, 12);
 expect("records of a type from crm_records_per_day",
   recordsOfType([{ recordType: "deal", records: 3 }, { recordType: "ticket", records: 2 }, { recordType: "deal", records: 4 }], "deal"), 7, 9);
 
