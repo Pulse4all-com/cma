@@ -25,6 +25,14 @@
 -- target, and the cutoff moment where the tenant's cutoff is 12:00); E7 and A1 compare
 -- cma.next_business_noon_in in its cutoff form (the tenant's speed_to_lead.next_day_cutoff) with the _of function, which
 -- reads the same setting; S5 names the cutoff form. Before 0009zq the script runs as it did.
+-- Edited after 0009zq (24 November 2026; prod's run of 179 after 234: E6 read "8230 rows now against 8230 before: 3 only
+-- now, 3 only before" for pulse4all-subscriptions; db/diagnose_0009zq_prod.sql, kept in records/0009zq-prod-2026-11-24/,
+-- found under one snapshot six rows of check source_figure_gap, where 214's function sets the market and the copy, which
+-- does not map the object type source_figure, says unknown): E6 leaves out the rows of the object types the current
+-- function's text names and the old copy's does not (today source_figure) and names those types and the check keys on
+-- them, as E5 does since 21 November 2026 (source_figure_gap is verified by 211 and 215); pg_temp.v0009o_diff computes both sides and its four numbers in one statement, so writes
+-- made while the check runs (prod's ingest) cannot split them. Not caused by 0009zq: no function the flash findings
+-- read is one 234 re-creates.
 -- Expected verdict, in dev and in prod: "0009o verified | 179_verify_job_reads: <n> ok, 0 FAIL, <k> skip" (a tenant
 -- without data reads ok on empty sets); provoked (verify.provoke true at the top): every E row reads FAIL (the previous
 -- definition's first row is dropped before the comparison, or the row says the set was empty), every S and A row reads
@@ -756,19 +764,20 @@ begin
   if current_setting('verify.provoke')::boolean then
     v_old := format('select * from (%s) z offset 1', p_old);
   end if;
-  execute format('select count(*) from (%s) a', p_new) into v_n_new;
-  execute format('select count(*) from (%s) a', v_old) into v_n_old;
+  -- one statement (edited after 0009zq): both sides are read once and the four numbers and the order come from the same
+  -- snapshot, so rows written while the check runs (prod's ingest) cannot make the two sides differ
+  execute format('with a as materialized (%s), b as materialized (%s)
+                  select (select count(*) from a), (select count(*) from b),
+                         (select count(*) from (select * from a except all select * from b) x),
+                         (select count(*) from (select * from b except all select * from a) x),
+                         case when %L then (select string_agg(r::text, ''|'' order by r.o) from (select row_number() over () as o, t from a t) r)
+                                           is not distinct from
+                                           (select string_agg(r::text, ''|'' order by r.o) from (select row_number() over () as o, t from b t) r)
+                              else true end', p_new, v_old, p_ordered)
+    into v_n_new, v_n_old, v_only_new, v_only_old, v_same;
   if current_setting('verify.provoke')::boolean and v_n_new = 0 then
     return 'provoked, but the set is empty: nothing to differ (FAIL by the switch)';
   end if;
-  if p_ordered then
-    execute format('select (select string_agg(a::text, ''|'' order by a.o) from (select row_number() over () as o, t from (%s) t) a) is not distinct from
-                           (select string_agg(b::text, ''|'' order by b.o) from (select row_number() over () as o, t from (%s) t) b)', p_new, v_old) into v_same;
-  else
-    v_same := true;
-  end if;
-  execute format('select count(*) from ((%s) except all (%s)) a', p_new, v_old) into v_only_new;
-  execute format('select count(*) from ((%s) except all (%s)) a', v_old, p_new) into v_only_old;
   if v_only_new = 0 and v_only_old = 0 and v_same then
     return null;
   end if;
@@ -937,6 +946,18 @@ declare
                           where position('''' || c.check_key || '''' in v_src) > 0 order by c.check_key collate "C");
   v_left  text := (select string_agg(c.check_key, ', ' order by c.check_key collate "C") from cma.data_quality_catalog() c
                    where position('''' || c.check_key || '''' in v_src) = 0);
+  -- E6 (edited after 0009zq, 24 November 2026): the old copy is 132's and maps a finding's market by its object type; 214
+  -- added the type source_figure (check source_figure_gap, verified by 211 and 215), which the copy reads as unknown. E6
+  -- leaves out the rows of the types the current function names and the copy does not, and names them
+  v_ff_src  text := (select p.prosrc from pg_proc p where p.oid = 'pg_temp.old_flash_findings_compute_of(uuid)'::regprocedure);
+  -- the words the current function's text quotes and the old copy's does not: the object types it maps that the copy
+  -- reads as unknown (today source_figure); only rows of those types are left out
+  v_ff_left text[] := array(select w
+                            from (select distinct (regexp_matches(p.prosrc, '''([a-z_]+)''', 'g'))[1] as w
+                                  from pg_proc p where p.oid = 'cma.flash_findings_compute_of(uuid)'::regprocedure) x
+                            where position('''' || w || '''' in v_ff_src) = 0
+                            order by w collate "C");
+  v_ff_keys text;
 begin
   for t in select te.id, te.slug from cma.tenant te order by te.slug loop
     perform set_config('app.tenant_id', t.id::text, true);
@@ -951,11 +972,12 @@ begin
                        format('select * from cma.speed_to_lead_of(%L, null, null)', t.id),
                        format('select * from cma.speed_to_lead_of(%L, date_trunc(''month'', now()) - interval ''1 month'', date_trunc(''month'', now()))', t.id),
                        format('select * from cma.data_quality_of(%L) where check_key = any (%L::text[])', t.id, v_known),
-                       format('select * from cma.flash_findings_compute_of(%L)', t.id)];
+                       format('select * from cma.flash_findings_compute_of(%L) where coalesce(object_type, '''') <> all (%L::text[])', t.id, v_ff_left)];
     v_sql_old := array[format('select * from pg_temp.old_open_tickets_of(%L)', t.id), format('select * from pg_temp.old_open_leads_of(%L)', t.id),
                        format('select * from pg_temp.old_speed_to_lead_of(%L, null, null)', t.id),
                        format('select * from pg_temp.old_speed_to_lead_of(%L, date_trunc(''month'', now()) - interval ''1 month'', date_trunc(''month'', now()))', t.id),
-                       format('select * from pg_temp.old_data_quality_of(%L)', t.id), format('select * from pg_temp.old_flash_findings_compute_of(%L)', t.id)];
+                       format('select * from pg_temp.old_data_quality_of(%L)', t.id),
+                       format('select * from pg_temp.old_flash_findings_compute_of(%L) where coalesce(object_type, '''') <> all (%L::text[])', t.id, v_ff_left)];
     v_ordered := array[true, true, false, false, false, false];
     for i in 1 .. cardinality(v_checks) loop
       v_ord := v_ord + 1; v_diff := null; v_err := null;
@@ -978,6 +1000,11 @@ begin
         end if;
         perform set_config('role', 'cma_app', true);
         v_diff := pg_temp.v0009o_diff(v_sql_new[i], v_sql_old[i], v_ordered[i]);
+        -- E6: the check keys on the rows it leaves out, named in its row
+        if i = 6 then
+          select string_agg(distinct f.check_key collate "C", ', ' order by f.check_key collate "C") into v_ff_keys
+          from cma.flash_findings_compute_of(t.id) f where f.object_type = any (v_ff_left);
+        end if;
         perform set_config('role', 'cma_owner', true);
       exception when others then
         perform set_config('role', 'cma_owner', true);
@@ -988,6 +1015,8 @@ begin
         coalesce(v_err, v_diff, 'the same rows as the previous definition' || case when v_ordered[i] then ', in the same order' else '' end
                  || case when i in (3, 4) and position('noon_at_12' in v_sql_new[i]) > 0 then ', on the columns 0009zq keeps' else '' end)
         || case when i = 5 then format(' (on the %s check keys the old copy knows; left out, added since: %s)', cardinality(v_known), coalesce(v_left, 'none'))
+                when i = 6 then format(' (left out, object types the current function maps and the old copy does not: %s; check keys on those rows here: %s)',
+                                       coalesce(nullif(array_to_string(v_ff_left, ', '), ''), 'none'), coalesce(v_ff_keys, 'none'))
                 else '' end);
     end loop;
 

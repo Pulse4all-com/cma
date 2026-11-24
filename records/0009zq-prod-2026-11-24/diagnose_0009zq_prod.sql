@@ -1,5 +1,5 @@
 -- =============================================================================================
--- diagnose_0009zq_prod.sql: why 179 E6 and 191 E4 read FAIL in prod after addition 0009zq (234), and in no other
+-- records/0009zq-prod-2026-11-24/diagnose_0009zq_prod.sql (written in db/, kept here as evidence): why 179 E6 and 191 E4 read FAIL in prod after addition 0009zq (234), and in no other
 -- database (24 November 2026; #316). A diagnostic, not a migration and not a verify: it changes nothing.
 -- =============================================================================================
 -- One transaction at REPEATABLE READ, rolled back at the end: every statement in it reads the same snapshot of the data.
