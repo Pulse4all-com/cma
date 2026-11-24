@@ -898,6 +898,8 @@ begin
                                                     and cma.has_permission(u.id, 'reports.view') order by u.id limit 1), ''), true);
       if current_setting('app.user_id') = '' then
         v_txt := v_txt || 'tenant: no reader, skipped; ';
+        -- the fixture's own tenants always have their analyst: skipping one of them is a failure
+        v_ok := v_ok and d not in (v_t1::text, v_t2::text);
         continue;
       end if;
       if d in (v_t1::text, v_t2::text) then
