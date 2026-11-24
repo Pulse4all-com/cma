@@ -28,7 +28,8 @@
 --   F1  a forced facts refresh stores exactly the outcomes 210's whole computation (kept below) gives
 --   F2  new events on three subscriptions (a renewal, a failed renewal then a renewal, a new cycle) and a refresh twenty
 --       minutes later: incremental (outcomes_whole false, its scope the subscriptions written), the stored outcomes equal
---       210's whole computation row for row
+--       210's whole computation row for row. F2 to F4 move the state's read mark to the instant before their own writes,
+--       so what the database received before the script (a fresh load, a live poll's chargeback) never decides the path
 --   F3  a subscription's row written (its instrument type): in the scope, equal again
 --   F4  a billing event written since: the next refresh computes the whole set (outcomes_whole true), equal again
 --   L1  cma.speed_to_lead_of equals 234's definition (kept below) row for row for every active tenant, the whole history
@@ -535,12 +536,18 @@ begin
       where x.ctid = (select y.ctid from cma.renewal_outcome y where y.tenant_id = v_t order by y.connection_id, y.subscription_source_id collate "C", y.renewal_key collate "C" limit 1);
     end if;
     d0 := pg_temp.v9zr_outcome_diff(v_t);
-    -- F2: three subscriptions get new events, written now
+    -- Each step's mark (0009zr's 237 fix, 25 November 2026): what was written before this script ran must not decide the
+    -- path. The state's read mark is moved so that the next refresh reads from this instant (outcomes_read_at less its
+    -- 10 minutes), and the step's own rows are written after it; a chargeback the database received minutes before (a
+    -- fresh load, a live poll) would otherwise rightly make the refresh whole and F2 and F3 read FAIL
+    -- F2: three subscriptions get new events, written after the mark
+    update cma.subscription_take_state x set outcomes_read_at = clock_timestamp() + interval '10 minutes' where x.tenant_id = v_t;
     for v_sub in select x.connection_id, x.source_id, row_number() over (order by x.connection_id, x.source_id collate "C") as k
                  from cma.subscription x where x.tenant_id = v_t and x.source_deleted_at is null
                  order by x.connection_id, x.source_id collate "C" limit 3 loop
-      insert into cma.subscription_event (tenant_id, connection_id, source_system, source_id, subscription_source_id, event_type, occurred_at, cycle_index, error_code)
-      select v_t, v_sub.connection_id, 'v9zr', 'v9zr-' || v_sub.k || '-' || e.n, v_sub.source_id, e.kind, now() - make_interval(mins => 60 - e.n), 9000 + v_sub.k::integer, e.err
+      insert into cma.subscription_event (tenant_id, connection_id, source_system, source_id, subscription_source_id, event_type, occurred_at, cycle_index, error_code, synced_at)
+      select v_t, v_sub.connection_id, 'v9zr', 'v9zr-' || v_sub.k || '-' || e.n, v_sub.source_id, e.kind, now() - make_interval(mins => 60 - e.n), 9000 + v_sub.k::integer, e.err,
+             clock_timestamp()
       from (values (1, case when v_sub.k = 2 then 'renew_failed' else 'renewed' end, case when v_sub.k = 2 then 'card_declined' end),
                    (2, 'renewed', null::text)) e(n, kind, err)
       where v_sub.k = 2 or e.n = 1;
@@ -548,15 +555,17 @@ begin
     end loop;
     r1 := cma.subscription_facts_refresh_of(v_t, false, v_at + interval '20 minutes');
     d1 := pg_temp.v9zr_outcome_diff(v_t);
-    -- F3: a fourth subscription's row written (its instrument type)
-    update cma.subscription x set payment_instrument_type = case when x.payment_instrument_type = 'card' then 'paypal' else 'card' end, synced_at = now()
+    -- F3: a fourth subscription's row written (its instrument type), after the mark
+    update cma.subscription_take_state x set outcomes_read_at = clock_timestamp() + interval '10 minutes' where x.tenant_id = v_t;
+    update cma.subscription x set payment_instrument_type = case when x.payment_instrument_type = 'card' then 'paypal' else 'card' end, synced_at = clock_timestamp()
     where x.id = (select y.id from cma.subscription y where y.tenant_id = v_t and y.source_deleted_at is null
                   order by y.connection_id, y.source_id collate "C" offset 3 limit 1);
     r2 := cma.subscription_facts_refresh_of(v_t, false, v_at + interval '40 minutes');
     d2 := pg_temp.v9zr_outcome_diff(v_t);
     -- F4: a billing event written: the whole set next time (56 minutes: before the hourly whole computation is due)
-    insert into cma.billing_event (tenant_id, connection_id, source_system, source_id, kind, occurred_at)
-    select v_t, x.connection_id, 'v9zr', 'v9zr-billing-1', 'chargeback', now()
+    update cma.subscription_take_state x set outcomes_read_at = clock_timestamp() + interval '10 minutes' where x.tenant_id = v_t;
+    insert into cma.billing_event (tenant_id, connection_id, source_system, source_id, kind, occurred_at, synced_at)
+    select v_t, x.connection_id, 'v9zr', 'v9zr-billing-1', 'chargeback', now(), clock_timestamp()
     from cma.subscription x where x.tenant_id = v_t order by x.connection_id, x.source_id collate "C" limit 1;
     r3 := cma.subscription_facts_refresh_of(v_t, false, v_at + interval '56 minutes');
     d3 := pg_temp.v9zr_outcome_diff(v_t);

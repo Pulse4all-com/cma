@@ -42,7 +42,7 @@ DROP FUNCTION
  G4 nothing to read                               | FAIL                 | FAIL G4: provoked; follow-up nothing_to_read, data quality go, Flash go
  F1 forced refresh equals 210                     | FAIL                 | FAIL F1: provoked; 1 rows differ, 578015 outcome rows
  F2 new events: incremental, equal                | FAIL                 | FAIL F2: provoked; 1 rows differ, whole false, scope 3 subscriptions (3 written)
- F3 a subscription row: in scope, equal           | FAIL                 | FAIL F3: provoked; 1 rows differ, whole false, scope 4
+ F3 a subscription row: in scope, equal           | FAIL                 | FAIL F3: provoked; 1 rows differ, whole false, scope 1
  F4 a billing event: whole, equal                 | FAIL                 | FAIL F4: provoked; 0 rows differ, whole true
  L1 speed to lead equals 234                      | FAIL                 | FAIL L1: provoked; 1 rows differ over 6882 lead deals
  L2 the open leads equal 234                      | FAIL                 | FAIL L2: provoked; 1 rows differ over 1380 open leads
