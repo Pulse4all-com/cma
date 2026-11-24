@@ -734,7 +734,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Status | Decided |
 | Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Assets → Pledge lists: the download is exactly the current file" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
 | Used by | Assets → Pledge lists; the checks of that page (`unknown_loan`, `no_model_values`, `no_first_shipped`, `no_language`, `customer_ref_invalid`, `no_start_date`) |
-| As built today | `cma.pledge_page()`, `cma.pledge_finding_rows(check, limit)` and `cma.pledge_file(date)` (`168`), read by `web/src/app/reports/pledge-lists/page.tsx` and the two API routes. Matches the definition |
+| As built today | `cma.pledge_page()`, `cma.pledge_finding_rows(check, limit)` and `cma.pledge_file(date)` (`168`), read by `web/src/app/(shell)/reports/pledge-lists/page.tsx` and the two API routes. Matches the definition |
 
 ### Loan
 
@@ -3687,7 +3687,7 @@ Decided by Martin on 24 November 2026 (addition 0009zp), applying Kira's rule in
 | Status | Decided |
 | Decided | 24 November 2026 (Martin); docs/decisions.md, 24 Nov 2026, "Definitions: Call center work and Overall are the two groups of Reports → Intake" (this PR, addition 0009zp) |
 | Used by | `intake.form_submissions`, `intake.lead_deals_created`, `intake.lead_deals_closed`, `intake.tickets_created`, `intake.tickets_closed`, `intake.calls_in`, `intake.calls_out`, `intake.tagged_calls`, `intake.volume_bar`; Reports → Intake |
-| As built today | `web/src/app/reports/intake/page.tsx`, copy `intake.groupWork` and `hints.groupWork`. Matches the definition |
+| As built today | `web/src/app/(shell)/reports/intake/page.tsx`, copy `intake.groupWork` and `hints.groupWork`. Matches the definition |
 
 ### Overall (Intake group)
 
@@ -3706,7 +3706,7 @@ Decided by Martin on 24 November 2026 (addition 0009zp), applying Kira's rule in
 | Status | Decided |
 | Decided | 24 November 2026 (Martin); docs/decisions.md, 24 Nov 2026, "Definitions: Call center work and Overall are the two groups of Reports → Intake" (this PR, addition 0009zp) |
 | Used by | `intake.other_deals_created`, `intake.new_customers`, `intake.first_orders`, `intake.repeat_orders`, `intake.renewals`, `dashboard.intake.first_orders`; Reports → Intake, Dashboard (Intake row) |
-| As built today | `web/src/app/reports/intake/page.tsx`, `web/src/components/IntakeRow.tsx`; copy keys as above. Matches the definition |
+| As built today | `web/src/app/(shell)/reports/intake/page.tsx`, `web/src/components/IntakeRow.tsx`; copy keys as above. Matches the definition |
 
 ## Retired words
 
@@ -3761,7 +3761,7 @@ Where the code or the catalog says something else than this file: every retired 
 | W13 | `web/src/lib/copy.ts` | `attempts.noteCrm` | Attempts are outbound calls logged in the customer records | Attempts come from the telephony system only (R1) |
 | W17 | `web/src/lib/copy.ts` | `speedToLead.intro` "first outbound call"; Dutch `speedToLead.intro`, `speedToLead.minutesNote` "belpoging"; Dutch `attempts.speed`, `attempts.colMedianSpeed`, `attempts.speedTitle`, `attempts.speedCol`, `hints.atOutcomes` "speed to lead" | The first outbound (CRM) call; two Dutch labels for one term | The first attempt; one Dutch label, "Snelheid tot lead", and one Dutch word for attempt, "poging" |
 | W18 | `web/src/lib/copy.ts` | `email.conversation`, `email.opened` "Conversations opened" ("Gesprekken geopend"), `email.waitingIntro`, `emailPerAgent.intro`, hints `emailOpened`, `emailOpenedCol`, `emailClosedCol`, `emailWait*`, `emailAgentReplies`, `emailAgentClosed` | Conversation for an inbox thread | Another word for the email thread: Conversation is a call term (to settle when Email is defined) |
-| W19 | `web/src/lib/copy.ts`; `web/src/app/api/v1/reports/first-orders/route.ts`, `callbacks-kept/route.ts`; `web/src/app/reports/orders-per-person/page.tsx` | `reports.noTelephony` "No telephony connected", `noShop`, `noEmail`, `noOrders`, `noTelephonyHint`, `noShopHint`, `noFormsHint`; the API field `connected` of First orders, Callbacks kept and Orders per person | Connected for a source that is set up | Another word, to choose in the definitions brief (for example "set up"): Connected is a call term. Customers → Reviews already says "set up" (`isSetUp`, `is_set_up`; Review terms) |
+| W19 | `web/src/lib/copy.ts`; `web/src/app/api/v1/reports/first-orders/route.ts`, `callbacks-kept/route.ts`; `web/src/app/(shell)/reports/orders-per-person/page.tsx` | `reports.noTelephony` "No telephony connected", `noShop`, `noEmail`, `noOrders`, `noTelephonyHint`, `noShopHint`, `noFormsHint`; the API field `connected` of First orders, Callbacks kept and Orders per person | Connected for a source that is set up | Another word, to choose in the definitions brief (for example "set up"): Connected is a call term. Customers → Reviews already says "set up" (`isSetUp`, `is_set_up`; Review terms) |
 | W20 | `web/src/lib/copy.ts`; `web/src/lib/csv.ts` | `funnel.colReachedWon`, `funnelFile.reachedWon`, `hints.fnColReachedWon` ("Reached won", "Gewonnen bereikt"); API `reachedWon` | Reached for a deal won now | A word that is not retired (for example "Won now") |
 | W21 | `web/src/lib/data/types.ts` | API fields `unanswered`, `unansweredByReason` (Inbound) | 0008i's words (the Calls, Calls per agent and Attempts per deal fields took the terms' keys in addition 0008zc) | The term's camelCase key (`missedInbound`) |
 | W25 | `web/src/components/configuration/SourceConfig.tsx` (Configuration → Sources, Lines); the Data quality page | The number of counted lines | Not shown: Lines lists each line with its Counted switch, and a line Aircall adds arrives counted | Data quality or Configuration → Sources shows the number of counted lines, so the list can be compared with the 46-number filter in Aircall Analytics (Call, Scope) after a line is added in Aircall |

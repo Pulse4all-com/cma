@@ -9344,7 +9344,7 @@ count of open lead deals not called = deals of counted lead pipelines (connectio
 
 **Who may see it** `reports.view` or `performance.team` or `monitoring.live`
 
-**Refresh** follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible (LiveRefresh); 'Updated … ago' under the title says the snapshot's age
+**Refresh** follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves; 'Updated … ago' under the title says the snapshot's age
 
 **Computed in** `cma.follow_up_page` (0008s); `cma.refresh_follow_up_of` (0008s); `cma.open_leads_of` (0008o); `cma.speed_to_lead_of` (0007d); `cma.lead_deals_of` (0007d); `cma.lead_calls_of` (0008zc); `summarise` in src/lib/follow-up.ts; `default` in src/app/reports/follow-up/page.tsx
 
@@ -9409,7 +9409,7 @@ count of the not-called open set (see follow_up.leads_open_not_called) where pas
 
 **Who may see it** `reports.view` or `performance.team` or `monitoring.live`
 
-**Refresh** follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible
+**Refresh** follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves
 
 **Computed in** `cma.follow_up_page` (0008s); `cma.open_leads_of` (0008o); `cma.speed_to_lead_of` (0007d); `cma.business_seconds_of` (0007d); `summarise` in src/lib/follow-up.ts
 
@@ -9474,7 +9474,7 @@ count of open tickets (record_type='ticket', source_deleted_at null, not coalesc
 
 **Who may see it** `reports.view` or `performance.team` or `monitoring.live`
 
-**Refresh** follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible
+**Refresh** follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves
 
 **Computed in** `cma.follow_up_page` (0008s); `cma.open_tickets_of` (0008o); `cma.business_seconds_of` (0007d); `cma.record_market_of` (0007d); `summarise` in src/lib/follow-up.ts
 
@@ -9538,7 +9538,7 @@ count of the open ticket set (see follow_up.tickets_at_risk) where open_s is not
 
 **Who may see it** `reports.view` or `performance.team` or `monitoring.live`
 
-**Refresh** follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible
+**Refresh** follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves
 
 **Computed in** `cma.follow_up_page` (0008s); `cma.open_tickets_of` (0008o); `cma.business_seconds_of` (0007d); `summarise` in src/lib/follow-up.ts
 
@@ -9593,7 +9593,7 @@ count of the open ticket set where owner_ref is null (no owner id stored at the 
 
 **Who may see it** `reports.view` or `performance.team` or `monitoring.live`
 
-**Refresh** follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible
+**Refresh** follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves
 
 **Computed in** `cma.follow_up_page` (0008s); `cma.open_tickets_of` (0008o); `cma.follow_up_summary_of` (0008o); `summarise` in src/lib/follow-up.ts
 
@@ -9649,7 +9649,7 @@ count of open tasks (crm_task not deleted; status not done by the catalog — a 
 
 **Who may see it** `reports.view` or `performance.team` or `monitoring.live`
 
-**Refresh** follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible
+**Refresh** follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves
 
 **Computed in** `cma.follow_up_page` (0008s); `cma.open_tasks_of` (0008o); `summarise` in src/lib/follow-up.ts
 
@@ -9704,7 +9704,7 @@ count of the open task set (see follow_up.tasks_overdue) where (due_at at time z
 
 **Who may see it** `reports.view` or `performance.team` or `monitoring.live`
 
-**Refresh** follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible
+**Refresh** follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves
 
 **Computed in** `cma.follow_up_page` (0008s); `cma.open_tasks_of` (0008o); `summarise` in src/lib/follow-up.ts
 
@@ -9759,7 +9759,7 @@ count of the open task set where owner_ref is not null AND owner_user_id is null
 
 **Who may see it** `reports.view` or `performance.team` or `monitoring.live`
 
-**Refresh** follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible
+**Refresh** follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves
 
 **Computed in** `cma.follow_up_page` (0008s); `cma.open_tasks_of` (0008o); `cma.owner_user_of` (0008o); `summarise` in src/lib/follow-up.ts
 
