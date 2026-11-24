@@ -1,0 +1,52 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ 500
+(1 row)
+
+ set_config 
+------------
+ 50
+(1 row)
+
+psql:197_verify_sync_run_reads.sql:60: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                              check_name                                              | result |                                                                                                                                                                                                                                                                                                  detail                                                                                                                                                                                                                                                                                                  
+------------------------------------------------------------------------------------------------------+--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 the addition 0009x is recorded once, after 0009w                                                  | PASS   | 0009x 1 time(s), after 0009w true
+ S2 the hours, their trigger function, triggers and view; the three indexes valid                     | PASS   | as designed
+ S3 the two reads: caller's rights, stable, the application's; 50 rows said                           | PASS   | as designed
+ H1 cma.sync_run_hour equals cma.sync_run grouped by tenant, job, connection and UTC hour             | PASS   | 12625 hours, 360016 runs
+ E pulse4all-invest                                                                                   | skip   | no active person holds tenant.configure: nothing compared
+ E1 pulse4all-subscriptions: cma.flash_sources_of equals 148's                                        | PASS   | assets 2026-11-24T16:29:23.141926+00:00; commerce none; crm 2026-11-24T16:29:43.141926+00:00; reviews 2026-11-24T16:30:03.141926+00:00; subscriptions 2026-11-24T16:29:43.141926+00:00
+ E2 pulse4all-subscriptions: cma.system_health_runs() equals 132's, row for row, in order             | PASS   | 24 rows; runs/failed in 24 hours: assets_poll 572/0, email_poll 3273/0, flash_snapshot 3/1, forms_poll 4418/98, reconcile 327/16, reconcile 5/0, reconcile 3/0, reconcile 4/0, refresh_active_customers 1/0, refresh_data_quality 2/0, refresh_follow_up 2/0, reviews_poll 573/0, subscriptions_poll 185/0, subscriptions_poll 192/0, subscriptions_poll 191/0, subscriptions_poll 192/0, subscriptions_poll 189/0, subscriptions_poll 191/0, subscriptions_poll 192/0, subscriptions_poll 190/0, subscriptions_poll 186/0, subscriptions_poll 189/0, subscriptions_poll 189/0, subscriptions_poll 190/0
+ T1 pulse4all-subscriptions: cma.flash_sources_of within its budget                                   | PASS   | 13.4 ms (best of 3, after six calls) against 50 ms
+ T2 pulse4all-subscriptions: cma.system_health_runs() within its budget                               | PASS   | 2.6 ms (best of 3, after six calls) against 500 ms
+ B1 the edges: the hours, the sources and the health runs equal the runs and the previous definitions | PASS   | email_poll crm 3/1 ok true bad true, forms_poll crm 4/2 ok true bad true, link_calls crm 2/1 ok true bad true, reconcile crm 0/0 ok true bad true, refresh_data_quality 1/1 ok true bad true, refresh_follow_up 2/1 ok true bad true, subscriptions_poll shop 2/0 ok true bad false
+ B2 the throwaway tenant and its rows are gone                                                        | PASS   | 0 tenant(s) verify-0009x
+ verdict                                                                                              | PASS   | 197_verify_sync_run_reads: 10 PASS, 0 FAIL, 1 skip
+(12 rows)
+
+DROP TABLE
+RESET

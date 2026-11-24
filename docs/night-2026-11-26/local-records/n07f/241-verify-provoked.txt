@@ -13,13 +13,12 @@ CREATE FUNCTION
 DO
 DROP FUNCTION
 DROP FUNCTION
-                       check_name                        |        result        |                                                                           detail                                                                            
----------------------------------------------------------+----------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------
- R1 structure                                            | FAIL                 | FAIL R1: provoked; order, index, purge definer, grants, settings 90/365, refusals CMA04/CMA04
- A1 the ingest's source writes out, config and people in | FAIL                 | FAIL A1: provoked; ingest to crm_contact 0 rows, ingest to market 1, a person to crm_contact 1
- F1 the follow-up sees a processed ingest event          | FAIL                 | FAIL F1: provoked; before: unchanged, after an event: computed true
- P1 the purge keeps what it must and the hourly counts   | FAIL                 | FAIL P1: provoked; deleted 1000 (more true), left 24: 20 recent, 3 failed of 200 days, 1 of its own stream; hourly runs 61 before, 61 after; a person CMA06
- verdict                                                 | PROVOKED, NOT A PASS | 241_verify_audit_and_retention: 0 OK, 4 FAIL
-(5 rows)
+                                   check_name                                   |        result        |                                                                           detail                                                                           
+--------------------------------------------------------------------------------+----------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------
+ R1 structure                                                                   | FAIL                 | FAIL R1: provoked; order, purge definer, grants, settings 90/365, refusals CMA04/CMA04
+ A1 the ingest's writes to the listed mirrors out; inputs, config and people in | FAIL                 | FAIL A1: provoked; ingest to subscription_event 0 rows, ingest to crm_contact 1, ingest to market 1, a person labelled ingest to subscription_event 1
+ P1 the purge keeps what it must and the hourly counts                          | FAIL                 | FAIL P1: provoked; deleted 37 (more false), left 24: 20 recent, 3 failed of 200 days, 1 of its own stream; hourly runs 61 before, 61 after; a person CMA06
+ verdict                                                                        | PROVOKED, NOT A PASS | 241_verify_audit_and_retention: 0 OK, 3 FAIL
+(4 rows)
 
 RESET

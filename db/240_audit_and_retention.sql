@@ -6,17 +6,9 @@
 -- after 238_email_not_responding_speed.sql (0009zs). Rerunnable, forward-only, in one transaction with a lock timeout.
 -- PROD WAITS FOR YORDI'S AGREEMENT on D12 (docs/open-decisions.md, the heads-up; the morning runbook says so): dev may run
 -- it at once. Run as your own IAM login: dev first, then 241_verify_audit_and_retention.sql there (normal and provoked),
--- then the verifies that read what this re-creates, each still PASS and none edited: 73, 81, 151, 155, 179, 191 and 237
--- (cma.refresh_follow_up), 197 (cma.sync_run_hour_count and the hourly counts), 77 and 195 (the audit trigger and its
--- bookkeeping). Then the ingest's image with the reconcile's purge (ingest/src/jobs/reconcile.mjs) and the first purge
+-- then the verifies that read what this re-creates, each still PASS and none edited: 77, 107, 113, 169 and 195 (they read
+-- cma.audit_row: the audit trigger and its bookkeeping), 197 (cma.sync_run_hour_count and the hourly counts). Then the ingest's image with the reconcile's purge (ingest/src/jobs/reconcile.mjs) and the first purge
 -- (the morning runbook: a Terminal step outside office hours).
---
--- cma.ingest_event, a busy table (CLAUDE.md, Performance): one index this script requires, built concurrently from the
--- Terminal first (set role cma_owner, lock_timeout '5s' and statement_timeout '10min' as separate commands, then
--- pg_index.indisvalid checked; an f: drop index concurrently and build it again). The script refuses to run until it
--- exists and is valid:
---   create index concurrently if not exists ingest_event_processed_idx on cma.ingest_event (tenant_id, processed_at);
--- It gives the follow-up refresh the tenant's latest processed event in one index read (below, 3).
 --
 -- Why (Martin, 24 November 2026; brief N07, decisions D12 and D13, verbatim): "D12 Writes of the ingest to the mirrored
 -- source tables (the crm_, commerce_, subscription and telephony mirrors and their kind, listed in the PR) are no longer
@@ -29,24 +21,25 @@
 -- a day (crm_contact alone 210,341 updates); sync_run 487 MB.
 --
 -- What it changes
---   cma.audit_source_mirror_tables()  the mirrored source tables D12 names: crm_record, crm_record_stage, crm_contact,
---                crm_contact_ref, crm_association, crm_call, crm_task, commerce_customer, commerce_order,
---                commerce_order_line, subscription, subscription_event, subscription_line, billing_event, telephony_call,
---                telephony_call_tag, email_thread, email_message, email_thread_event (night default N07-6, to confirm).
---                Not in it: every configuration table (connection_*, market, telephony_number, telephony_tag, settings),
---                the CMA's own derived rows (call_link, subscription_change) and the asset register
+--   cma.audit_source_mirror_tables()  the mirrored source tables of D12 whose ingest writes leave no audit row:
+--                crm_record_stage, commerce_order_line, subscription, subscription_event, subscription_line, billing_event,
+--                email_thread, email_message, email_thread_event. Night default N07-6 (to confirm): D12's other mirrors
+--                (crm_record, crm_contact, crm_contact_ref, crm_association, crm_call, crm_task, commerce_customer,
+--                commerce_order, telephony_call, telephony_call_tag) are the follow-up's inputs (cma.follow_up_input_tables()),
+--                whose change check reads their audit rows, and the email poll writes crm_contact and crm_association with
+--                no ingest event; they stay audited until the follow-up reads write-time markers (NIGHT_NOTES, remainder 1).
+--                Not in it either: every configuration table, the CMA's own derived rows (call_link, subscription_change),
+--                the asset register
 --   cma.audit_row (based on 168) returns before writing when the table is one of them and the writer is the ingest (its
 --                actor label ingest:<adapter> and a system user); everything else as before
---   cma.refresh_follow_up (based on 178) its "nothing changed" check also asks the tenant's latest processed ingest
---                event (ingest_event_processed_idx): the ingest's writes no longer leave audit rows to find; its
---                plan_cache_mode repeated
 --   settings     sync_run.retention_days (integer, 90; 7 to 3650): how long a succeeded run row is kept;
 --                sync_run.failed_retention_days (integer, 365; 30 to 3650): a failed one (D13), checked by
 --                cma.check_sync_run_setting()
 --   cma.sync_run_hour_count (based on 196) leaves the hourly counts as they are for a delete made by the purge
---   cma.sync_run_purge(integer) SECURITY DEFINER, owned by cma_owner, search path pinned: for the current tenant and a
---                system user only (the ingest's reconcile), deletes at most the given number of finished run rows past
---                their retention, oldest first, pair by pair (job and connection, read from cma.sync_run_hour), never a
+--   cma.sync_run_purge(integer, text, uuid) SECURITY DEFINER, owned by cma_owner, search path pinned: for the current
+--                tenant and a system user only (the ingest's reconcile), deletes at most the given number of finished run
+--                rows past their retention, oldest first, pair by pair (job and connection, read from cma.sync_run_hour;
+--                or the one pair the two optional arguments name, as 241 does), never a
 --                pair's 20 latest runs and never the latest succeeded run of a job, connection and stream (Sources' last
 --                read and the latest run's figures read them). Answers {deleted, more}. The caller sets its lock and
 --                statement timeouts per batch
@@ -56,13 +49,6 @@ begin;
 set local lock_timeout = '5s';
 set role cma_owner;
 
-do $$
-begin
-  if not exists (select 1 from pg_index i where i.indexrelid = to_regclass('cma.ingest_event_processed_idx') and i.indisvalid) then
-    raise exception 'the index ingest_event_processed_idx must exist and be valid first: create it concurrently from the Terminal (this script''s header)';
-  end if;
-end
-$$;
 
 -- ---------------------------------------------------------------------------------------------
 -- 1. D12: the mirrored source tables, and the audit trigger that leaves the ingest's writes to them out
@@ -71,10 +57,10 @@ create or replace function cma.audit_source_mirror_tables()
 returns text[]
 language sql immutable
 as $$
-  select array['crm_record', 'crm_record_stage', 'crm_contact', 'crm_contact_ref', 'crm_association', 'crm_call', 'crm_task',
-               'commerce_customer', 'commerce_order', 'commerce_order_line',
+  -- the mirrors D12 names, less the follow-up's inputs (cma.follow_up_input_tables()): its change check reads their
+  -- audit rows, and the email poll writes crm_contact and crm_association without an ingest event (night default N07-6)
+  select array['crm_record_stage', 'commerce_order_line',
                'subscription', 'subscription_event', 'subscription_line', 'billing_event',
-               'telephony_call', 'telephony_call_tag',
                'email_thread', 'email_message', 'email_thread_event']
 $$;
 
@@ -91,7 +77,7 @@ begin
   -- change already. A person's write, a job's, and every write to a configuration table stay audited
   if tg_table_schema = 'cma' and tg_table_name = any (cma.audit_source_mirror_tables())
      and coalesce(cma.current_actor_label(), '') like 'ingest:%'
-     and (select u.kind from cma.app_user u where u.id = cma.current_user_id()) = 'system' then
+     and (select u.kind from cma.app_user u where u.tenant_id = cma.current_tenant_id() and u.id = cma.current_user_id()) = 'system' then
     return null;
   end if;
   if tg_op = 'DELETE' and tg_table_schema = 'cma'
@@ -198,52 +184,6 @@ end
 $$;
 
 
--- based on: 178_job_reads.sql
-create or replace function cma.refresh_follow_up()
-returns jsonb
-language plpgsql
-as $$
-declare
-  v_tenant  uuid := cma.current_tenant_id();
-  v_t0      timestamptz := clock_timestamp();
-  mk        cma.follow_up_marker;
-  v_leads   integer;
-  v_tickets integer;
-  v_tasks   integer;
-begin
-  perform cma.assert_permission('follow_up.refresh');
-  select * into mk from cma.follow_up_marker x where x.tenant_id = v_tenant;
-  if mk.tenant_id is not null
-     and now() < mk.next_change_at
-     and now() < mk.computed_at + make_interval(mins => cma.setting_of(v_tenant, 'follow_up.recompute_minutes')::integer)
-     and exists (select 1 from cma.follow_up_snapshot s where s.tenant_id = v_tenant)
-     and (select count(*)::integer from cma.schema_migration) = mk.migrations
-     -- min() over the time index (audit_log_time_idx), a bounded range, never exists(): with no row, exists() may be
-     -- planned on another index and read the tenant's whole history (CLAUDE.md, Performance, N06)
-     and (select min(a.changed_at) from cma.audit_log a
-          where a.tenant_id = v_tenant and a.changed_at > mk.inputs_checked_at - interval '2 minutes'
-            and a.table_name = any (cma.follow_up_input_tables())) is null
-     -- 0009zt (D12): the ingest's writes are no longer audited: an event processed since (ingest_event_processed_idx,
-     -- the tenant's latest processed event, one index read) means a source table changed
-     and coalesce((select max(e.processed_at) from cma.ingest_event e where e.tenant_id = v_tenant),
-                   '-infinity'::timestamptz) <= mk.inputs_checked_at - interval '2 minutes' then
-    if not pg_try_advisory_xact_lock(cma.follow_up_lock_key(v_tenant)) then
-      return jsonb_build_object('refreshed', false, 'reason', 'running');
-    end if;
-    update cma.follow_up_snapshot s set computed_at = now() where s.tenant_id = v_tenant;
-    update cma.follow_up_marker x set inputs_checked_at = v_t0 where x.tenant_id = v_tenant;
-    select count(*) filter (where i.kind = 'lead'), count(*) filter (where i.kind = 'ticket'), count(*) filter (where i.kind = 'task')
-      into v_leads, v_tickets, v_tasks
-    from cma.follow_up_item i where i.tenant_id = v_tenant;
-    return jsonb_build_object('refreshed', true, 'computed', false, 'reason', 'unchanged', 'leads', v_leads, 'tickets', v_tickets,
-                              'tasks', v_tasks, 'rows', v_leads + v_tickets + v_tasks, 'written', 0, 'unchanged', v_leads + v_tickets + v_tasks,
-                              'duration_ms', floor(extract(epoch from clock_timestamp() - v_t0) * 1000)::integer, 'computed_at', now());
-  end if;
-  return cma.refresh_follow_up_of(v_tenant);
-end
-$$;
-
-alter function cma.refresh_follow_up() set plan_cache_mode = force_custom_plan;
 
 -- ---------------------------------------------------------------------------------------------
 -- 2. D13: the retention's settings, their ranges, and the purge
@@ -263,18 +203,19 @@ language plpgsql
 as $$
 begin
   if new.key = 'sync_run.retention_days'
-     and (new.value !~ '^[0-9]{1,4}$' or new.value::integer not between 7 and 3650) then
+     and (case when new.value !~ '^[0-9]{1,4}$' then true else new.value::integer not between 7 and 3650 end) then
     raise exception 'Setting % takes a whole number of days from 7 to 3650', new.key using errcode = 'CMA04';
   end if;
   if new.key = 'sync_run.failed_retention_days'
-     and (new.value !~ '^[0-9]{1,4}$' or new.value::integer not between 30 and 3650) then
+     and (case when new.value !~ '^[0-9]{1,4}$' then true else new.value::integer not between 30 and 3650 end) then
     raise exception 'Setting % takes a whole number of days from 30 to 3650', new.key using errcode = 'CMA04';
   end if;
   return new;
 end
 $$;
 
-create or replace function cma.sync_run_purge(p_batch integer default 2000)
+drop function if exists cma.sync_run_purge(integer);
+create or replace function cma.sync_run_purge(p_batch integer default 2000, p_job text default null, p_connection uuid default null)
 returns jsonb
 language plpgsql
 volatile
@@ -300,41 +241,64 @@ begin
   end if;
   v_days := cma.setting_of(v_tenant, 'sync_run.retention_days')::integer;
   v_fdays := cma.setting_of(v_tenant, 'sync_run.failed_retention_days')::integer;
-  -- the hourly counts stay as they are for these deletes (cma.sync_run_hour_count), for this transaction only
+  -- the hourly counts stay as they are for these deletes (cma.sync_run_hour_count); the flag is set back before the
+  -- function returns, so no later delete of the caller's transaction is left out of the counts
   perform set_config('cma.sync_run_purge', 'on', true);
+  -- pair by pair (job and connection, from the hourly counts), or the one pair asked for (the verify's)
   for p in
     select distinct h.job, h.connection_id from cma.sync_run_hour h
     where h.tenant_id = v_tenant and h.hour < now() - make_interval(days => least(v_days, v_fdays))
+      and (p_job is null or h.job = p_job) and (p_connection is null or h.connection_id = p_connection)
     order by h.job, h.connection_id
   loop
     exit when v_left <= 0;
-    -- the pair's 20th latest run: it and everything newer stay (sync_run_job_started_idx)
-    select x.started_at into v_from from cma.sync_run x
-    where x.tenant_id = v_tenant and x.job = p.job and x.connection_id is not distinct from p.connection_id
-    order by x.started_at desc, x.id desc offset 19 limit 1;
-    continue when v_from is null;
-    with doomed as (
-      select r.id from cma.sync_run r
-      where r.tenant_id = v_tenant and r.job = p.job and r.connection_id is not distinct from p.connection_id
-        and r.started_at < v_from
-        and ((r.status = 'succeeded' and r.finished_at < now() - make_interval(days => v_days))
-             or (r.status = 'failed' and r.finished_at < now() - make_interval(days => v_fdays)))
-        -- a newer succeeded run of the same job, connection and stream exists: this one is not the latest succeeded
-        and exists (select 1 from cma.sync_run s
-                     where s.tenant_id = r.tenant_id and s.job = r.job and s.connection_id is not distinct from r.connection_id
-                       and s.stream is not distinct from r.stream and s.status = 'succeeded' and s.started_at > r.started_at)
-      order by r.started_at, r.id
-      limit v_left
-    )
-    delete from cma.sync_run r using doomed d where r.id = d.id and r.tenant_id = v_tenant;
+    if p.connection_id is null then
+      -- the scheduler's jobs: no connection (sync_run_job_started_idx's connection_id is null range)
+      select x.started_at into v_from from cma.sync_run x
+      where x.tenant_id = v_tenant and x.job = p.job and x.connection_id is null
+      order by x.started_at desc, x.id desc offset 19 limit 1;
+      continue when v_from is null;
+      with doomed as (
+        select r.id from cma.sync_run r
+        where r.tenant_id = v_tenant and r.job = p.job and r.connection_id is null and r.started_at < v_from
+          and ((r.status = 'succeeded' and r.finished_at < now() - make_interval(days => v_days))
+               or (r.status = 'failed' and r.finished_at < now() - make_interval(days => v_fdays)))
+          and exists (select 1 from cma.sync_run s
+                      where s.tenant_id = v_tenant and s.job = r.job and s.connection_id is null
+                        and s.stream is not distinct from r.stream and s.status = 'succeeded' and s.started_at > r.started_at)
+        order by r.started_at, r.id
+        limit v_left
+      )
+      delete from cma.sync_run r using doomed d where r.id = d.id and r.tenant_id = v_tenant;
+    else
+      -- a connection's job: the pair's 20th latest run, then what lies before it (sync_run_job_started_idx)
+      select x.started_at into v_from from cma.sync_run x
+      where x.tenant_id = v_tenant and x.job = p.job and x.connection_id = p.connection_id
+      order by x.started_at desc, x.id desc offset 19 limit 1;
+      continue when v_from is null;
+      with doomed as (
+        select r.id from cma.sync_run r
+        where r.tenant_id = v_tenant and r.job = p.job and r.connection_id = p.connection_id and r.started_at < v_from
+          and ((r.status = 'succeeded' and r.finished_at < now() - make_interval(days => v_days))
+               or (r.status = 'failed' and r.finished_at < now() - make_interval(days => v_fdays)))
+          -- a newer succeeded run of the same job, connection and stream: this one is not the latest succeeded
+          and exists (select 1 from cma.sync_run s
+                      where s.tenant_id = v_tenant and s.job = r.job and s.connection_id = p.connection_id
+                        and s.stream is not distinct from r.stream and s.status = 'succeeded' and s.started_at > r.started_at)
+        order by r.started_at, r.id
+        limit v_left
+      )
+      delete from cma.sync_run r using doomed d where r.id = d.id and r.tenant_id = v_tenant;
+    end if;
     get diagnostics n = row_count;
     v_deleted := v_deleted + n;
     v_left := v_left - n;
   end loop;
+  perform set_config('cma.sync_run_purge', '', true);
   return jsonb_build_object('deleted', v_deleted, 'more', v_left <= 0);
 end
 $$;
-alter function cma.sync_run_purge(integer) owner to cma_owner;
+alter function cma.sync_run_purge(integer, text, uuid) owner to cma_owner;
 
 -- ---------------------------------------------------------------------------------------------
 -- 3. Grants: the application only
@@ -343,8 +307,7 @@ do $$
 declare
   f text;
 begin
-  foreach f in array array['cma.audit_source_mirror_tables()', 'cma.check_sync_run_setting()', 'cma.sync_run_purge(integer)',
-                           'cma.refresh_follow_up()'] loop
+  foreach f in array array['cma.audit_source_mirror_tables()', 'cma.check_sync_run_setting()', 'cma.sync_run_purge(integer,text,uuid)'] loop
     execute format('revoke execute on function %s from public', f);
     execute format('grant execute on function %s to cma_app', f);
   end loop;
@@ -364,7 +327,7 @@ create trigger check_sync_run_setting before insert or update on cma.tenant_sett
 -- 5. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009zt', 'The ingest''s source writes out of the audit log and the run rows'' retention (Martin, 24 Nov 2026; brief N07, D12, D13): cma.audit_source_mirror_tables(); cma.audit_row skips the ingest''s writes (actor ingest:<adapter>, a system user) to those tables; cma.refresh_follow_up also checks the tenant''s latest processed ingest event (ingest_event_processed_idx, built concurrently first); settings sync_run.retention_days (90) and sync_run.failed_retention_days (365), checked by cma.check_sync_run_setting(); cma.sync_run_purge(integer) (SECURITY DEFINER, a system user, batches, never a pair''s 20 latest or a stream''s latest succeeded run) and cma.sync_run_hour_count keeping the hourly counts for its deletes')
+values ('0009zt', 'The ingest''s source writes out of the audit log and the run rows'' retention (Martin, 24 Nov 2026; brief N07, D12, D13): cma.audit_source_mirror_tables(); cma.audit_row skips the ingest''s writes (actor ingest:<adapter>, a system user) to those tables (the mirrors that are not the follow-up''s inputs); settings sync_run.retention_days (90) and sync_run.failed_retention_days (365), checked by cma.check_sync_run_setting(); cma.sync_run_purge(integer, text, uuid) (SECURITY DEFINER, a system user, batches, never a pair''s 20 latest or a stream''s latest succeeded run) and cma.sync_run_hour_count keeping the hourly counts for its deletes')
 on conflict (version) do nothing;
 
 commit;

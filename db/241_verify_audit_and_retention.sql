@@ -2,20 +2,19 @@
 -- 241_verify_audit_and_retention.sql: verifies addition 0009zt, the ingest's source writes out of the audit log (D12) and
 -- the run rows' retention (D13) (brief N07, PR N07f)
 -- =============================================================================================
--- Universal: no seed is assumed. R1 checks the structure; A1, F1 and P1 write throwaway rows inside subtransactions that are
+-- Universal: no seed is assumed. R1 checks the structure; A1 and P1 write throwaway rows inside subtransactions that are
 -- always rolled back, so nothing stays and the script runs in dev and in prod. Synthetic data only (ids v9zt-…, counts
 -- printed, never a row). Run as your own IAM login after 240_audit_and_retention.sql, dev first, then prod. Expected: R1,
--- A1, F1, P1 OK, then "PASS 0009zt". Provoked (verify.provoke true at the top): every row FAIL, the verdict PROVOKED, NOT A
--- PASS, and P1 then purges with a retention of 7 days, a deliberate difference its detail shows.
+-- A1, P1 OK, then "PASS 0009zt". Provoked (verify.provoke true at the top): every row FAIL, the verdict PROVOKED, NOT A
+-- PASS, and P1 then purges its pair with a retention of 7 days, a deliberate difference its detail shows.
 --
---   R1  0009zt recorded after 0009zs; ingest_event_processed_idx valid; cma.sync_run_purge(integer) SECURITY DEFINER of
+--   R1  0009zt recorded after 0009zs; cma.sync_run_purge(integer, text, uuid) SECURITY DEFINER of
 --       cma_owner with its search path pinned, it and cma.audit_source_mirror_tables() the application's only; the settings
 --       90 and 365; a value out of range refused (CMA04)
---   A1  the ingest's write to a mirrored source table (crm_contact) leaves no audit row; the ingest's write to a
---       configuration table (market) and a person's write to the same source table each leave one
---   F1  the follow-up refresh: nothing processed since its marker answers unchanged; an ingest event processed after it
---       makes it compute
---   P1  the purge of a throwaway pair: old succeeded runs and failed runs past 365 days go, a failed run of 200 days stays,
+--   A1  the ingest's write to a mirrored source table of the list (subscription_event) leaves no audit row; the ingest's
+--       write to a follow-up input (crm_contact), to a configuration table (market) and a person's write to the listed
+--       table, even with an ingest label, each leave one
+--   P1  the purge of a throwaway pair (the purge told that pair alone, so no other run row is touched): old succeeded runs and failed runs past 365 days go, a failed run of 200 days stays,
 --       the pair's 20 latest stay, a stream's only (latest) succeeded run stays however old; the hourly counts of the pair
 --       are the same before and after; a person is refused (CMA06)
 -- =============================================================================================
@@ -74,8 +73,7 @@ declare
   a_src    integer;
   a_cfg    integer;
   a_person integer;
-  f1       jsonb;
-  f2       jsonb;
+  a_input  integer;
   h_before bigint;
   h_after  bigint;
   pr       jsonb;
@@ -87,18 +85,23 @@ declare
   v_mark   timestamptz;
 begin
   -- R1
-  c1 := pg_temp.v9zt_code(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''sync_run.retention_days'', ''3'')', v_t));
-  c2 := pg_temp.v9zt_code(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''sync_run.failed_retention_days'', ''9999'')', v_t));
+  -- inside a block that is always rolled back: a trigger that failed to refuse would commit nothing
+  begin
+    c1 := pg_temp.v9zt_code(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''sync_run.retention_days'', ''3'')', v_t));
+    c2 := pg_temp.v9zt_code(format('insert into cma.tenant_setting (tenant_id, key, value) values (%L, ''sync_run.failed_retention_days'', ''9999'')', v_t));
+    raise exception using errcode = 'V9ZT0', message = 'rolled back';
+  exception when sqlstate 'V9ZT0' then
+    null;
+  end;
   ok := (select a.applied_at >= b.applied_at from cma.schema_migration a, cma.schema_migration b where a.version = '0009zt' and b.version = '0009zs')
-    and exists (select 1 from pg_index i where i.indexrelid = to_regclass('cma.ingest_event_processed_idx') and i.indisvalid)
     and (select p.prosecdef and pg_get_userbyid(p.proowner) = 'cma_owner' and 'search_path=pg_catalog, pg_temp' = any (p.proconfig)
-         from pg_proc p where p.oid = 'cma.sync_run_purge(integer)'::regprocedure)
-    and not has_function_privilege('public', 'cma.sync_run_purge(integer)', 'execute') and has_function_privilege('cma_app', 'cma.sync_run_purge(integer)', 'execute')
+         from pg_proc p where p.oid = 'cma.sync_run_purge(integer,text,uuid)'::regprocedure)
+    and not has_function_privilege('public', 'cma.sync_run_purge(integer,text,uuid)', 'execute') and has_function_privilege('cma_app', 'cma.sync_run_purge(integer,text,uuid)', 'execute')
     and not has_function_privilege('public', 'cma.audit_source_mirror_tables()', 'execute')
     and (select s.default_value from cma.setting s where s.key = 'sync_run.retention_days') = '90'
     and (select s.default_value from cma.setting s where s.key = 'sync_run.failed_retention_days') = '365'
     and c1 = 'CMA04' and c2 = 'CMA04';
-  perform pg_temp.v9zt_row(1, 'R1', 'structure', ok, format('order, index, purge definer, grants, settings 90/365, refusals %s/%s', c1, c2));
+  perform pg_temp.v9zt_row(1, 'R1', 'structure', ok, format('order, purge definer, grants, settings 90/365, refusals %s/%s', c1, c2));
 
   v_ingest := (select u.id from cma.app_user_external_id e join cma.app_user u on u.tenant_id = e.tenant_id and u.id = e.user_id
                where e.tenant_id = v_t and e.system = 'ingest' and e.external_id = 'ingest' and u.kind = 'system' limit 1);
@@ -107,52 +110,35 @@ begin
   v_person := (select u.id from cma.app_user u where u.tenant_id = v_t and u.kind = 'person' and u.status = 'active' order by u.id limit 1);
   v_conn := (select ic.id from cma.integration_connection ic where ic.tenant_id = v_t order by ic.id limit 1);
 
-  -- A1: three writes, the audit rows each leaves
+  -- A1: writes and the audit rows each leaves
   begin
     perform set_config('app.tenant_id', v_t::text, true);
     perform set_config('app.user_id', v_ingest::text, true);
     perform set_config('app.actor_label', 'ingest:v9zt', true);
+    insert into cma.subscription_event (tenant_id, connection_id, source_system, source_id, subscription_source_id, event_type, occurred_at)
+    values (v_t, v_conn, 'v9zt', 'v9zt-a1', 'v9zt-sub', 'paused', now());
+    v_mark := clock_timestamp();
+    update cma.subscription_event e set synced_at = now() where e.tenant_id = v_t and e.source_system = 'v9zt' and e.source_id = 'v9zt-a1';
+    a_src := (select count(*) from cma.audit_log a where a.tenant_id = v_t and a.table_name = 'subscription_event' and a.changed_at >= v_mark);
     v_mark := clock_timestamp();
     update cma.crm_contact k set synced_at = now() where k.id = (select x.id from cma.crm_contact x where x.tenant_id = v_t order by x.id limit 1);
-    a_src := (select count(*) from cma.audit_log a where a.tenant_id = v_t and a.table_name = 'crm_contact' and a.changed_at >= v_mark);
+    a_input := (select count(*) from cma.audit_log a where a.tenant_id = v_t and a.table_name = 'crm_contact' and a.changed_at >= v_mark);
     v_mark := clock_timestamp();
     update cma.market m set time_zone = m.time_zone where m.tenant_id = v_t and m.code = (select min(x.code) from cma.market x where x.tenant_id = v_t);
     a_cfg := (select count(*) from cma.audit_log a where a.tenant_id = v_t and a.table_name = 'market' and a.changed_at >= v_mark);
+    -- a person with the ingest's label: audited all the same
     perform set_config('app.user_id', v_person::text, true);
-    perform set_config('app.actor_label', 'v9zt-person', true);
     v_mark := clock_timestamp();
-    update cma.crm_contact k set synced_at = now() where k.id = (select x.id from cma.crm_contact x where x.tenant_id = v_t order by x.id limit 1);
-    a_person := (select count(*) from cma.audit_log a where a.tenant_id = v_t and a.table_name = 'crm_contact' and a.changed_at >= v_mark);
+    update cma.subscription_event e set synced_at = now() where e.tenant_id = v_t and e.source_system = 'v9zt' and e.source_id = 'v9zt-a1';
+    a_person := (select count(*) from cma.audit_log a where a.tenant_id = v_t and a.table_name = 'subscription_event' and a.changed_at >= v_mark);
     raise exception using errcode = 'V9ZT0', message = 'rolled back';
   exception when sqlstate 'V9ZT0' then
     null;
   end;
-  perform pg_temp.v9zt_row(2, 'A1', 'the ingest''s source writes out, config and people in',
-    v_ingest is not null and a_src = 0 and a_cfg = 1 and a_person = 1,
-    format('ingest to crm_contact %s rows, ingest to market %s, a person to crm_contact %s', a_src, a_cfg, a_person));
-
-  -- F1: the follow-up's probe
-  begin
-    perform set_config('app.tenant_id', v_t::text, true);
-    perform set_config('app.user_id', v_sched::text, true);
-    perform set_config('app.actor_label', 'scheduler', true);
-    perform cma.refresh_follow_up_of(v_t);
-    -- the marker as if checked five minutes from now, its clock change an hour on: nothing processed since
-    update cma.follow_up_marker x set inputs_checked_at = now() + interval '5 minutes', computed_at = now(),
-                                      next_change_at = now() + interval '1 hour'
-    where x.tenant_id = v_t;
-    f1 := cma.refresh_follow_up();
-    insert into cma.ingest_event (tenant_id, connection_id, event_key, source_type, kind, object_type, object_id, occurred_at,
-                                  recorded_at, status, processed_at)
-    values (v_t, v_conn, 'v9zt-event-1', 'v9zt', 'changed', 'v9zt', 'v9zt-1', now(), now(), 'processed', now() + interval '10 minutes');
-    f2 := cma.refresh_follow_up();
-    raise exception using errcode = 'V9ZT0', message = 'rolled back';
-  exception when sqlstate 'V9ZT0' then
-    null;
-  end;
-  perform pg_temp.v9zt_row(3, 'F1', 'the follow-up sees a processed ingest event',
-    f1 ->> 'reason' = 'unchanged' and (f2 ->> 'computed')::boolean,
-    format('before: %s, after an event: computed %s', coalesce(f1 ->> 'reason', f1 ->> 'computed'), f2 ->> 'computed'));
+  perform pg_temp.v9zt_row(2, 'A1', 'the ingest''s writes to the listed mirrors out; inputs, config and people in',
+    v_ingest is not null and a_src = 0 and a_input = 1 and a_cfg = 1 and a_person = 1,
+    format('ingest to subscription_event %s rows, ingest to crm_contact %s, ingest to market %s, a person labelled ingest to subscription_event %s',
+           a_src, a_input, a_cfg, a_person));
 
   -- P1: the purge of a throwaway pair
   begin
@@ -179,7 +165,7 @@ begin
     union all
     select v_t, v_conn, v_job, 'v9zt-s', now() - interval '300 days', now() - interval '300 days', 'succeeded', '{}', null;
     h_before := (select sum(h.runs) from cma.sync_run_hour h where h.tenant_id = v_t and h.job = v_job and h.connection_id = v_conn);
-    pr := cma.sync_run_purge(1000);
+    pr := cma.sync_run_purge(1000, v_job, v_conn);
     h_after := (select sum(h.runs) from cma.sync_run_hour h where h.tenant_id = v_t and h.job = v_job and h.connection_id = v_conn);
     n_left := (select count(*) from cma.sync_run x where x.tenant_id = v_t and x.job = v_job and x.connection_id = v_conn);
     n_stream := (select count(*) from cma.sync_run x where x.tenant_id = v_t and x.job = v_job and x.connection_id = v_conn and x.stream = 'v9zt-s');
@@ -187,12 +173,12 @@ begin
     n_recent := (select count(*) from cma.sync_run x where x.tenant_id = v_t and x.job = v_job and x.connection_id = v_conn
                    and x.started_at > now() - interval '30 days');
     perform set_config('app.user_id', v_person::text, true);
-    c_person := pg_temp.v9zt_code('select cma.sync_run_purge(10)');
+    c_person := pg_temp.v9zt_code(format('select cma.sync_run_purge(10, %L, %L)', v_job, v_conn));
     raise exception using errcode = 'V9ZT0', message = 'rolled back';
   exception when sqlstate 'V9ZT0' then
     null;
   end;
-  perform pg_temp.v9zt_row(4, 'P1', 'the purge keeps what it must and the hourly counts',
+  perform pg_temp.v9zt_row(3, 'P1', 'the purge keeps what it must and the hourly counts',
     (pr ->> 'deleted')::integer = 32 and not (pr ->> 'more')::boolean and n_left = 29 and n_stream = 1 and n_f200 = 3
     and n_recent = 25 and h_before = h_after and c_person = 'CMA06',
     format('deleted %s (more %s), left %s: %s recent, %s failed of 200 days, %s of its own stream; hourly runs %s before, %s after; a person %s',
@@ -209,7 +195,7 @@ from (select ord, check_name, result, detail from pg_temp.verify_0009zt
       select 1000000, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
                   when exists (select 1 from pg_temp.verify_0009zt where result <> 'OK') then 'FAIL'
-                  when (select count(*) from pg_temp.verify_0009zt where result = 'OK') <> 4 then 'FAIL'
+                  when (select count(*) from pg_temp.verify_0009zt where result = 'OK') <> 3 then 'FAIL'
                   else 'PASS 0009zt' end,
              format('241_verify_audit_and_retention: %s OK, %s FAIL', (select count(*) from pg_temp.verify_0009zt where result = 'OK'),
                     (select count(*) from pg_temp.verify_0009zt where result <> 'OK'))) x
