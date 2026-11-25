@@ -90,9 +90,10 @@ Expected: `PASS 0009zs` (E1 to E3); provoked E2 "1 rows differ".
 
 **1d. Terminal** (N07f, dev first: `240`, `241`, the reruns 77, 107, 113, 169, 195, 197)
 ```bash
-cd ~/cma && git checkout claude/clever-goodall-7wnx9z-n07f && cma_db dev && run_migration db/240_audit_and_retention.sql && psql "$PGCONN" -X -f db/241_verify_audit_and_retention.sql | tail -7
+cd ~/cma && git fetch -q origin && git checkout -q claude/clever-goodall-7wnx9z-n07f && git pull -q --ff-only && bash tools/runners/n07f-dev.sh
 ```
-Expected: `PASS 0009zt` (R1, A1, P1).
+Expected: `PASS 0009zt` (R1, A1, P1), provoked `PROVOKED, NOT A PASS`, the reruns' verdicts, `RESULT n07f-dev: OK`. Where 240 ran in
+dev already, the runner runs no migration and only 241, normal and provoked.
 
 **1e. Terminal** (the schema snapshot for the data map, on each branch that changed a column: N07a)
 ```bash
@@ -113,7 +114,10 @@ trigger as an empty value. Expected: six green builds; the Workspace opens after
 
 **3b. Terminal:** `236` twice and `237` against prod as in 1b; then `238` and `239` as in 1c. Expected: `PASS 0009zr`, `PASS 0009zs`; the prod reruns of 1b (not 73, 75, 81, 95, 151, 155) PASS, and 1c's 83, 91 and 101 run in dev only (they refuse prod); 211, 213 and 217 pass their block A, and block B refuses prod (no dev seed), as on 25 November 2026.
 
-**3c. After `244` (0009zv) in prod:** `240` and `241` against prod as in 1d. Expected: `PASS 0009zt`.
+**3c. After `244` (0009zv) in prod:** `bash tools/runners/n07f-prod.sh` from the N07f branch (or main after the merge).
+Expected: `PASS 0009zt`, provoked `PROVOKED, NOT A PASS`, 77 and 107 refused (dev only), 113, 169, 195 and 197 PASS,
+`RESULT n07f-prod: OK`. Then, after the merge, `bash tools/runners/n07f-ingest.sh` on main (the ingest image with the
+purge: dev, one reconcile in dev, prod).
 
 ## 4. The jobs' deploys (after the N07a merge's build)
 
@@ -141,7 +145,7 @@ Expected: `ANALYZE` eight times. From `236` on, a handful of edits analyzes them
 **Terminal** (outside office hours; the reconcile purges at most 50 batches of 2,000 per tenant a night; the first time
 by hand, watched)
 ```bash
-cd ~/cma && gcloud run jobs execute ingest-reconcile --region=europe-west4 --project=p4a-cma-prod --wait && gcloud logging read 'resource.type="cloud_run_job" AND jsonPayload.message="reconcile: sync_run retention"' --project=p4a-cma-prod --freshness=1h --format='value(jsonPayload.tenant,jsonPayload.deleted,jsonPayload.batches,jsonPayload.more,jsonPayload.ms)'
+cd ~/cma && git switch -q main && git pull -q --ff-only && bash tools/runners/n07f-first-purge.sh
 ```
 Expected: one line per tenant with `deleted`, `batches`, `more` (true while more than 100,000 rows wait: the next nights
 continue) and `ms`. System health's 24-hour counts unchanged (the hourly bookkeeping keeps its counts).
