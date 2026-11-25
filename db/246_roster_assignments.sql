@@ -524,7 +524,8 @@ as $$
   select (extract(epoch from p_time) / 60)::integer
 $$;
 
--- A person-date's current blocks as JSON, in start order, with their type (the shape of the planner's answer)
+-- A person-date's current blocks as JSON, in start order, with their type (the shape of the planner's answer). Internal:
+-- no permission of its own; called only after a roster.manage check, never from a route with a request's person
 create or replace function cma.roster_blocks_json(p_user_id uuid, p_date date)
 returns jsonb
 language sql stable
@@ -540,7 +541,7 @@ as $$
 $$;
 
 -- How many person-dates of a roster week other than the one given changed since the week's latest publication: an entry
--- or a block recorded or ended after it (D8's "{n} other changes"). 0 for a draft week
+-- or a block recorded or ended after it (D8's "{n} other changes"). 0 for a draft week. Internal, as roster_blocks_json
 create or replace function cma.roster_other_changes(p_week_id uuid, p_user_id uuid, p_date date)
 returns integer
 language sql stable
@@ -598,6 +599,16 @@ begin
     raise exception 'at most 96 blocks per person and date' using errcode = 'CMA04';
   end if;
 
+  -- Its own guards, whoever calls it (defence in depth: its callers check the same first): the past stays locked, and no
+  -- current block of the person-date may belong to another roster week, an empty list included
+  if p_date < cma.business_date(now(), cma.user_timezone(p_user_id)) then
+    raise exception 'date % is in the past for this person; the roster plans today and ahead', p_date using errcode = 'CMA04';
+  end if;
+  if exists (select 1 from cma.roster_assignment a
+             where a.tenant_id = cma.current_tenant_id() and a.user_id = p_user_id and a.business_date = p_date
+               and a.valid_to is null and a.roster_week_id <> p_week_id) then
+    raise exception 'this person''s assignments on % belong to another roster', p_date using errcode = 'CMA03';
+  end if;
   select * into v_shift from cma.roster_entry
    where tenant_id = cma.current_tenant_id() and user_id = p_user_id and business_date = p_date and valid_to is null;
   if jsonb_array_length(p_blocks) > 0 then
@@ -1450,7 +1461,9 @@ create or replace view cma.roster_published_assignment as
   select * from cma.roster_published_assignment_all where tenant_id = cma.current_tenant_id();
 
 -- A person-date's published blocks of one roster week as JSON for the agent's schedule and the Live board: code, name,
--- kind, work area, is_extra, start, end, the hours market (own market: the person's Default market) and its zone
+-- kind, work area, is_extra, start, end, the hours market (own market: the person's Default market) and its zone.
+-- Internal: no permission of its own; my_roster passes the acting user (roster.view), roster_today its people
+-- (monitoring.live). Never call it from a route with a request's person: that would show a colleague's plan
 create or replace function cma.roster_published_blocks_json(p_week_id uuid, p_user_id uuid, p_date date)
 returns jsonb
 language sql stable
