@@ -3559,18 +3559,18 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 |---|---|
 | Term | Default market (nl: Standaardmarkt), a setting of a person |
 | Key | SQL `cma.app_user.default_hours_market_code` and `cma_read.app_user.default_hours_market_code` (last column), `cma.set_person_default_hours_market`; API `defaultHoursMarket` on `GET /api/v1/team/directory`, `PUT /api/v1/team/directory/{userId}/default-market`; copy `team.defaultMarket` and `team.noDefaultMarket` |
-| Definition | An optional Hours market of a person, set on People. Clock-in opens the day in the default status with that market; without a Default market, with the market of the person's last day; otherwise with none. Clocking in again on a day that already has events continues under that day's own market (the one in force at its last event) and uses the Default market only when the day has none. It is never a market change on its own: it applies at clock-in only. |
+| Definition | An optional Hours market of a person, set on People. Clock-in opens the day in the default status with that market; without a Default market, with the market of the person's last day; otherwise with none. Clocking in again on a day that already has events continues under that day's own market (the one in force at its last event) and uses the Default market only when the day has none. It is never a market change on its own. Two readers use it: clock-in, and the hourly forgotten-day sweep, which (where the tenant's `workday.auto_close_office_hours` is true and no shift is published) closes a forgotten day at the end of the Default market's office hours. |
 | Source | The CMA: `cma.app_user`, written by `cma.set_person_default_hours_market` for whoever may manage the person (the other People writes' rule) |
 | Counts / does not count | Counts only an active hours market of the tenant; one that was remapped or deactivated since is skipped at clock-in, which then falls back to the market of the last day or none. Changes no figure |
 | Unit and display | A market code with its name, or "No default market", in the People dialog (nl "Geen standaardmarkt") |
-| Time rule | Read at clock-in; changing it does not change a day already open |
+| Time rule | Read at clock-in; changing it does not change a day already open. The auto-close sweep reads it at sweep time, not at clock-in: a change before the sweep changes where that day closes |
 | Scope | Per person and tenant |
 | Equivalent in the source system | None |
 | Not to use | "Home market" or "country of the person" for it: a person's zone and employer are other fields, and Market keeps its meaning, the country |
 | Status | Decided |
-| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "People gets a Default market per person …" and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo) |
-| Used by | No catalog key. People, clock-in (Welcome, My day); `GET /api/v1/team/directory`, `PUT /api/v1/team/directory/{userId}/default-market`, `POST /api/v1/me/day/start` |
-| As built today | `230`: a trigger checks an active hours market when the column is set or changed, a market that a person's Default market names keeps mapping to itself (the conflict a market change answers with 409), `cma.clock_in_hours_market(person)` applies the rule when a day opens, and `cma.open_workday` takes the day's own market first when clocking in again. Matches the definition |
+| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "People gets a Default market per person …" and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo); 25 November 2026 (Martin), docs/decisions.md, "The Default market is read at sweep time …" and "Definitions: Office hours is a new term …" (this PR, addition 0009zv) |
+| Used by | No catalog key for the market itself; the forgotten-day close's catalog keys name the sweep (docs/metrics/catalog.json, the entries that cite `cma.close_forgotten_workdays`). People, clock-in (Welcome, My day), the hourly auto-close sweep; `GET /api/v1/team/directory`, `PUT /api/v1/team/directory/{userId}/default-market`, `POST /api/v1/me/day/start` |
+| As built today | `230`: a trigger checks an active hours market when the column is set or changed, a market that a person's Default market names keeps mapping to itself (the conflict a market change answers with 409), `cma.clock_in_hours_market(person)` applies the rule when a day opens, and `cma.open_workday` takes the day's own market first when clocking in again. `244` (addition 0009zv): `cma.close_forgotten_workdays` reads the Default market at sweep time and skips it without error when the person has none or it is no longer an active hours market. Matches the definition |
 
 ### No market
 
@@ -3590,6 +3590,25 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "People gets a Default market per person …" and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo) |
 | Used by | No catalog key. My day, Correct day, the Live board, the Team hours and status-changes CSVs |
 | As built today | `web/src/lib/copy.ts` (`noMarket` in the myDay, dayEditor, live and exports groups), `web/src/lib/csv.ts` (`hoursMarketsCell`). Matches the definition |
+
+### Office hours
+
+| Field | Value |
+|---|---|
+| Term | Office hours (nl: Kantooruren), the ranges of time per market and weekday in which the market's office is open |
+| Key | SQL `cma.business_hours` and `cma.business_holiday`, `cma.set_business_hours`, `cma.business_calendar_of`, `cma.business_seconds` and `cma.business_seconds_of`, `cma.next_business_noon`, `cma.office_hours_end_in`; API `GET /api/v1/configuration/markets`, `PUT /api/v1/configuration/markets/hours` and `/markets/holidays` |
+| Definition | Per market and weekday, one or more ranges of local time. A market with hours of its own uses only those; a market without follows the default row (market `*`). Holidays are kept per market or for `*` and count as days without office hours. Tenant configuration, never code. |
+| Source | The CMA: `cma.business_hours` and `cma.business_holiday`, edited on Configuration → Markets through `cma.set_business_hours` |
+| Counts / does not count | Counts only time inside a range of a day that is no holiday; a weekday without ranges is closed. Changes no worked, paid, billable or productive time |
+| Unit and display | Ranges as HH:MI to HH:MI per weekday on Configuration → Markets |
+| Time rule | Read in the zone as found: the market's own `time_zone`, and the `*` row too is read in the market's zone. Speed to lead's business time reads them for the deal's market; the auto-close sweep reads the Default market's hours when the sweep runs, and closes a forgotten day without a published shift at the end of the last range of that weekday (closed weekdays, holidays, a person without a Default market and a Default market that is no longer an active hours market fall to the default time) |
+| Scope | Per market and tenant |
+| Equivalent in the source system | None |
+| Not to use | "Opening hours" or "shift" for it: a shift is a person's published planned time (the roster), office hours belong to a market |
+| Status | Decided |
+| Decided | 25 November 2026 (Martin); docs/decisions.md, 25 Nov 2026, "Definitions: Office hours is a new term …" and the rows of this PR's auto-close order (this PR, addition 0009zv) |
+| Used by | No catalog key of its own. Speed to lead (the keys that read business time in docs/metrics/catalog.json), the hourly auto-close sweep (the forgotten-day close keys citing `cma.close_forgotten_workdays`), Configuration → Markets, Configuration → Exports (the setting `workday.auto_close_office_hours`) |
+| As built today | `cma.business_hours` and `cma.business_holiday` (32, with the overlap check); `cma.business_calendar_of` (178) resolves each market's schedule (its own rows, else `*`) with its zone and holidays, and Speed to lead's functions and, since `244`, `cma.close_forgotten_workdays` (through `cma.office_hours_end_in`) take their hours from it; the older `cma.business_seconds`, `cma.business_seconds_of` and `cma.next_business_noon` apply the same resolution. Matches the definition |
 
 ## Intake terms
 
