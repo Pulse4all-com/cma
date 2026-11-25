@@ -13,7 +13,9 @@ const WEEKS_AROUND = 12;
 /**
  * Roster planner (Team group, migration 0005): the week per team as a grid of people by days with
  * quick typing, a publish button with the draft and published state, Copy previous week, the
- * coverage per work type per day, a print view. Shown to people holding roster.manage; the
+ * coverage per work type per day, a print view. Since addition 0009zw a Week | Day switch
+ * (?view=day&date=): the Day view paints assignments per slot (brief A); the week's read brings the
+ * blocks, the planner settings and the type catalog in the same transaction. Shown to people holding roster.manage; the
  * database checks that permission on every read and write (CMA06). Staff data only.
  */
 export default async function RosterPlannerPage({ searchParams }: PageProps<"/roster/planner">) {
@@ -72,8 +74,10 @@ export default async function RosterPlannerPage({ searchParams }: PageProps<"/ro
         today={today}
         thisWeek={thisWeek}
         viewerZone={me.timeZone}
-        copy={pickCopy(copy, "dayEditor", "roster")}
+        copy={pickCopy(copy, "dayEditor", "roster", "assignments")}
         locale={me.locale}
+        view={sp.view === "day" ? "day" : "week"}
+        day={isDateKey(sp.date) ? sp.date : undefined}
       />
 
       {dataIsMock ? (

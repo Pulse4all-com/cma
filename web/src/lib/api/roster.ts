@@ -1,6 +1,6 @@
 import "server-only";
 import { ApiError, dateParam } from "./respond";
-import type { RosterCellInput } from "@/lib/data";
+import type { AssignmentBlockInput, RosterCellInput } from "@/lib/data";
 
 /** A Monday in YYYY-MM-DD, or a 400: a roster week starts on a Monday (cma.assert_week_start checks again) */
 export function weekStartParam(value: string | null | undefined): string {
@@ -39,4 +39,29 @@ export function cellParam(raw: unknown): RosterCellInput {
     return { kind: "absence", absenceKey: c.absenceKey, note };
   }
   throw new ApiError(400, "invalid_cell", "kind must be shift, absence or clear");
+}
+
+const BLOCK_START_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const BLOCK_END_RE = /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/;
+
+/**
+ * A person-date's blocks as the planner sends them (addition 0009zw): [{ code, start, end, market?, note? }], at most 96;
+ * times hh:mm in the person's zone (an end of 24:00 allowed), the market an hours market's code or null (own market). The
+ * grid, the shift, overlap and the market's kind are the database's answers (400 or 404)
+ */
+export function blocksParam(raw: unknown): AssignmentBlockInput[] {
+  if (!Array.isArray(raw) || raw.length > 96) throw new ApiError(400, "invalid_blocks", "blocks must be an array of at most 96 blocks");
+  return raw.map((x) => {
+    if (!x || typeof x !== "object" || Array.isArray(x)) throw new ApiError(400, "invalid_blocks", "each block is an object");
+    const b = x as Record<string, unknown>;
+    if (typeof b.code !== "string" || !/^[A-Z0-9]{1,6}$/.test(b.code)) throw new ApiError(400, "invalid_blocks", "code must be 1 to 6 of A-Z and 0-9");
+    if (typeof b.start !== "string" || typeof b.end !== "string" || !BLOCK_START_RE.test(b.start) || !BLOCK_END_RE.test(b.end) || b.end <= b.start) {
+      throw new ApiError(400, "invalid_blocks", "start and end must be hh:mm, the end after the start");
+    }
+    const market = b.market === undefined || b.market === null || b.market === "" ? null : b.market;
+    if (market !== null && (typeof market !== "string" || !/^[A-Z]{2}$/.test(market))) throw new ApiError(400, "invalid_blocks", "market must be a market code");
+    const note = b.note === undefined || b.note === null || b.note === "" ? null : b.note;
+    if (note !== null && (typeof note !== "string" || note.trim().length > 120)) throw new ApiError(400, "invalid_blocks", "note must be at most 120 characters");
+    return { code: b.code, start: b.start, end: b.end, market: market as string | null, note: note === null ? null : (note as string).trim() || null };
+  });
 }

@@ -29,6 +29,8 @@
 --   btree_gist                  extension, schema public (section 0)
 --   settings                    roster.slot_minutes (5, 10, 15, 20, 30, 60; default 15: the planner's grid, D6),
 --                               roster.lunch_after_minutes (default 360: the plan check's long shift without a lunch block),
+--                               roster.lunch_type_code (default empty: any pause block is the lunch block; the code the plan
+--                               check takes as lunch, so no code names a tenant's type),
 --                               roster.planner_timezone (text, default empty: the tenant's zone; the zone of the planner's
 --                               Day view and of cma.roster_slot_coverage). A trigger on cma.tenant_setting refuses a
 --                               planner zone that is no IANA zone (CMA04)
@@ -152,6 +154,8 @@ insert into cma.setting (key, value_type, allowed_values, default_value, descrip
      'Minutes per slot of the roster planner''s grid: an assignment starts and ends on it'),
   ('roster.lunch_after_minutes', 'integer', null, '360',
      'Minutes of shift from which the planner''s plan check expects a lunch block (an assignment of a pause type booking lunch)'),
+  ('roster.lunch_type_code', 'text', null, '',
+     'The assignment type code the planner''s plan check takes as the lunch block; empty: any block of a pause type'),
   ('roster.planner_timezone', 'text', null, '',
      'IANA zone of the roster planner''s Day view and its coverage per slot; empty: the tenant''s zone')
 on conflict (key) do update
@@ -1644,7 +1648,7 @@ create or replace view cma_read.standard_week_assignment as
 -- 14. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009zw', 'Assignments in the roster, the planner side (brief A): assignment types (tenant configuration, D2), versioned roster assignments inside a shift on the slot grid without overlap (D1, D6, D7), today''s change publishing the week (D8), the Standard week with save and apply (D9), absence types that carry over with Copy week''s report (D10), the planned figures per slot and per person (D12), the published blocks on My schedule and roster_today, the settings roster.slot_minutes, roster.lunch_after_minutes and roster.planner_timezone')
+values ('0009zw', 'Assignments in the roster, the planner side (brief A): assignment types (tenant configuration, D2), versioned roster assignments inside a shift on the slot grid without overlap (D1, D6, D7), today''s change publishing the week (D8), the Standard week with save and apply (D9), absence types that carry over with Copy week''s report (D10), the planned figures per slot and per person (D12), the published blocks on My schedule and roster_today, the settings roster.slot_minutes, roster.lunch_after_minutes, roster.lunch_type_code and roster.planner_timezone')
 on conflict (version) do nothing;
 
 commit;

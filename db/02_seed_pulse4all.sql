@@ -730,8 +730,8 @@ $$;
 -- market is part of the block, not of the code (D5), so Arno's twelve Excel codes are these nine work codes and the
 -- block's Hours market. The absences that carry over (D10): Day off, and the new Paternity leave (paid); the new Holiday
 -- (unpaid) does not, nor do Leave, Sick, Public holiday and Other. The planner's grid is 15 minutes and its plan check
--- expects a lunch block from 360 minutes of shift (both the catalog defaults, set here so the tenant's values are its
--- own), in Europe/Madrid as Arno's sheet. A rerun adds what is missing and keeps what was changed since on the
+-- expects a lunch block (LB) from 360 minutes of shift (the grid and the minutes are the catalog defaults, set here so the
+-- tenant's values are its own), in Europe/Madrid as Arno's sheet. A rerun adds what is missing and keeps what was changed since on the
 -- configuration screen (on conflict do nothing); a type whose status the tenant lacks is left out with a notice. A
 -- database without the addition says so; rerun this seed after 246_roster_assignments.sql.
 do $$
@@ -786,6 +786,7 @@ begin
   insert into cma.tenant_setting (tenant_id, key, value) values
     (v_subs, 'roster.slot_minutes', '15'),
     (v_subs, 'roster.lunch_after_minutes', '360'),
+    (v_subs, 'roster.lunch_type_code', 'LB'),
     (v_subs, 'roster.planner_timezone', 'Europe/Madrid')
   on conflict (tenant_id, key) do nothing;
 end

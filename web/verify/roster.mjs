@@ -12,7 +12,11 @@
  * built from the tenant's types; since 17 November 2026 (brief B39, addition 0009y) who is on the roster: the planner's list
  * and the Live board's flags hold only people with their time kept and roster.planned, roles combined; since 19 November
  * 2026 (brief B41) the planner's one team per page view: Everyone without a ?team= or with one that names no current
- * team, and the select, the header, the reads, print, copy, publish and the address all on that one key.
+ * team, and the select, the header, the reads, print, copy, publish and the address all on that one key; since 25 November
+ * 2026 (brief A, addition 0009zw) the assignments: the CODE-MARKET parser with the UK alias, painting and emptying over a
+ * selection inside the shift, joined bars, the colours from what a type books, the planner zone, the planned figures per
+ * slot and per person on 247's B10 fixture, and the plan check. Copy week, Apply and Save as standard week write the team
+ * as the other writes do (four writes on the page's key).
  */
 import { readFileSync } from "node:fs";
 import {
@@ -20,6 +24,9 @@ import {
   plannerNeedsTeams, plannerSearch, plannerTeam, plannerTeamOfHeader, rosterTeamArg, shiftMinutes, weekDays,
 } from "../src/lib/roster.ts";
 import { fmtDateRange } from "../src/lib/time.ts";
+import {
+  assignmentText, fromPlannerMinutes, joinBlocks, paintBlocks, parseAssignment, planCheck, plannedByKey, slotFigures, toneOf, toPlannerMinutes,
+} from "../src/lib/assignments.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -184,10 +191,75 @@ expect("(c) the planner: select, week links, print, copy, publish, cells and the
     (planner.match(/\{ team: teamArg[ ,]/g) ?? []).length, /print\?week=\$\{weekStart\}&team=\$\{encodeURIComponent\(team\)\}/.test(planner),
     /window\.history\.replaceState\(null, "", plannerSearch\(window\.location\.search, team\)\)/.test(planner), /if \(answer !== week\) \{/.test(planner),
     /data-team=\{plannerTeamOfHeader\(header\)\}/.test(planner)],
-  [true, true, true, true, 3, true, true, true, true], [false, false, false, false, 0, false, false, false, false]);
+  [true, true, true, true, 4, true, true, true, true], [false, false, false, false, 0, false, false, false, false]);
 expect("(c) the print view resolves the team as the planner does, the team list only for a named team",
   [/getRosterWeek\(me, weekStart, rosterTeamArg\(plannerTeam\(sp\.team, teams\)\)\)/.test(print), /const teams = plannerNeedsTeams\(sp\.team\) \? await data\(\)\.listTeams\(me\) : \[\];/.test(print)],
   [true, true], [false, false]);
+
+// ---- assignments (addition 0009zw, brief A) -------------------------------------------------------
+const types = [
+  { code: "SL", name: "Sales", kind: "work", workArea: "sales", isExtra: false, statusIsProductive: true, isActive: true },
+  { code: "GO", name: "General Ops", kind: "work", workArea: "operations", isExtra: false, statusIsProductive: true, isActive: true },
+  { code: "TR", name: "Training", kind: "work", workArea: null, isExtra: false, statusIsProductive: false, isActive: true },
+  { code: "LB", name: "Lunch break", kind: "pause", workArea: null, isExtra: false, statusIsProductive: false, isActive: true },
+  { code: "X", name: "Extra hours", kind: "work", workArea: null, isExtra: true, statusIsProductive: null, isActive: true },
+  { code: "OLD", name: "Retired", kind: "work", workArea: "operations", isExtra: false, statusIsProductive: true, isActive: false },
+];
+const markets = [{ code: "GB", isActive: true }, { code: "NL", isActive: true }, { code: "SE", isActive: false }];
+expect("D5: a code, a code and a market, any case, an en dash too",
+  [parseAssignment("sl", types, markets), parseAssignment("SL-GB", types, markets), parseAssignment(" go – nl ", types, markets), parseAssignment("x", types, markets)],
+  [{ code: "SL", market: null }, { code: "SL", market: "GB" }, { code: "GO", market: "NL" }, { code: "X", market: null }],
+  [{ code: "SL", market: null }, { code: "SL", market: "UK" }, { code: "GO", market: "NL" }, { code: "X", market: null }]);
+expect("D5: UK is read as GB and always shown as GB", [parseAssignment("SL-UK", types, markets), assignmentText({ code: "SL", market: "GB" })],
+  [{ code: "SL", market: "GB" }, "SL-GB"], [{ code: "SL", market: "UK" }, "SL-UK"]);
+expect("refusals: unknown code, retired type, no or an inactive hours market, a bad shape, nothing typed",
+  [parseAssignment("ZZ", types, markets), parseAssignment("OLD", types, markets), parseAssignment("SL-BE", types, markets), parseAssignment("SL-SE", types, markets),
+    parseAssignment("SL-GB-X", types, markets), parseAssignment("  ", types, markets)].map((x) => x.problem),
+  ["unknown", "retired", "market", "market", "format", "empty"], ["unknown", "retired", "market", "market", "format", null]);
+const shift9to17 = { start: 540, end: 1020 };
+const painted = paintBlocks([], 540, 660, { code: "SL", market: "GB" }, shift9to17);
+const over = paintBlocks(painted, 600, 630, { code: "LB", market: null }, shift9to17);
+expect("painting cuts a block in two around a new one, keeps the order",
+  over.map((b) => `${b.code}${b.market ? "-" + b.market : ""} ${b.start}-${b.end}`), ["SL-GB 540-600", "LB 600-630", "SL-GB 630-660"], ["SL-GB 540-660", "LB 600-630"]);
+expect("Delete empties a selection; painting the same type back joins the bar again",
+  [paintBlocks(over, 600, 630, null, shift9to17).length, paintBlocks(over, 600, 630, { code: "SL", market: "GB" }, shift9to17).map((b) => `${b.start}-${b.end}`)],
+  [2, ["540-660"]], [3, ["540-600", "600-630", "630-660"]]);
+expect("a selection beyond the shift is clipped to it; wholly outside paints nothing",
+  [paintBlocks([], 480, 600, { code: "GO", market: null }, shift9to17).map((b) => `${b.start}-${b.end}`), paintBlocks([], 1020, 1080, { code: "GO", market: null }, shift9to17).length],
+  [["540-600"], 0], [["480-600"], 1]);
+expect("joined bars: neighbours of one code and market, never across a market or a note",
+  joinBlocks([{ code: "SL", start: 540, end: 600, market: null, note: null }, { code: "SL", start: 600, end: 660, market: null, note: null },
+    { code: "SL", start: 660, end: 720, market: "GB", note: null }, { code: "SL", start: 720, end: 780, market: "GB", note: "desk" }]).length, 3, 1);
+expect("D13: the colour follows what a type books", types.map(toneOf), ["sales", "operations", "otherWork", "pause", "extra", "operations"],
+  ["sales", "sales", "otherWork", "pause", "extra", "operations"]);
+expect("the planner zone: one hour ahead in winter and summer, equal zones untouched, back again",
+  [toPlannerMinutes("2026-12-07", "09:00", "Europe/London", "Europe/Madrid"), toPlannerMinutes("2026-07-06", "09:00", "Europe/London", "Europe/Madrid"),
+    toPlannerMinutes("2026-12-07", "09:00", "Europe/Madrid", "Europe/Madrid"), fromPlannerMinutes(600, "2026-12-07", "Europe/London", "Europe/Madrid"),
+    fromPlannerMinutes(1500, "2026-12-07", "Europe/London", "Europe/Madrid")],
+  [600, 600, 540, "09:00", "24:00"], [540, 540, 540, "10:00", null]);
+// 247's B10: a2 GO 08-12 (no Default market), LB 12-13, SL 13-16 under GB; a1 (Default NL) SL 09-13, X 13-14, SL 14-17 GB; one
+// hour ahead on the planner's axis
+const kinds = new Map(types.map((x) => [x.code, x.kind]));
+const h = (x) => x * 60 + 60;
+const fixture = [
+  { userId: "a2", defaultMarket: null, blocks: [{ code: "GO", start: h(8), end: h(12), market: null, note: null }, { code: "LB", start: h(12), end: h(13), market: null, note: null }, { code: "SL", start: h(13), end: h(16), market: "GB", note: null }] },
+  { userId: "a1", defaultMarket: "NL", blocks: [{ code: "SL", start: h(9), end: h(13), market: null, note: null }, { code: "X", start: h(13), end: h(14), market: null, note: null }, { code: "SL", start: h(14), end: h(17), market: "GB", note: null }] },
+];
+const figs = slotFigures(fixture, kinds, 15, h(8), h(17));
+const slotAt = (hhmm) => { const f = figs.find((x) => x.start === Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3))); return `w${f.working} ${[...f.byKey].sort().map(([k, n]) => `${k}=${n}`).join(" ")}`; };
+expect("D12 per slot as 247's B10 counts it (the planner's 09:00, 10:00, 13:00, 14:00, 17:45)",
+  [figs.length, slotAt("09:00"), slotAt("10:00"), slotAt("13:00"), slotAt("14:00"), slotAt("17:45")],
+  [36, "w1 GO/=1", "w2 GO/=1 SL/NL=1", "w1 LB/=1 SL/NL=1", "w2 SL/GB=1 X/NL=1", "w1 SL/GB=1"],
+  [36, "w1 GO/=1", "w2 GO/=1 SL/NL=1", "w2 LB/=1 SL/NL=1", "w2 SL/GB=1 X/NL=1", "w1 SL/GB=1"]);
+expect("D12 per person as 247's B10's planned minutes",
+  fixture.map((p) => [...plannedByKey(p.blocks, p.defaultMarket)].sort().map(([k, v]) => `${k}=${v}`).join(" ")),
+  ["GO/=240 LB/=60 SL/GB=180", "SL/GB=180 SL/NL=240 X/NL=60"], ["GO/=240 LB/=60 SL/GB=180", "SL/GB=180 SL/NL=300"]);
+const day = [{ code: "SL", start: 540, end: 720, market: null, note: null }, { code: "GO", start: 780, end: 1020, market: null, note: null }];
+expect("the plan check: no lunch block in a long shift and a gap; the lunch type named or any pause; a shift without blocks unchecked",
+  [planCheck(shift9to17, day, 360, "LB", kinds), planCheck(shift9to17, [...day, { code: "LB", start: 720, end: 780, market: null, note: null }], 360, "LB", kinds),
+    planCheck(shift9to17, [...day, { code: "LB", start: 720, end: 750, market: null, note: null }], 360, "", kinds).map((w) => w.kind), planCheck(shift9to17, [], 360, "LB", kinds)],
+  [[{ kind: "lunch" }, { kind: "gap", start: 720, end: 780 }], [], ["gap"], []],
+  [[{ kind: "gap", start: 720, end: 780 }], [], [], []]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

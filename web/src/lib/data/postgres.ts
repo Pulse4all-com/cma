@@ -6,7 +6,9 @@ import { tenantCache } from "@/lib/cache";
 import type {
   ActiveList, ActiveNow, ActiveReport, SubscriptionRowsList, SubscriptionsPage,
   AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MessageStat, MessagesWritten, MyMessage, MyMessages, MyProfile, MyRosterDay, OrganisationInfo,
-  RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
+  RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary,
+  AssignmentBlock, AssignmentType, PublishedAssignment, RosterAssignment, RosterAssignmentsResult, RosterCellAnswer, RosterPlannedRow, RosterPlannerContext,
+  RosterReportRow, RosterSlotCoverageRow, StandardWeekDay, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkArea, WorkStatus, PermissionInfo, SentMessage, HoursMarket, MyDayChoices,
   CrmRecordsDay, DashboardIntake, DashboardReads, DataQualityCheck, Intake, SourceConnections, SpeedToLeadDeal, SpeedToLeadFigures, SpeedToLeadGroup, SpeedToLeadPeriodFigures, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
@@ -911,7 +913,20 @@ type RosterWeekDbRow = {
   week_id: string | null; team_key: string | null; team_name: string | null; week_start: string; status: "draft" | "published";
   version: number; published_at: Date | null; published_by_name: string | null; entry_count: number; changed_since_publish: boolean;
 };
-type RosterPersonDbRow = { user_id: string; display_name: string; organisation_name: string; timezone: string; team_keys: string[] | null; work_type_keys: string[] | null };
+type RosterPersonDbRow = {
+  user_id: string; display_name: string; organisation_name: string; timezone: string; team_keys: string[] | null; work_type_keys: string[] | null;
+  default_hours_market_code?: string | null;
+};
+type RosterAssignmentDbRow = {
+  assignment_id: string; user_id: string; business_date: string; code: string; name: string; kind: "work" | "pause"; work_area: WorkArea | null;
+  is_extra: boolean; start_time: string; end_time: string; hours_market_code: string | null; note: string | null; recorded_at: Date;
+};
+type AssignmentTypeDbRow = {
+  code: string; name: string; sort_order: number; status: string; kind: "work" | "pause"; status_key: string | null; status_name: string | null;
+  work_area: WorkArea | null; is_extra: boolean; status_is_productive: boolean | null;
+};
+type RosterReportDbRow = { user_id: string; business_date: string; outcome: "done" | "skipped"; reason: RosterReportRow["reason"]; blocks: number; blocks_dropped: number };
+type BlockJson = { assignmentId: string; code: string; start: string; end: string; hoursMarket: string | null; note: string | null };
 type RosterEntryDbRow = {
   entry_id: string; user_id: string; business_date: string; kind: "shift" | "absence"; start_time: string | null; end_time: string | null;
   absence_key: string | null; absence_name: string | null; note: string | null; recorded_at: Date; recorded_by_name: string;
@@ -930,6 +945,42 @@ function toRosterEntry(r: RosterEntryDbRow): RosterEntry {
   return {
     entryId: r.entry_id, userId: r.user_id, date: r.business_date, kind: r.kind, start: r.start_time, end: r.end_time,
     absenceKey: r.absence_key, absenceName: r.absence_name, note: r.note, recordedAt: r.recorded_at.toISOString(), recordedByName: r.recorded_by_name,
+  };
+}
+
+function toAssignmentType(t: AssignmentTypeDbRow): AssignmentType {
+  return {
+    code: t.code, name: t.name, sortOrder: t.sort_order, isActive: t.status === "active", kind: t.kind, statusKey: t.status_key,
+    statusName: t.status_name, workArea: t.work_area, isExtra: t.is_extra, statusIsProductive: t.status_is_productive,
+  };
+}
+
+function toReport(r: RosterReportDbRow): RosterReportRow {
+  return { userId: r.user_id, date: r.business_date, outcome: r.outcome, reason: r.reason, blocks: r.blocks, blocksDropped: r.blocks_dropped };
+}
+
+const toBlock = (b: BlockJson): AssignmentBlock => ({ assignmentId: b.assignmentId, code: b.code, start: b.start, end: b.end, hoursMarket: b.hoursMarket ?? null, note: b.note ?? null });
+
+/**
+ * The planner's settings and catalogs in one statement (addition 0009zw): the four roster settings, the planner zone, the
+ * assignment types and the hours markets, so the week's page gains one statement, not a transaction
+ */
+async function readPlannerContext(q: Querier): Promise<RosterPlannerContext> {
+  const r = await q.query<{ settings: Record<string, string> | null; zone: string; types: AssignmentTypeDbRow[] | null; markets: HoursMarketDbRow[] | null }>(
+    `select (select jsonb_object_agg(s.key, s.value) from cma.tenant_settings() s
+             where s.key in ('roster.slot_minutes', 'roster.lunch_after_minutes', 'roster.lunch_type_code')) as settings,
+            cma.roster_planner_zone() as zone,
+            (select jsonb_agg(to_jsonb(t)) from cma.assignment_types() t) as types,
+            (select jsonb_agg(to_jsonb(m)) from cma.hours_markets() m) as markets`);
+  const x = one(r.rows, "planner context");
+  const st = x.settings ?? {};
+  return {
+    slotMinutes: Number(st["roster.slot_minutes"] ?? 15) || 15,
+    lunchAfterMinutes: Number(st["roster.lunch_after_minutes"] ?? 360) || 360,
+    lunchTypeCode: st["roster.lunch_type_code"] ?? "",
+    plannerZone: x.zone,
+    types: (x.types ?? []).map(toAssignmentType),
+    hoursMarkets: (x.markets ?? []).map((m) => ({ code: m.code, name: m.name, isActive: m.status === "active" })),
   };
 }
 
@@ -2449,12 +2500,19 @@ export const postgresData: CmaData = {
       const people = await q.query<RosterPersonDbRow>(`select * from cma.roster_people($1::date, $2)`, [weekStart, teamKey]);
       const entries = await q.query<RosterEntryDbRow>(`select * from cma.roster_entries($1::date, $2)`, [weekStart, teamKey]);
       const coverage = await q.query<CoverageDbRow>(`select * from cma.roster_coverage($1::date, $2)`, [weekStart, teamKey]);
+      const assignments = await q.query<RosterAssignmentDbRow>(`select * from cma.roster_assignments($1::date, $2)`, [weekStart, teamKey]);
+      const planner = await readPlannerContext(q);
       return {
         header,
         people: people.rows.map((p): RosterPerson => ({
           userId: p.user_id, displayName: p.display_name, organisationName: p.organisation_name, timeZone: p.timezone,
-          teamKeys: p.team_keys ?? [], workTypeKeys: p.work_type_keys ?? [],
+          teamKeys: p.team_keys ?? [], workTypeKeys: p.work_type_keys ?? [], defaultHoursMarket: p.default_hours_market_code ?? null,
         })),
+        assignments: assignments.rows.map((a): RosterAssignment => ({
+          assignmentId: a.assignment_id, userId: a.user_id, date: a.business_date, code: a.code, name: a.name, kind: a.kind, workArea: a.work_area,
+          isExtra: a.is_extra, start: a.start_time, end: a.end_time, hoursMarket: a.hours_market_code, note: a.note, recordedAt: a.recorded_at.toISOString(),
+        })),
+        planner,
         entries: entries.rows.map(toRosterEntry),
         coverage: coverage.rows.map((c): RosterCoverageRow => ({
           date: c.business_date, skillKey: c.skill_key, skillName: c.skill_name, plannedPeople: c.planned_people,
@@ -2480,12 +2538,12 @@ export const postgresData: CmaData = {
 
   async listAbsenceTypes(me): Promise<AbsenceType[]> {
     return withTenant(ctx(me), async (q) => {
-      const r = await q.query<{ key: string; name: string; is_paid: boolean; sort_order: number; status: string }>(`select * from cma.absence_types()`);
-      return r.rows.map((a) => ({ key: a.key, name: a.name, isPaid: a.is_paid, sortOrder: a.sort_order, isActive: a.status === "active" }));
+      const r = await q.query<{ key: string; name: string; is_paid: boolean; sort_order: number; status: string; carries_over?: boolean }>(`select * from cma.absence_types()`);
+      return r.rows.map((a) => ({ key: a.key, name: a.name, isPaid: a.is_paid, sortOrder: a.sort_order, isActive: a.status === "active", carriesOver: a.carries_over === true }));
     });
   },
 
-  async setRosterEntry(me, weekStart, teamKey, userId, date, cell): Promise<RosterEntry | null> {
+  async setRosterEntry(me, weekStart, teamKey, userId, date, cell): Promise<RosterCellAnswer> {
     assertDate(weekStart, "weekStart");
     assertDate(date, "date");
     return withTenant(ctx(me), async (q) => {
@@ -2496,12 +2554,106 @@ export const postgresData: CmaData = {
       const note = cell.kind === "clear" ? null : cell.note ?? null;
       await q.query(`select 1 from cma.roster_set_entry($1::date, $2, $3::uuid, $4::date, $5, $6::time, $7::time, $8, $9)`,
         [weekStart, teamKey, userId, date, kind, start, end, absence, note]);
-      const r = await q.query<RosterEntryDbRow>(
-        `select * from cma.roster_entries($1::date, $2) e where e.user_id = $3::uuid and e.business_date = $4::date`,
-        [weekStart, teamKey, userId, date],
+      // The cell as it stands, with its blocks and the blocks this write ended with the shift (cma.roster_cell, 0009zw)
+      const r = await q.query<Omit<RosterEntryDbRow, "entry_id" | "user_id" | "business_date"> & { entry_id: string | null; assignments: BlockJson[]; ended_assignments: number }>(
+        `select * from cma.roster_cell($1::date, $2, $3::uuid, $4::date)`, [weekStart, teamKey, userId, date],
       );
-      return r.rows[0] ? toRosterEntry(r.rows[0]) : null;
+      const c = one(r.rows, "roster_cell");
+      return {
+        entry: c.entry_id ? toRosterEntry({ ...c, entry_id: c.entry_id, user_id: userId, business_date: date }) : null,
+        assignments: (c.assignments ?? []).map(toBlock),
+        endedAssignments: c.ended_assignments,
+      };
     });
+  },
+
+  async setRosterAssignments(me, weekStart, teamKey, userId, date, blocks, publishOthers): Promise<RosterAssignmentsResult> {
+    assertDate(weekStart, "weekStart");
+    assertDate(date, "date");
+    try {
+      return await withTenant(ctx(me), async (q) => {
+        const r = await q.query<{ answer: { kept: number; ended: number; added: number; published: boolean; version: number; blocks: BlockJson[] } }>(
+          `select cma.roster_set_assignments($1::date, $2, $3::uuid, $4::date, $5::jsonb, $6) as answer`,
+          [weekStart, teamKey, userId, date, JSON.stringify(blocks), publishOthers],
+        );
+        const a = one(r.rows, "roster_set_assignments").answer;
+        return { status: "saved", kept: a.kept, ended: a.ended, added: a.added, published: a.published, version: a.version, blocks: (a.blocks ?? []).map(toBlock) };
+      });
+    } catch (e) {
+      // D8: today's change in a published week would also publish other changes; the planner asks first
+      const m = e instanceof CmaDbError && e.sqlState === "CMA03" ? /^publish_others=(\d+)$/.exec(e.detail ?? "") : null;
+      if (m) return { status: "confirm", otherChanges: Number(m[1]) };
+      throw e;
+    }
+  },
+
+  async getRosterSlotCoverage(me, date, teamKey): Promise<RosterSlotCoverageRow[]> {
+    assertDate(date, "date");
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ slot_start: Date; slot_time: string; working: number; code: string; hours_market_code: string | null; people: number }>(
+        `select * from cma.roster_slot_coverage($1::date, $2)`, [date, teamKey]);
+      return r.rows.map((x) => ({ slotStart: x.slot_start.toISOString(), slotTime: x.slot_time.slice(0, 5), working: x.working, code: x.code, hoursMarket: x.hours_market_code, people: x.people }));
+    });
+  },
+
+  async getRosterPlannedHours(me, weekStart, teamKey): Promise<RosterPlannedRow[]> {
+    assertDate(weekStart, "weekStart");
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ user_id: string; business_date: string; code: string; kind: "work" | "pause"; hours_market_code: string | null; planned_minutes: number }>(
+        `select * from cma.roster_planned_hours($1::date, $2)`, [weekStart, teamKey]);
+      return r.rows.map((x) => ({ userId: x.user_id, date: x.business_date, code: x.code, kind: x.kind, hoursMarket: x.hours_market_code, plannedMinutes: x.planned_minutes }));
+    });
+  },
+
+  async getStandardWeek(me): Promise<StandardWeekDay[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{
+        user_id: string; iso_weekday: number; kind: "shift" | "absence"; start_time: string | null; end_time: string | null; absence_key: string | null;
+        absence_name: string | null; note: string | null; assignments: StandardWeekDay["assignments"] | null; recorded_at: Date;
+      }>(`select * from cma.standard_week()`);
+      return r.rows.map((x) => ({
+        userId: x.user_id, isoWeekday: x.iso_weekday, kind: x.kind, start: x.start_time, end: x.end_time, absenceKey: x.absence_key,
+        absenceName: x.absence_name, note: x.note, assignments: x.assignments ?? [], recordedAt: x.recorded_at.toISOString(),
+      }));
+    });
+  },
+
+  async saveStandardWeek(me, weekStart, teamKey): Promise<RosterReportRow[]> {
+    assertDate(weekStart, "weekStart");
+    return withTenant(ctx(me), async (q) =>
+      (await q.query<RosterReportDbRow>(`select * from cma.save_standard_week($1::date, $2)`, [weekStart, teamKey])).rows.map(toReport));
+  },
+
+  async applyStandardWeek(me, weekStart, teamKey): Promise<RosterReportRow[]> {
+    assertDate(weekStart, "weekStart");
+    return withTenant(ctx(me), async (q) =>
+      (await q.query<RosterReportDbRow>(`select * from cma.apply_standard_week($1::date, $2)`, [weekStart, teamKey])).rows.map(toReport));
+  },
+
+  async getRosterConfiguration(me) {
+    return withTenant(ctx(me), async (q) => {
+      // The catalog first: cma.assignment_types checks the acting person (CMA01); the active statuses as listStatuses reads
+      // them (a plain read: no time_event count, unlike the Statuses page's cma.work_statuses_all)
+      const types = (await q.query<AssignmentTypeDbRow>(`select * from cma.assignment_types()`)).rows.map(toAssignmentType);
+      const st = await q.query<{ key: string; name: string; is_working: boolean; is_productive: boolean; work_area: WorkArea | null; is_default: boolean }>(
+        `select key, name, is_working, is_productive, work_area, is_default from cma.work_status
+          where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, key`);
+      const statuses = st.rows.map((x) => ({ key: x.key, name: x.name, isWorking: x.is_working, isProductive: x.is_productive, workArea: x.work_area, isDefault: x.is_default }));
+      return { types, statuses, settings: await readSettings(q) };
+    });
+  },
+
+  async listAssignmentTypes(me): Promise<AssignmentType[]> {
+    return withTenant(ctx(me), async (q) => (await q.query<AssignmentTypeDbRow>(`select * from cma.assignment_types()`)).rows.map(toAssignmentType));
+  },
+
+  async upsertAssignmentType(me, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.upsert_assignment_type($1, $2, $3, $4, $5, $6, $7)`,
+      [input.code, input.name, input.kind, input.isExtra ? null : input.statusKey, input.isExtra, input.sortOrder, input.isActive ? "active" : "inactive"]));
+  },
+
+  async setAbsenceCarriesOver(me, key, carriesOver): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_absence_carries_over($1, $2)`, [key, carriesOver]));
   },
 
   async publishRoster(me, weekStart, teamKey): Promise<RosterWeekHeader> {
@@ -2512,13 +2664,11 @@ export const postgresData: CmaData = {
     });
   },
 
-  async copyRosterWeek(me, fromWeekStart, toWeekStart, teamKey): Promise<number> {
+  async copyRosterWeek(me, fromWeekStart, toWeekStart, teamKey): Promise<RosterReportRow[]> {
     assertDate(fromWeekStart, "from");
     assertDate(toWeekStart, "to");
-    return withTenant(ctx(me), async (q) => {
-      const r = await q.query<{ n: number }>(`select cma.roster_copy_week($1::date, $2::date, $3) as n`, [fromWeekStart, toWeekStart, teamKey]);
-      return Number(one(r.rows, "roster_copy_week").n);
-    });
+    return withTenant(ctx(me), async (q) =>
+      (await q.query<RosterReportDbRow>(`select * from cma.roster_copy_week_report($1::date, $2::date, $3)`, [fromWeekStart, toWeekStart, teamKey])).rows.map(toReport));
   },
 
   async getMyRoster(me, range): Promise<MyRosterDay[]> {
@@ -2528,11 +2678,12 @@ export const postgresData: CmaData = {
       const r = await q.query<{
         business_date: string; is_published: boolean; kind: "shift" | "absence" | null; start_time: string | null; end_time: string | null;
         absence_key: string | null; absence_name: string | null; note: string | null; team_name: string | null; published_at: Date | null;
+        assignments?: PublishedAssignment[] | null;
       }>(`select * from cma.my_roster($1::date, $2::date)`, [range.from, range.to]);
       return r.rows.map((d) => ({
         date: d.business_date, isPublished: d.is_published, kind: d.kind, start: d.start_time, end: d.end_time,
         absenceKey: d.absence_key, absenceName: d.absence_name, note: d.note, teamName: d.team_name,
-        publishedAt: d.published_at ? d.published_at.toISOString() : null,
+        publishedAt: d.published_at ? d.published_at.toISOString() : null, assignments: d.assignments ?? [],
       }));
     });
   },

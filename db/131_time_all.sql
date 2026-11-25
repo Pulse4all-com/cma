@@ -361,6 +361,18 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'roster week', 'roster coverage', $q$select * from cma.roster_coverage('{monday}', null)$q$, 'agent', array['roster.manage']),
 ('a', 'roster week', 'roster weeks around', $q$select * from cma.roster_weeks(null, date '{monday}' - 84, date '{monday}' + 90)$q$, 'agent', array['roster.manage']),
 ('a', 'roster week', 'absence types', $q$select * from cma.absence_types()$q$, 'agent', array['roster.manage']),
+-- Assignments in the roster (addition 0009zw, brief A): the week's blocks and the planner's settings and catalogs in the
+-- week's transaction (the Week and Day views), the person-date after a cell write, and the figures and Standard week the
+-- API serves; the type catalog as Configuration → Roster reads it
+('a', 'roster week', 'roster assignments', $q$select * from cma.roster_assignments('{monday}', null)$q$, 'agent', array['roster.manage']),
+('a', 'roster week', 'planner context', $q$select (select jsonb_object_agg(s.key, s.value) from cma.tenant_settings() s
+   where s.key in ('roster.slot_minutes', 'roster.lunch_after_minutes', 'roster.lunch_type_code')) as settings, cma.roster_planner_zone() as zone,
+   (select jsonb_agg(to_jsonb(t)) from cma.assignment_types() t) as types, (select jsonb_agg(to_jsonb(m)) from cma.hours_markets() m) as markets$q$, 'agent', array['roster.manage']),
+('a', 'roster cell', 'roster cell', $q$select c.* from cma.roster_people('{monday}', null) p cross join lateral cma.roster_cell('{monday}', null, p.user_id, '{monday}') c limit 1$q$, 'agent', array['roster.manage']),
+('a', 'roster figures', 'roster slot coverage', $q$select * from cma.roster_slot_coverage('{monday}', null)$q$, 'agent', array['roster.manage']),
+('a', 'roster figures', 'roster planned hours', $q$select * from cma.roster_planned_hours('{monday}', null)$q$, 'agent', array['roster.manage']),
+('a', 'roster figures', 'standard week', $q$select * from cma.standard_week()$q$, 'agent', array['roster.manage']),
+('a', 'configuration roster', 'assignment types', $q$select * from cma.assignment_types()$q$, 'agent', array['tenant.configure']),
 ('a', 'follow-up', 'follow-up page with callbacks', $q$select cma.follow_up_page(null, null, null, null) as j,
    (select coalesce(json_agg(r order by r.ordinality), '[]'::json) from cma.callbacks_kept_report(date '{today}' - 55, '{today}') with ordinality r) as callback_rows,
    cma.callbacks_kept_connected() as callbacks_connected,

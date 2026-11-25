@@ -13,7 +13,8 @@
 --   S3  every new and re-created function: the owner's, the application's, never the readers' or public's, the caller's
 --       rights; the reads stable; my_roster and roster_today end with assignments, roster_people with
 --       default_hours_market_code, absence_types with carries_over
---   S4  the settings: roster.slot_minutes (5 to 60, default 15), roster.lunch_after_minutes (360), roster.planner_timezone
+--   S4  the settings: roster.slot_minutes (5 to 60, default 15), roster.lunch_after_minutes (360), roster.lunch_type_code
+--       (empty), roster.planner_timezone
 --       (empty), and the zone trigger on cma.tenant_setting
 --   B   on a throwaway tenant (zone UTC; planner zone Africa/Lagos, UTC + 1 all year, from B9; markets GB and NL as hours markets, BE
 --       mapped to NL; team alpha with a1 and a2, a1's Default market NL; an admin, a manager and an analyst):
@@ -261,9 +262,9 @@ begin
   -- S4
   perform pg_temp.v0009zw_row(4, 'S4', 'the settings and the zone trigger on cma.tenant_setting',
     (select string_agg(s.key || '=' || s.default_value || coalesce(' [' || array_to_string(s.allowed_values, ',') || ']', ''), '; ' order by s.key collate "C")
-     from cma.setting s where s.key in ('roster.slot_minutes', 'roster.lunch_after_minutes', 'roster.planner_timezone'))
+     from cma.setting s where s.key in ('roster.slot_minutes', 'roster.lunch_after_minutes', 'roster.lunch_type_code', 'roster.planner_timezone'))
     || '; zone trigger ' || exists (select 1 from pg_trigger g where g.tgrelid = 'cma.tenant_setting'::regclass and g.tgname = 'zone_ok'),
-    'roster.lunch_after_minutes=360; roster.planner_timezone=; roster.slot_minutes=15 [5,10,15,20,30,60]; zone trigger true');
+    'roster.lunch_after_minutes=360; roster.lunch_type_code=; roster.planner_timezone=; roster.slot_minutes=15 [5,10,15,20,30,60]; zone trigger true');
 end
 $$;
 
