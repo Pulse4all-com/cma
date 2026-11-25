@@ -25,6 +25,8 @@
 -- target, and the cutoff moment where the tenant's cutoff is 12:00); E7 and A1 compare
 -- cma.next_business_noon_in in its cutoff form (the tenant's speed_to_lead.next_day_cutoff) with the _of function, which
 -- reads the same setting; S5 names the cutoff form. Before 0009zq the script runs as it did.
+-- Edited by 0009zu (242, brief B40b, D36): the row type no longer has first_call_*, so E3 and E4 compare the other
+-- columns they compared; the first Attempt is 235's and 243's to verify.
 -- Edited after 0009zq (24 November 2026; prod's run of 179 after 234: E6 read "8230 rows now against 8230 before: 3 only
 -- now, 3 only before" for pulse4all-subscriptions; db/diagnose_0009zq_prod.sql, kept in records/0009zq-prod-2026-11-24/,
 -- found under one snapshot six rows of check source_figure_gap, where 214's function sets the market and the copy, which
@@ -932,9 +934,11 @@ declare
   v_checks text[]; v_sql_new text[]; v_sql_old text[]; v_ordered boolean[];
   v_from timestamptz[]; v_to timestamptz[]; m record; v_bad text;
   r jsonb; v_n_old bigint; v_only bigint; v_snap boolean;
-  -- E3 and E4 where 0009zq has run: the columns it leaves as they were (the cutoff moment only at a 12:00 cutoff)
+  -- E3 and E4 where 0009zq has run: the columns it leaves as they were (the cutoff moment only at a 12:00 cutoff). Edited
+  -- for 0009zu (242, D36): first_call_* left the row, so they are compared no more; the first Attempt that replaced them
+  -- is 235's and 243's to verify
   v_kept text := 'tenant_id, deal_id, connection_id, deal_source_id, pipeline_id, pipeline_label, business_date, created_at, market, '
-                 || 'market_source, is_closed, first_call_id, first_call_source_id, first_call_at, first_call_linked, first_any_call_at, '
+                 || 'market_source, is_closed, first_any_call_at, '
                  || 'first_any_direction, inbound_first, first_connected_at, target_seconds, '
                  || 'case when cma.setting_of(tenant_id, ''speed_to_lead.next_day_cutoff'') = ''12:00'' then next_business_noon end as noon_at_12';
   -- E5 (edited after 0009zg, 21 November 2026): the old copy is 160's and knows none of the checks added since (210's

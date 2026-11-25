@@ -36,7 +36,7 @@ export function GroupSwitch({
   group, query, copy,
 }: { group: SpeedToLeadGroup; query: Record<string, string>; copy: Copy }) {
   const t = copy.speedToLead;
-  const labels: Record<SpeedToLeadGroup, string> = { day: t.day, market: t.market, agent: t.agent, pipeline: t.pipeline };
+  const labels: Record<SpeedToLeadGroup, string> = { day: t.day, week: t.week, market: t.market, agent: t.agent, pipeline: t.pipeline };
   const next = nextGroup(group);
   return (
     <div className="flex flex-col gap-2 text-small font-semibold">
@@ -48,6 +48,7 @@ export function GroupSwitch({
           <Link
             key={g}
             href={{ pathname: "/reports/speed-to-lead", query: { ...query, group: g } }}
+            scroll={false}
             aria-current={g === group ? "page" : undefined}
             data-shortcut={g === next ? "g" : undefined}
             className={[

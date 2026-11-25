@@ -1,6 +1,9 @@
+import { ServerResponse } from "node:http";
+import { trace } from "@opentelemetry/api";
 import { AlwaysOnSampler, NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-import type { ReadableSpan, SpanProcessor } from "@opentelemetry/sdk-trace-base";
-import { takeDbStats, warmDatabase } from "@/lib/db/client";
+import type { ReadableSpan, Span, SpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { peekDbStats, takeDbStats, warmDatabase } from "@/lib/db/client";
+import { requestKindOf, serverTimingOf } from "@/lib/telemetry";
 
 /** Next's request span (its own tracer, next.span_type BaseServer.handleRequest): it ends when the response is complete */
 const REQUEST_SPAN = "BaseServer.handleRequest";
@@ -17,6 +20,22 @@ const ROUTE_TTL_MS = 60_000;
  * 17 October 2026, section 5.6). Insertion order is age order, so expired entries are dropped from the front.
  */
 const routes = new Map<string, { route: string; at: number }>();
+/**
+ * The traces of the client router's prefetches (Next-Router-Prefetch on the incoming request): Next's request span does
+ * not carry the header, so the response's head (writeHead below) marks the trace; the header's presence only, no value
+ */
+const prefetches = new Map<string, { at: number }>();
+/** When each request's first span started (performance.now() as t), for the Server-Timing header's total */
+const starts = new Map<string, { at: number; t: number }>();
+
+/** Drops the entries older than ROUTE_TTL_MS from a map's front (insertion order is age order) */
+function expire(m: Map<string, { at: number }>): void {
+  const now = Date.now();
+  for (const [id, v] of m) {
+    if (now - v.at <= ROUTE_TTL_MS) break;
+    m.delete(id);
+  }
+}
 
 function remember(span: ReadableSpan): void {
   const route = span.attributes["next.route"];
@@ -38,7 +57,14 @@ function routeOf(span: ReadableSpan): string | null {
 }
 
 const requestLog: SpanProcessor = {
-  onStart() {},
+  onStart(span: Span) {
+    // The first span of a trace is the request's (the proxy's run, then the render's): its start is the request's
+    const id = span.spanContext().traceId;
+    if (!starts.has(id)) {
+      expire(starts);
+      starts.set(id, { at: Date.now(), t: performance.now() });
+    }
+  },
   onEnd(span: ReadableSpan) {
     if (span.attributes["next.span_type"] !== REQUEST_SPAN) {
       remember(span);
@@ -49,9 +75,14 @@ const requestLog: SpanProcessor = {
     // the only span; such a request reaches no route and no database, and this span's status is not the answer's.
     if (span.attributes["next.bubble"] === true) return;
     // One line per page request, RSC request and API request, with the route pattern or null: never the path
+    // (a request the proxy answered itself leaves its start and mark behind: they expire after ROUTE_TTL_MS)
+    const traceId = span.spanContext().traceId;
+    const prefetch = prefetches.delete(traceId);
+    starts.delete(traceId);
     const route = routeOf(span);
     if (route?.startsWith("/_next") || String(span.attributes["http.target"] ?? "").startsWith("/_next/")) return;
-    const db = takeDbStats(span.spanContext().traceId);
+    const db = takeDbStats(traceId);
+    const rsc = span.attributes["next.rsc"] === true;
     const [s, ns] = span.duration;
     const totalMs = s * 1000 + ns / 1e6;
     const status = Number(span.attributes["http.status_code"] ?? 0);
@@ -61,7 +92,9 @@ const requestLog: SpanProcessor = {
       route,
       method: span.attributes["http.method"] ?? null,
       status,
-      rsc: span.attributes["next.rsc"] === true,
+      rsc,
+      // document (a page opened), navigation (the client router's request), prefetch (the router's prefetch) or api
+      kind: requestKindOf({ route, rsc, prefetch }),
       // dbMs sums the time each transaction held a connection; a page's parallel reads overlap, so it can exceed totalMs
       totalMs: Math.round(totalMs * 10) / 10,
       dbMs: db ? Math.round(db.dbMs * 10) / 10 : 0,
@@ -72,6 +105,35 @@ const requestLog: SpanProcessor = {
   forceFlush: async () => {},
   shutdown: async () => {},
 };
+
+/**
+ * The Server-Timing header (brief N07, WP1): on every page and API response, in every auth mode, the database's
+ * milliseconds and the total up to the moment the response's head is written: for an API answer its whole time, for a
+ * page its first byte (the route skeleton; the rest streams after it). Durations only, never a name, an id or a query.
+ * Set where Node writes the head (an explicit or an implicit writeHead), in the request's own trace; a static file
+ * (/_next/) and a response that already has the header are left alone.
+ */
+const writeHead = ServerResponse.prototype.writeHead;
+ServerResponse.prototype.writeHead = function (this: ServerResponse, ...args: unknown[]) {
+  try {
+    const req = (this as ServerResponse & { req?: { url?: string; headers?: Record<string, unknown> } }).req;
+    const url = req?.url ?? "";
+    if (!this.headersSent && !url.startsWith("/_next/")) {
+      const id = trace.getActiveSpan()?.spanContext().traceId;
+      if (id && req?.headers?.["next-router-prefetch"] !== undefined) {
+        expire(prefetches);
+        prefetches.set(id, { at: Date.now() });
+      }
+      const start = id ? starts.get(id) : undefined;
+      if (id && start && !this.hasHeader("server-timing")) {
+        this.setHeader("Server-Timing", serverTimingOf(peekDbStats(id)?.dbMs ?? 0, performance.now() - start.t));
+      }
+    }
+  } catch {
+    // never let the header cost a response
+  }
+  return (writeHead as (...a: unknown[]) => ServerResponse).apply(this, args);
+} as typeof ServerResponse.prototype.writeHead;
 
 // No exporter: the processor above is the only consumer of the spans. Every request is recorded (AlwaysOnSampler):
 // the default sampler follows an incoming traceparent, and Google's front end sends one on every request, marked not

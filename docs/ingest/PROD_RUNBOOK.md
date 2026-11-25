@@ -218,11 +218,11 @@ Expected: an empty result. Rerun the query above: `code` `GB`, `source` `record`
 
 **Studio (cma-prod-pg)** after the context block (speed to lead for today)
 ```sql
-select deal_source_id, market, market_source, status, first_call_at, business_seconds
+select deal_source_id, market, market_source, status, first_attempt_at, business_seconds
 from cma.speed_to_lead_rows(current_date, current_date) where deal_source_id = '<deal id>';
 reset role;
 ```
-Expected: one row with market `GB`, `market_source` `record`, no call yet. Log an outbound call on the test contact (outcome Connected) and rerun: `first_call_at` filled.
+Expected: one row with market `GB`, `market_source` `record`, no call yet. Log an outbound call on the test contact (outcome Connected) and rerun: `first_attempt_at` filled (an outbound telephony call linked to the deal or its contact).
 
 In the live portal on 12 October `deal_country` was filled: `United Kingdom` resolved to `GB` with `source` `record`, so no alias was needed.
 

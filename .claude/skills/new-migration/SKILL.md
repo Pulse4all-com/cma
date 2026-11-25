@@ -10,6 +10,7 @@ Follow CLAUDE.md (Database, Performance) and docs/RUNBOOK.md, section 7. Nothing
 ## 1. Number and version
 - Next script number: `ls db | sort -n | tail -4`; take the next two numbers: `<n>_<name>.sql` and `<n+1>_verify_<name>.sql`.
 - Next addition version: the highest `version` inserted into `cma.schema_migration` in `db/*.sql`, then the series of docs/decisions.md (0008za after 0008z; after 0008zz the additions continue as 0009a, 0009b, …). Search with `grep -h "insert into cma.schema_migration" -A1 db/*.sql | tail`.
+- Both are free only when neither main nor any open pull request uses them (CLAUDE.md, Database): list the open PRs (`gh pr list --state open`; in a cloud session `gh api -X GET search/issues -f q='repo:<owner>/<repo> is:pr is:open'`) and the db/ files of their branches (`git diff --name-only origin/main...origin/<branch> -- db/`), and take the next number and version after every one of them. Check again right before the PR opens, and say in the PR that Martin checks once more before merging.
 - The brief gives the migration number when it has one; use it as given and say so.
 
 ## 2. Impact (delegate when a function or object is re-created)
