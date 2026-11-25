@@ -5,7 +5,7 @@ import { MAX_REPORT_DAYS, parseCallsFilter, REPORT_PERMISSIONS } from "@/lib/rep
 export const dynamic = "force-dynamic";
 
 /**
- * Speed to lead's cockpit figures (cma.speed_to_lead_figures, addition 0009zr) for ?from&to (at most 92 days) and the
+ * Speed to lead's cockpit figures (cma.speed_to_lead_figures, addition 0009zu) for ?from&to (at most 92 days) and the
  * optional &market (a market code or unknown; anything else 400): the period's and the previous period's (the same
  * length before it, cut at now's time of day while the period reaches today, as Attempts per deal compares) deals,
  * called, % within target, % before the next working day's cutoff, median business minutes, open deals not called yet

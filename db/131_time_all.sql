@@ -32,11 +32,11 @@
 -- Since addition 0009zq (234_speed_to_lead_one.sql) the Dashboard's speed-to-lead row reads the one-row total of
 -- cma.speed_to_lead_summary ('speed to lead total', which needs 234: before it the group is refused, CMA04), and Speed to
 -- lead's page has its rows read timed as a row of its own ('speed to lead {P}', 'rows').
--- Since addition 0009zr (236_speed_to_lead_cockpit.sql) Speed to lead's page is the cockpit: its two rows ('summary by
+-- Since addition 0009zu (242_speed_to_lead_cockpit.sql) Speed to lead's page is the cockpit: its two rows ('summary by
 -- day', 'rows') are its one read, cma.speed_to_lead_page ('page (not called yet, first page)'), and the Called tab's page
 -- 2 ('page (called, page 2)', a set of its own: a tab or a further page is a load of its own), the page over this month
 -- in part a (the default view, read again every minute while open), and the API's figures, deals list and rows, each a
--- set of its own; all but the rows need 236 (before it the functions do not exist: they read FAIL).
+-- set of its own; all but the rows need 242 (before it the functions do not exist: they read FAIL).
 -- Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
@@ -442,7 +442,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'subscriptions filtered', 'page under a market, no proposition and the monthly group', $q$select cma.subscriptions_page((select min(t.market) from cma.subscription_take t where t.tenant_id = cma.current_tenant_id()), null, 'none', 'monthly', (date '{month}' - interval '12 months')::date, date '{month}')$q$, 'list', array['reports.view', 'performance.team']),
 ('a', 'subscriptions further page', 'list page 2', $q$select cma.subscription_rows(null, null, null, null, 'total', 'monthly_amount', true, 2, 50, false)$q$, 'list', array['reports.view', 'performance.team']),
 ('a', 'subscriptions file', 'records file of the Total subscriptions', $q$select cma.subscription_rows(null, null, null, null, 'total', 'monthly_amount', true, 1, 50, true)$q$, 'overview', array['reports.view', 'performance.team']),
--- Speed to lead's page over this month to today (addition 0009zr): the view a plain visit opens, and the one the page
+-- Speed to lead's page over this month to today (addition 0009zu): the view a plain visit opens, and the one the page
 -- reads again every 60 seconds while it is open
 ('a', 'speed to lead this month', 'page (not called yet, first page)', $q$select cma.speed_to_lead_page(date_trunc('month', x.today)::date, x.today, null, 'day', 'not_called', 50, 0) from (select (now() at time zone t.timezone)::date as today from cma.tenant t where t.id = cma.current_tenant_id()) x$q$, 'overview', array['reports.view', 'performance.team']),
 -- Campaigns
@@ -452,7 +452,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'dashboard {P}', 'intake per day', $q$select * from cma.intake_per_day('{f}', '{t}')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'dashboard {P}', 'speed to lead total', $q$select * from cma.speed_to_lead_summary('{f}', '{t}', 'total')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'dashboard {P}', 'callbacks kept', $q$select * from cma.callbacks_kept_report('{f}', '{t}')$q$, 'overview', array['reports.view', 'performance.team']),
--- Speed to lead's cockpit (addition 0009zr): the page makes one read (cma.speed_to_lead_page: the figures with the
+-- Speed to lead's cockpit (addition 0009zu): the page makes one read (cma.speed_to_lead_page: the figures with the
 -- previous period, the markets, the trend, the Group by table and the deals list's first page of 50), the Not called yet
 -- tab first; a tab or a further page is the same read again (the Called tab's page 2 its own row). A report core
 -- (overview, 500 ms) that holds a list's first page

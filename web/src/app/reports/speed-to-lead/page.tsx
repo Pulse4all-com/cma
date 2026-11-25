@@ -20,7 +20,7 @@ import { dateKeyInZone, fmtDate, fmtTime } from "@/lib/time";
 import { resolve } from "../../access";
 
 /**
- * Speed to lead (Report, B11; the cockpit since addition 0009zr, brief B40b, mockup approved 24 November 2026): how fast
+ * Speed to lead (Report, B11; the cockpit since addition 0009zu, brief B40b, mockup approved 24 November 2026): how fast
  * new lead deals get their first Attempt (an outbound call on the phone system linked to the deal or its contacts), in
  * office time of the deal's market, and how they are followed up after it. One read (cma.speed_to_lead_page) gives the
  * whole page: six tiles with their change against the previous period of the same length (within target and before the

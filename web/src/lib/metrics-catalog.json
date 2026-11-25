@@ -7989,16 +7989,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -8010,7 +8010,7 @@
           },
           {
             "object": "cma.speed_to_lead_groups_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -8212,16 +8212,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -8233,7 +8233,7 @@
           },
           {
             "object": "cma.speed_to_lead_groups_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -8413,7 +8413,7 @@
     {
       "surface": "report",
       "page": "/reports/speed-to-lead",
-      "comparison": "Since addition 0009zr the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
+      "comparison": "Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
       "settings": [
         {
           "key": "intake.start_date",
@@ -8435,16 +8435,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -8456,11 +8456,11 @@
           },
           {
             "object": "cma.speed_to_lead_groups_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_figures_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -8640,7 +8640,7 @@
     {
       "surface": "report",
       "page": "/reports/speed-to-lead",
-      "comparison": "Since addition 0009zr the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
+      "comparison": "Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
       "settings": [
         {
           "key": "intake.start_date",
@@ -8670,16 +8670,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -8691,11 +8691,11 @@
           },
           {
             "object": "cma.speed_to_lead_groups_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_figures_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -8875,7 +8875,7 @@
     {
       "surface": "report",
       "page": "/reports/speed-to-lead",
-      "comparison": "Since addition 0009zr the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
+      "comparison": "Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
       "settings": [
         {
           "key": "intake.start_date",
@@ -8909,16 +8909,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -8930,11 +8930,11 @@
           },
           {
             "object": "cma.speed_to_lead_groups_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_figures_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -9114,7 +9114,7 @@
     {
       "surface": "report",
       "page": "/reports/speed-to-lead",
-      "comparison": "Since addition 0009zr the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
+      "comparison": "Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
       "settings": [
         {
           "key": "intake.start_date",
@@ -9136,16 +9136,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -9157,11 +9157,11 @@
           },
           {
             "object": "cma.speed_to_lead_groups_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_figures_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -9341,7 +9341,7 @@
     {
       "surface": "report",
       "page": "/reports/speed-to-lead",
-      "comparison": "Since addition 0009zr the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
+      "comparison": "Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
       "settings": [
         {
           "key": "intake.start_date",
@@ -9363,16 +9363,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -9384,11 +9384,11 @@
           },
           {
             "object": "cma.speed_to_lead_groups_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_figures_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -9590,16 +9590,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -9611,7 +9611,7 @@
           },
           {
             "object": "cma.speed_to_lead_groups_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -9787,7 +9787,7 @@
     {
       "surface": "report",
       "page": "/reports/speed-to-lead",
-      "comparison": "Since addition 0009zr the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
+      "comparison": "Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
       "settings": [
         {
           "key": "intake.start_date",
@@ -9817,16 +9817,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -9838,7 +9838,7 @@
           },
           {
             "object": "cma.speed_to_lead_figures_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -9848,7 +9848,7 @@
           }
         ]
       },
-      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -9875,7 +9875,7 @@
         "features.md paragraph 4 (Speed to lead)",
         "definitions.md, Speed to lead (As built today)",
         "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
-        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)"
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
       ],
       "sources": [
         {
@@ -10007,7 +10007,7 @@
     {
       "surface": "report",
       "page": "/reports/speed-to-lead",
-      "comparison": "Since addition 0009zr the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
+      "comparison": "Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
       "settings": [
         {
           "key": "intake.start_date",
@@ -10037,16 +10037,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -10058,11 +10058,11 @@
           },
           {
             "object": "cma.speed_to_lead_groups_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_figures_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -10072,7 +10072,7 @@
           }
         ]
       },
-      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -10099,7 +10099,7 @@
         "features.md paragraph 4 (Speed to lead)",
         "definitions.md, Speed to lead (As built today)",
         "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
-        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)"
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
       ],
       "sources": [
         {
@@ -10266,16 +10266,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -10287,7 +10287,7 @@
           },
           {
             "object": "cma.speed_to_lead_groups_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -10297,7 +10297,7 @@
           }
         ]
       },
-      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -10324,7 +10324,7 @@
         "features.md paragraph 4 (Speed to lead)",
         "definitions.md, Speed to lead (As built today)",
         "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
-        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)"
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
       ],
       "sources": [
         {
@@ -10499,16 +10499,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -10526,7 +10526,7 @@
           }
         ]
       },
-      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -10553,7 +10553,7 @@
         "features.md paragraph 4 (Speed to lead)",
         "definitions.md, Speed to lead (As built today)",
         "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
-        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)"
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
       ],
       "sources": [
         {
@@ -10715,16 +10715,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -10736,7 +10736,7 @@
           },
           {
             "object": "cma.speed_to_lead_groups_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -10746,7 +10746,7 @@
           }
         ]
       },
-      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -10773,7 +10773,7 @@
         "features.md paragraph 4 (Speed to lead)",
         "definitions.md, Speed to lead (As built today)",
         "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
-        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)"
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
       ],
       "sources": [
         {
@@ -10943,16 +10943,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -10964,7 +10964,7 @@
           },
           {
             "object": "cma.speed_to_lead_groups_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -10974,7 +10974,7 @@
           }
         ]
       },
-      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -11001,7 +11001,7 @@
         "features.md paragraph 4 (Speed to lead)",
         "definitions.md, Speed to lead (As built today)",
         "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
-        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)"
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
       ],
       "sources": [
         {
@@ -11164,16 +11164,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -11185,7 +11185,7 @@
           },
           {
             "object": "cma.speed_to_lead_deals_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -11195,7 +11195,7 @@
           }
         ]
       },
-      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -11222,7 +11222,7 @@
         "features.md paragraph 4 (Speed to lead)",
         "definitions.md, Speed to lead (As built today)",
         "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
-        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)"
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
       ],
       "sources": [
         {
@@ -11384,16 +11384,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -11405,7 +11405,7 @@
           },
           {
             "object": "cma.speed_to_lead_deals_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -11415,7 +11415,7 @@
           }
         ]
       },
-      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -11442,7 +11442,7 @@
         "features.md paragraph 4 (Speed to lead)",
         "definitions.md, Speed to lead (As built today)",
         "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
-        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)"
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
       ],
       "sources": [
         {
@@ -11570,7 +11570,7 @@
         "per_attempt"
       ],
       "verify_sql": "select r.deal_source_id, r.attempts_so_far from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r where r.status = 'called' order by r.created_at desc, r.deal_id",
-      "notes": "No phone number, recording, customer name or email; staff names (the agent) are shown. 237 W10 compares the list's attempts with cma.deal_attempts_of's."
+      "notes": "No phone number, recording, customer name or email; staff names (the agent) are shown. 243 W10 compares the list's attempts with cma.deal_attempts_of's."
     },
     {
       "surface": "report",
@@ -11609,16 +11609,16 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
             "object": "cma.speed_to_lead_page",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zr"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
@@ -11630,7 +11630,7 @@
           },
           {
             "object": "cma.speed_to_lead_deals_from",
-            "migration": "0009zr"
+            "migration": "0009zu"
           }
         ],
         "ts": [
@@ -11640,7 +11640,7 @@
           }
         ]
       },
-      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -11667,7 +11667,7 @@
         "features.md paragraph 4 (Speed to lead)",
         "definitions.md, Speed to lead (As built today)",
         "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
-        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)"
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
       ],
       "sources": [
         {
@@ -11794,7 +11794,7 @@
         "per_record"
       ],
       "verify_sql": "select r.deal_source_id, r.created_at, r.market from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r where r.status = 'not_called_open' order by r.created_at desc",
-      "notes": "Moves with now(). The setting is 1 to 30 working days (cma.check_tenant_setting); 237 W8 proves it follows the setting."
+      "notes": "Moves with now(). The setting is 1 to 30 working days (cma.check_tenant_setting); 243 W8 proves it follows the setting."
     },
     {
       "key": "calls.total",

@@ -4735,9 +4735,9 @@ deals = count(*) over cma.speed_to_lead_of rows of the group: deals of counted l
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -4818,9 +4818,9 @@ called = count(*) filter (where status = 'called'); status = 'called' when a fir
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -4891,7 +4891,7 @@ median = round(percentile_cont(0.5) within group (order by business_seconds)::nu
 
 **Time** Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)
 
-**Previous period** Since addition 0009zr the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)
+**Previous period** Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)
 
 **Settings**
 
@@ -4903,9 +4903,9 @@ median = round(percentile_cont(0.5) within group (order by business_seconds)::nu
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zr); `cma.speed_to_lead_figures_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zu); `cma.speed_to_lead_figures_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -4976,7 +4976,7 @@ within_target per deal: business_seconds <= target_minutes*60 when called with a
 
 **Time** Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)
 
-**Previous period** Since addition 0009zr the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)
+**Previous period** Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)
 
 **Settings**
 
@@ -4990,9 +4990,9 @@ within_target per deal: business_seconds <= target_minutes*60 when called with a
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zr); `cma.speed_to_lead_figures_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zu); `cma.speed_to_lead_figures_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -5063,7 +5063,7 @@ cutoff = cma.next_business_noon_of(market, created_at): the tenant setting speed
 
 **Time** Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)
 
-**Previous period** Since addition 0009zr the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)
+**Previous period** Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)
 
 **Settings**
 
@@ -5078,9 +5078,9 @@ cutoff = cma.next_business_noon_of(market, created_at): the tenant setting speed
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zr); `cma.speed_to_lead_figures_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zu); `cma.speed_to_lead_figures_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -5151,7 +5151,7 @@ open_not_called = count(*) filter (where status = 'not_called_open'); status = '
 
 **Time** Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)
 
-**Previous period** Since addition 0009zr the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)
+**Previous period** Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)
 
 **Settings**
 
@@ -5163,9 +5163,9 @@ open_not_called = count(*) filter (where status = 'not_called_open'); status = '
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zr); `cma.speed_to_lead_figures_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zu); `cma.speed_to_lead_figures_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -5236,7 +5236,7 @@ closed_before_first_call = count(*) filter (where status = 'closed_before_first_
 
 **Time** Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)
 
-**Previous period** Since addition 0009zr the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)
+**Previous period** Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)
 
 **Settings**
 
@@ -5248,9 +5248,9 @@ closed_before_first_call = count(*) filter (where status = 'closed_before_first_
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zr); `cma.speed_to_lead_figures_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zu); `cma.speed_to_lead_figures_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -5331,9 +5331,9 @@ totals = sum(deals), sum(called), sum(open_not_called), sum(closed_before_first_
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts; `groupSpeedToLead` in src/lib/reports.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -5404,7 +5404,7 @@ max(waiting_business_seconds) filter (where status = 'not_called_open') over the
 
 **Time** Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)
 
-**Previous period** Since addition 0009zr the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)
+**Previous period** Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)
 
 **Settings**
 
@@ -5418,9 +5418,9 @@ max(waiting_business_seconds) filter (where status = 'not_called_open') over the
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_figures_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_figures_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -5428,7 +5428,7 @@ max(waiting_business_seconds) filter (where status = 'not_called_open') over the
 select max(r.waiting_business_seconds) / 60 as oldest_waiting_business_minutes from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r where r.status = 'not_called_open'
 ```
 
-**Fixture check** The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
+**Fixture check** The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
 
 **Data prerequisites**
 
@@ -5438,7 +5438,7 @@ select max(r.waiting_business_seconds) / 60 as oldest_waiting_business_minutes f
 - Country on the deal or its primary contact, so business time has a market (data quality check `market_not_in_catalog`)
 - No test deals in the live pipeline
 
-**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)
+**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)
 
 **Notes**
 
@@ -5482,7 +5482,7 @@ mean = round(avg(attempts_so_far), 2), median = round(percentile_cont(0.5) withi
 
 **Time** Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)
 
-**Previous period** Since addition 0009zr the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)
+**Previous period** Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)
 
 **Settings**
 
@@ -5496,9 +5496,9 @@ mean = round(avg(attempts_so_far), 2), median = round(percentile_cont(0.5) withi
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zr); `cma.speed_to_lead_figures_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zu); `cma.speed_to_lead_figures_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -5506,7 +5506,7 @@ mean = round(avg(attempts_so_far), 2), median = round(percentile_cont(0.5) withi
 select round(avg(r.attempts_so_far), 2) as attempts_mean, round((percentile_cont(0.5) within group (order by r.attempts_so_far))::numeric, 1) as attempts_median from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r
 ```
 
-**Fixture check** The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
+**Fixture check** The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
 
 **Data prerequisites**
 
@@ -5516,7 +5516,7 @@ select round(avg(r.attempts_so_far), 2) as attempts_mean, round((percentile_cont
 - Country on the deal or its primary contact, so business time has a market (data quality check `market_not_in_catalog`)
 - No test deals in the live pipeline
 
-**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)
+**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)
 
 **Notes**
 
@@ -5572,9 +5572,9 @@ round(100.0 * count(*) filter (where conversations_so_far > 0) / nullif(count(*)
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -5582,7 +5582,7 @@ round(100.0 * count(*) filter (where conversations_so_far > 0) / nullif(count(*)
 select round(100.0 * count(*) filter (where r.conversations_so_far > 0) / nullif(count(*), 0), 1) as conversation_share from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r
 ```
 
-**Fixture check** The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
+**Fixture check** The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
 
 **Data prerequisites**
 
@@ -5592,7 +5592,7 @@ select round(100.0 * count(*) filter (where r.conversations_so_far > 0) / nullif
 - Country on the deal or its primary contact, so business time has a market (data quality check `market_not_in_catalog`)
 - No test deals in the live pipeline
 
-**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)
+**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)
 
 **Notes**
 
@@ -5650,13 +5650,13 @@ goalTone(pct, goal): none without a goal or without a share; 'below' when pct < 
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `getSpeedToLeadPage` in src/lib/data/postgres.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `getSpeedToLeadPage` in src/lib/data/postgres.ts
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
+**Fixture check** The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
 
 **Data prerequisites**
 
@@ -5666,7 +5666,7 @@ goalTone(pct, goal): none without a goal or without a share; 'below' when pct < 
 - Country on the deal or its primary contact, so business time has a market (data quality check `market_not_in_catalog`)
 - No test deals in the live pipeline
 
-**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)
+**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)
 
 **Notes**
 
@@ -5722,9 +5722,9 @@ per market (cma.speed_to_lead_groups_from, group market, never narrowed): bar 1 
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -5732,7 +5732,7 @@ per market (cma.speed_to_lead_groups_from, group market, never narrowed): bar 1 
 select r.market, round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1) as within_target_pct, round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1) as before_next_noon_pct from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r group by r.market order by r.market
 ```
 
-**Fixture check** The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
+**Fixture check** The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
 
 **Data prerequisites**
 
@@ -5742,7 +5742,7 @@ select r.market, round(100.0 * count(*) filter (where r.within_target) / nullif(
 - Country on the deal or its primary contact, so business time has a market (data quality check `market_not_in_catalog`)
 - No test deals in the live pipeline
 
-**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)
+**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)
 
 **Notes**
 
@@ -5800,9 +5800,9 @@ the summary's within_target_pct and before_next_noon_pct per business date (grou
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_groups_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -5810,7 +5810,7 @@ the summary's within_target_pct and before_next_noon_pct per business date (grou
 select r.business_date, round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1) as within_target_pct, round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1) as before_next_noon_pct from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r group by r.business_date order by r.business_date
 ```
 
-**Fixture check** The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
+**Fixture check** The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
 
 **Data prerequisites**
 
@@ -5820,7 +5820,7 @@ select r.business_date, round(100.0 * count(*) filter (where r.within_target) / 
 - Country on the deal or its primary contact, so business time has a market (data quality check `market_not_in_catalog`)
 - No test deals in the live pipeline
 
-**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)
+**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)
 
 **Notes**
 
@@ -5876,9 +5876,9 @@ coalesce(business_seconds, waiting_business_seconds) of the deal's row (cma.spee
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_deals_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_deals_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -5886,7 +5886,7 @@ coalesce(business_seconds, waiting_business_seconds) of the deal's row (cma.spee
 select r.deal_source_id, r.status, coalesce(r.business_seconds, r.waiting_business_seconds) / 60 as business_minutes from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r where r.status in ('called', 'not_called_open') order by r.created_at desc, r.deal_id
 ```
 
-**Fixture check** The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
+**Fixture check** The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
 
 **Data prerequisites**
 
@@ -5896,7 +5896,7 @@ select r.deal_source_id, r.status, coalesce(r.business_seconds, r.waiting_busine
 - Country on the deal or its primary contact, so business time has a market (data quality check `market_not_in_catalog`)
 - No test deals in the live pipeline
 
-**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)
+**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)
 
 **Notes**
 
@@ -5952,9 +5952,9 @@ attempts_so_far of the row; the detail is cma.deal_attempts_of's is_attempt rows
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_deals_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_deals_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -5962,7 +5962,7 @@ attempts_so_far of the row; the detail is cma.deal_attempts_of's is_attempt rows
 select r.deal_source_id, r.attempts_so_far from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r where r.status = 'called' order by r.created_at desc, r.deal_id
 ```
 
-**Fixture check** The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
+**Fixture check** The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
 
 **Data prerequisites**
 
@@ -5972,11 +5972,11 @@ select r.deal_source_id, r.attempts_so_far from cma.speed_to_lead_of(:tenant_id,
 - Country on the deal or its primary contact, so business time has a market (data quality check `market_not_in_catalog`)
 - No test deals in the live pipeline
 
-**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)
+**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)
 
 **Notes**
 
-No phone number, recording, customer name or email; staff names (the agent) are shown. 237 W10 compares the list's attempts with cma.deal_attempts_of's.
+No phone number, recording, customer name or email; staff names (the agent) are shown. 243 W10 compares the list's attempts with cma.deal_attempts_of's.
 
 #### `speed_to_lead.deals_list.stale`
 
@@ -6029,9 +6029,9 @@ status = 'not_called_open' and cma.business_days_in(market calendar, created_at,
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zr); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
+**Refresh** on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)
 
-**Computed in** `cma.speed_to_lead_page` (0009zr); `cma.speed_to_lead_of` (0009zr); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_deals_from` (0009zr); `getSpeedToLeadPage` in src/lib/data/postgres.ts
+**Computed in** `cma.speed_to_lead_page` (0009zu); `cma.speed_to_lead_of` (0009zu); `cma.deal_attempts_of` (0008zc); `cma.lead_deals_of` (0007d); `cma.speed_to_lead_deals_from` (0009zu); `getSpeedToLeadPage` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -6039,7 +6039,7 @@ status = 'not_called_open' and cma.business_days_in(market calendar, created_at,
 select r.deal_source_id, r.created_at, r.market from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r where r.status = 'not_called_open' order by r.created_at desc
 ```
 
-**Fixture check** The query runs against the local volume fixture database (every db/ script to 236, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 237 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
+**Fixture check** The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.
 
 **Data prerequisites**
 
@@ -6049,11 +6049,11 @@ select r.deal_source_id, r.created_at, r.market from cma.speed_to_lead_of(:tenan
 - Country on the deal or its primary contact, so business time has a market (data quality check `market_not_in_catalog`)
 - No test deals in the live pipeline
 
-**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zr, #318)
+**Documented in** features.md paragraph 4 (Speed to lead); definitions.md, Speed to lead (As built today); api.md, GET /api/v1/reports/speed-to-lead/figures and /deals; decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)
 
 **Notes**
 
-Moves with now(). The setting is 1 to 30 working days (cma.check_tenant_setting); 237 W8 proves it follows the setting.
+Moves with now(). The setting is 1 to 30 working days (cma.check_tenant_setting); 243 W8 proves it follows the setting.
 
 ### /reports/calls
 

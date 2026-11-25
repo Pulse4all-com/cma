@@ -34,7 +34,7 @@ export const DATA_QUALITY_PERMISSIONS = ["reports.view", "tenant.configure"] as 
 
 /** The page's Group by table: day, market, agent, pipeline (G cycles them); the week is the trend's over 31 days */
 export const SPEED_TO_LEAD_GROUPS: readonly SpeedToLeadGroup[] = ["day", "market", "agent", "pipeline"];
-/** Every group cma.speed_to_lead_summary takes besides total: the API's (0009zr adds week) */
+/** Every group cma.speed_to_lead_summary takes besides total: the API's (0009zu adds week) */
 export const SPEED_TO_LEAD_API_GROUPS: readonly SpeedToLeadGroup[] = ["day", "week", "market", "agent", "pipeline"];
 
 /** The group named in a query, or null when it is none of the page's four (withWeek: the API's five) */
@@ -100,7 +100,7 @@ export function speedFigures(rows: SpeedToLeadRow[], noAttempt = false): Omit<Sp
   const p80 = percentileCont(seconds, 0.8);
   const attempts = rows.map((r) => r.attemptsSoFar);
   const attemptsMedian = percentileCont(attempts, 0.5);
-  // the no_attempt group has no measure of its own: its shares and medians are null (shown as –; 0009zr)
+  // the no_attempt group has no measure of its own: its shares and medians are null (shown as –; 0009zu)
   const measured = <T,>(x: T): T | null => (noAttempt ? null : x);
   return {
     deals: rows.length,
@@ -195,7 +195,7 @@ export function groupDisplay(row: Pick<SpeedToLeadSummaryRow, "groupKey" | "grou
 }
 
 /**
- * A share's tone against its goal (Speed to lead's cockpit, 0009zr): none without a goal or without a share (the tile
+ * A share's tone against its goal (Speed to lead's cockpit, 0009zu): none without a goal or without a share (the tile
  * has no colour), "met" at or above the goal (success surface), "below" under it (error surface)
  */
 export function goalTone(pct: number | null, goal: number | null): "none" | "met" | "below" {
@@ -207,7 +207,7 @@ export function goalTone(pct: number | null, goal: number | null): "none" | "met
 export interface TimelineDot { n: number; at: number; kind: "notConnected" | "connected" | "conversation" }
 
 /**
- * A deal's timeline over its first 1.5 working days in business time (the cockpit's list, 0009zr): the target and the
+ * A deal's timeline over its first 1.5 working days in business time (the cockpit's list, 0009zu): the target and the
  * cutoff marks and one dot per attempt, each as a percent of the span (an attempt beyond it is left out and flagged by
  * `beyond`); a deal not called yet has its wait as a bar. Null without a span (an unknown market has no business time)
  */

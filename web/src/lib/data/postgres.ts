@@ -183,7 +183,7 @@ function toSpeedRow(r: SpeedDbRow): SpeedToLeadRow {
 
 /**
  * One row per lead deal created in the range (cma.speed_to_lead_rows checks the permission and the 92 days). The columns
- * are named, never r.*: the owner's CRM reference (deal_owner_ref, 0009zr) is the open leads', not the API's
+ * are named, never r.*: the owner's CRM reference (deal_owner_ref, 0009zu) is the open leads', not the API's
  */
 async function readSpeedToLeadRows(q: Querier, range: HoursRange): Promise<SpeedToLeadRow[]> {
   // cma.record_url (migration 0008) builds the link from the connection's own template; null without one
@@ -219,7 +219,7 @@ function toSummaryRow(x: SummaryDbRow, group: SpeedToLeadGroup | "total"): Speed
   };
 }
 
-// ---- Speed to lead's cockpit (addition 0009zr): the figures, the deals list and the page in one read
+// ---- Speed to lead's cockpit (addition 0009zu): the figures, the deals list and the page in one read
 
 /** cma.speed_to_lead_figures' row (numeric as a string; to_jsonb gives numbers) */
 type FiguresDb = Record<string, string | number | null>;

@@ -13,7 +13,7 @@ function intParam(sp: URLSearchParams, name: string, min: number, max: number, f
 }
 
 /**
- * Speed to lead's deals list (cma.speed_to_lead_deals_of, addition 0009zr) for ?from&to (at most 92 days), the optional
+ * Speed to lead's deals list (cma.speed_to_lead_deals_of, addition 0009zu) for ?from&to (at most 92 days), the optional
  * &market (a market code or unknown), &view=not_called|called (not_called when left out), &limit (1 to 200, 50) and
  * &offset (0 or more, 0); anything else 400. Newest created first: per deal its ids and record link, market, pipeline,
  * creation, status, the business seconds (to the first attempt, or waited so far), within target, before the cutoff and

@@ -40,8 +40,8 @@ export function Legend({ items, label }: { items: { key: string; label: string; 
  * Lines over an even x axis (months, ages, cohort ages): each series a polyline with a point per value, the last point
  * hollow where it is the running month ("so far"). step: a step line (a survival curve holds its value until the next
  * age). markers: vertical lines with a title (a store's subscription history start). refY: a horizontal reference with
- * its label (the 50 % line); refLines: more of them, each dashed in its series' colour (Speed to lead's goals, 0009zr).
- * bands: x ranges shaded Neutral surface behind the lines, each with a title (Speed to lead's weekends, 0009zr)
+ * its label (the 50 % line); refLines: more of them, each dashed in its series' colour (Speed to lead's goals, 0009zu).
+ * bands: x ranges shaded Neutral surface behind the lines, each with a title (Speed to lead's weekends, 0009zu)
  */
 export function LineChart({ series, xLabels, yFormat, yTop, yLabel, xLabel, label, testId, step = false, markers = [], refY, refLines = [], bands = [], height = 280, width = 960 }: {
   series: LineSeries[]; xLabels: { x: number; text: string }[]; yFormat: (v: number) => string;

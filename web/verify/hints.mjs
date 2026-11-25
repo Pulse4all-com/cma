@@ -99,7 +99,7 @@ const COURTESY_LAST_MONTH = (() => {
 const cases = [
   // [subject, path, at least this many headers, at least this many tiles]; on the Dashboard the tiles
   // only: the charts' own tables (time per status, per person) are not report headers
-  // Speed to lead's cockpit (addition 0009zr): six tiles; the per-market card's eight headers, the Group by table's ten and
+  // Speed to lead's cockpit (addition 0009zu): six tiles; the per-market card's eight headers, the Group by table's ten and
   // the deals list's seven, in each grouping and in the Called view (its rows' attempts open with Show attempts)
   ["manager", "/reports/speed-to-lead?range=month&group=day", 25, 6],
   ["manager", "/reports/speed-to-lead?range=month&group=market", 25, 6],

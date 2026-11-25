@@ -175,8 +175,8 @@ as $$
     and not co.is_test and co.cancelled_at is null and co.source_deleted_at is null
 $$;
 
--- A deal's first outbound CRM call, linked or not (0009zq's first_call_*; the row no longer has them since 0009zr, D36):
--- cma.lead_calls_of from the creation less the pre-window, the earliest by start, then id. V2 reads it (edited by 0009zr)
+-- A deal's first outbound CRM call, linked or not (0009zq's first_call_*; the row no longer has them since 0009zu, D36):
+-- cma.lead_calls_of from the creation less the pre-window, the earliest by start, then id. V2 reads it (edited by 0009zu)
 create or replace function pg_temp.v9zp_first_crm_call(p_tenant uuid, p_deal uuid, out source_id text, out linked boolean)
 language sql stable
 as $$
@@ -205,8 +205,8 @@ begin
                and a.attnum > 0 and not a.attisdropped);
   v_view := (select string_agg(a.attname || ':' || format_type(a.atttypid, a.atttypmod), ',' order by a.attnum)
              from pg_attribute a where a.attrelid = 'cma_read.speed_to_lead'::regclass and a.attnum > 0 and not a.attisdropped);
-  -- since 0009zr (236, D36) the row has no first_call_* and five more columns at its end: 35 columns (edited by 0009zr)
-  if exists (select 1 from cma.schema_migration where version = '0009zr') then
+  -- since 0009zu (242, D36) the row has no first_call_* and five more columns at its end: 35 columns (edited by 0009zu)
+  if exists (select 1 from cma.schema_migration where version = '0009zu') then
     if v_type !~ ',first_attempt_call_id:uuid,first_attempt_at:timestamp with time zone,attempts_so_far:integer,deal_owner_user_id:uuid,last_attempt_at:timestamp with time zone,last_call_at:timestamp with time zone,deal_owner_ref:text,conversations_so_far:integer,window_end:timestamp with time zone$'
        or (select count(*) from regexp_split_to_table(v_type, ',')) <> 35 or position('first_call_' in v_type) > 0
        or v_type !~ '^tenant_id:uuid,deal_id:uuid,.*,status:text,first_any_call_at:.*,agent_user_id:uuid,agent_ref:text,agent_from:text,.*,waiting_business_seconds:integer,first_attempt_call_id' then
@@ -251,8 +251,8 @@ begin
   end if;
   rows_ := rows_ || pg_temp.v9zp_row(1, 'V1', 'structure: the addition, the row type and the view, the status values, the setting, the grants',
                                      v_ok and v_bad = '', case when not v_ok then '0009zq or 0009zp not recorded; ' else '' end
-                                                          || coalesce(nullif(v_bad, ''), case when exists (select 1 from cma.schema_migration where version = '0009zr')
-                                                                                             then '35 columns (0009zr: no first_call_*, five more last)' else '34 columns, the four new last' end
+                                                          || coalesce(nullif(v_bad, ''), case when exists (select 1 from cma.schema_migration where version = '0009zu')
+                                                                                             then '35 columns (0009zu: no first_call_*, five more last)' else '34 columns, the four new last' end
                                                                                         || '; the view the same; three status values; time 12:00; grants as designed'));
   insert into verify_0009zq (ord, check_name, result, detail)
   select rows_[4 * i - 3]::integer, rows_[4 * i - 2], rows_[4 * i - 1], rows_[4 * i] from generate_series(1, cardinality(rows_) / 4) i;

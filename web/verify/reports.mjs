@@ -188,7 +188,7 @@ const rows = [
 expect("percentile_cont: median and 80th percentile interpolate",
   [percentileCont([420, 900, 7200], 0.5), percentileCont([420, 900, 7200], 0.8), percentileCont([10, 20, 30, 40], 0.5), percentileCont([], 0.5)],
   [900, 4680, 25, null], [900, 7200, 20, null]);
-// since 0009zr the attempts per deal (mean over every deal to 2 places, median to 1) and the share with a Conversation
+// since 0009zu the attempts per deal (mean over every deal to 2 places, median to 1) and the share with a Conversation
 expect("period figures as the summary computes them (closed before the first call apart)", speedFigures(rows),
   { deals: 8, called: 4, medianBusinessMinutes: 15, p80BusinessMinutes: 78, withinTargetPct: 50, beforeNextNoonPct: 100, openNotCalled: 3, closedBeforeFirstCall: 1,
     attemptsMean: 0.88, attemptsMedian: 0.5, conversationShare: 25 },
@@ -214,7 +214,7 @@ const byAgent = groupSpeedToLead(rows, "agent", (id) => names[id] ?? null);
 expect("by agent: the first attempt's person as key, not mapped under unknown, no attempt apart",
   byAgent.map((g) => [g.groupKey, g.groupLabel, g.deals]), [["no_attempt", null, 4], ["u-ana", "Ana", 2], ["u-bo", "Bo", 1], ["unknown", null, 1]],
   [["u-ana", "Ana", 2], ["u-bo", "Bo", 3], ["unknown", null, 3]]);
-expect("no_attempt: its shares and medians null (shown as –), its attempts 0 (0009zr, 237's W9)",
+expect("no_attempt: its shares and medians null (shown as –), its attempts 0 (0009zu, 243's W9)",
   byAgent.filter((g) => g.groupKey === "no_attempt").map((g) => [g.medianBusinessMinutes, g.p80BusinessMinutes, g.withinTargetPct, g.beforeNextNoonPct, g.conversationShare, g.attemptsMean, g.attemptsMedian]),
   [[null, null, null, null, null, 0, 0]], [[null, null, 0, 0, 0, 0, 0]]);
 expect("an agent who is not mapped shows as Not mapped, deals without an attempt as No attempt yet",
@@ -227,7 +227,7 @@ const byPipeline = groupSpeedToLead(rows, "pipeline", () => null);
 expect("by pipeline: connection and pipeline as key, a missing label unknown",
   byPipeline.map((g) => [g.groupKey, groupDisplay(g, "pipeline").kind]), [["c1:", "unknownPipeline"], ["c1:p1", "text"]],
   [["c1:p1", "text"], ["c1:", "unknownPipeline"]]);
-expect("by week: the Monday of the business date's ISO week (0009zr), shown as a date",
+expect("by week: the Monday of the business date's ISO week (0009zu), shown as a date",
   groupSpeedToLead([...rows, deal("2026-10-11", "NL", "called", 60, true, true, null), deal("2026-10-12", "NL", "called", 60, true, true, null)], "week", () => null)
     .map((g) => [g.groupKey, g.deals, groupDisplay(g, "week").kind]),
   [["2026-10-05", 9, "date"], ["2026-10-12", 1, "date"]], [["2026-10-05", 10, "date"]]);
@@ -238,7 +238,7 @@ expect("open deals not called: longest waiting first, no business time last",
 expect("no row carries an owner id or a personal field",
   [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((k) => /^(email|phone|name|firstname|ownerRef|agentRef)$/i.test(k)), [], ["agentRef"]);
 
-// ---- speed to lead's cockpit (addition 0009zr) -------------------------------------------------------------------
+// ---- speed to lead's cockpit (addition 0009zu) -------------------------------------------------------------------
 expect("the page's groups are four, the API's five (week); the view not_called or called",
   [parseGroup("week"), parseGroup("week", true), parseGroup("day", true), parseSpeedView("called"), parseSpeedView("not_called"), parseSpeedView("all"), parseSpeedView(null)],
   [null, "week", "day", "called", "not_called", null, null], ["week", "week", "day", "called", "not_called", "all", null]);

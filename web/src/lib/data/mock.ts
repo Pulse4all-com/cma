@@ -1622,7 +1622,7 @@ const MOCK_SETTINGS: TenantSetting[] = [
   { key: "speed_to_lead.pre_window_minutes", value: "10", isDefault: false },
   // speed to lead in one function (addition 0009zq): the next working day's cutoff at its catalog default, as Pulse4all has it
   { key: "speed_to_lead.next_day_cutoff", value: "12:00", isDefault: true },
-  // Speed to lead's cockpit (addition 0009zr): no goals yet (Pulse4all's come from Martin), stale after 2 working days
+  // Speed to lead's cockpit (addition 0009zu): no goals yet (Pulse4all's come from Martin), stale after 2 working days
   { key: "speed_to_lead.goal_within_target_pct", value: "", isDefault: true },
   { key: "speed_to_lead.goal_before_cutoff_pct", value: "", isDefault: true },
   { key: "speed_to_lead.stale_business_days", value: "2", isDefault: true },
@@ -4127,7 +4127,7 @@ export const mockData: CmaData = {
     if (value !== null && key === LEAD_TO_ORDER_SETTING && Number(value) < Math.max(0, ...leadAgesOf(mockSetting(LEAD_AGES_SETTING)))) {
       throw new CmaDbError("CMA04", `Setting ${key} takes at least the largest age of ${LEAD_AGES_SETTING}`);
     }
-    // as cma.check_tenant_setting (addition 0009zr): Speed to lead's goals, a whole number of percent 0 to 100 or empty; the
+    // as cma.check_tenant_setting (addition 0009zu): Speed to lead's goals, a whole number of percent 0 to 100 or empty; the
     // stale days 1 to 30
     if (value !== null && (key === "speed_to_lead.goal_within_target_pct" || key === "speed_to_lead.goal_before_cutoff_pct")) {
       value = value.trim();

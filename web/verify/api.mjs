@@ -1491,7 +1491,7 @@ async function reportChecks() {
       .map(async (r) => (await get(ANALYST, r)).status)), [400, 400, 400], [200, 200, 200]);
   expect("reports: 92 days are answered", (await get(ANALYST, `/api/v1/reports/intake?from=${day(-91)}&to=${day(0)}`)).status, 200, 400);
   expect("reports: a backwards range is a 400", (await get(ANALYST, `/api/v1/reports/speed-to-lead/rows?from=${day(0)}&to=${day(-1)}`)).status, 400, 200);
-  // since addition 0009zr week is a group too (the Monday of the business date's ISO week); total stays the Dashboard's own
+  // since addition 0009zu week is a group too (the Monday of the business date's ISO week); total stays the Dashboard's own
   expect("reports: a group outside the five is a 400",
     await Promise.all(["owner", "total", "DAY"].map(async (g) => (await get(ANALYST, `/api/v1/reports/speed-to-lead?${range}&group=${g}`)).status)),
     [400, 400, 400], [200, 200, 200]);
@@ -1506,7 +1506,7 @@ async function reportChecks() {
   walk(rowsBody);
   expect("reports: no field named email, phone, name or firstname in the rows",
     ["email", "phone", "name", "firstname"].filter((k) => keys.has(k)), [], ["name"]);
-  // D36 (addition 0009zr): the first outbound CRM call left the rows, and the CRM owner's reference was never in them
+  // D36 (addition 0009zu): the first outbound CRM call left the rows, and the CRM owner's reference was never in them
   expect("reports: no firstCall field and no owner reference in the rows",
     [...keys].filter((k) => /^(firstcallsourceid|firstcallat|firstcalllinked|dealownerref|ownerref)$/.test(k)), [], ["firstcallat"]);
   expect("reports: statuses are called, not called yet or closed before the first call",
@@ -1530,7 +1530,7 @@ async function reportChecks() {
     [true, rows.filter((r) => r.agentUserId === null && r.firstAttemptAt !== null).length, true, rows.filter((r) => r.firstAttemptAt === null).length, true],
     [false, -1, false, -1, false]);
 
-  // Speed to lead's cockpit (addition 0009zr): the figures and the deals list, each with its permission and its checks
+  // Speed to lead's cockpit (addition 0009zu): the figures and the deals list, each with its permission and its checks
   const figures = (await get(ANALYST, `/api/v1/reports/speed-to-lead/figures?${range}`)).body?.data;
   const total = (await get(ANALYST, `/api/v1/reports/speed-to-lead?${range}&group=day`)).body?.data?.rows ?? [];
   expect("reports: the figures' period adds up as the summary's groups and its rows",

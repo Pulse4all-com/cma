@@ -1,5 +1,5 @@
 /**
- * The server parts of Sales → Speed to lead's cockpit (addition 0009zr, brief B40b; mockup approved 24 November 2026):
+ * The server parts of Sales → Speed to lead's cockpit (addition 0009zu, brief B40b; mockup approved 24 November 2026):
  * the six tiles with their change against the previous period, the per-market card (two stacked bars per market, a row
  * sets the market filter), the trend per day or week with the goals as dashed lines and the weekends shaded (the shared
  * LineChart, no chart library), and the Group by table. Every figure is the database's (cma.speed_to_lead_page); nothing

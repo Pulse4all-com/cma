@@ -905,7 +905,7 @@ export interface MessageStat {
 // ---- Intake reports (migration 0007d and 0006; B11, 12 October 2026). Ids, counts and codes only:
 // no customer name, email or phone number reaches these shapes.
 
-/** How cma.speed_to_lead_summary groups its rows; week: the Monday of the business date's ISO week (0009zr) */
+/** How cma.speed_to_lead_summary groups its rows; week: the Monday of the business date's ISO week (0009zu) */
 export type SpeedToLeadGroup = "day" | "week" | "market" | "agent" | "pipeline";
 
 /**
@@ -956,13 +956,13 @@ export interface SpeedToLeadRow {
   attemptsSoFar: number;
   /** The deal's owner mapped to a person; never part of the measure */
   dealOwnerUserId: string | null;
-  /** The last Attempt so far; null without one (0009zr) */
+  /** The last Attempt so far; null without one (0009zu) */
   lastAttemptAt: Instant | null;
-  /** The latest call of the deal or its contacts from the window's start, any direction (0009zr) */
+  /** The latest call of the deal or its contacts from the window's start, any direction (0009zu) */
   lastCallAt: Instant | null;
-  /** The Attempts so far that were a Conversation (0009zr) */
+  /** The Attempts so far that were a Conversation (0009zu) */
   conversationsSoFar: number;
-  /** The end of the Attempts' window: the earliest of the close, the contacts' first order and now (0009zr) */
+  /** The end of the Attempts' window: the earliest of the close, the contacts' first order and now (0009zu) */
   windowEnd: Instant;
   recordUrl: string | null;
 }
@@ -986,14 +986,14 @@ export interface SpeedToLeadSummaryRow {
   openNotCalled: number;
   /** Deals closed before their first attempt: shown apart, in neither share nor the median */
   closedBeforeFirstCall: number;
-  /** Attempts per deal as attempts.per_deal counts them: the mean (2 places) and the median (1 place), every deal counting (0009zr) */
+  /** Attempts per deal as attempts.per_deal counts them: the mean (2 places) and the median (1 place), every deal counting (0009zu) */
   attemptsMean: number | null;
   attemptsMedian: number | null;
-  /** The share of deals with a Conversation among their Attempts, in percent (1 place); null in no_attempt (0009zr) */
+  /** The share of deals with a Conversation among their Attempts, in percent (1 place); null in no_attempt (0009zu) */
   conversationShare: number | null;
 }
 
-/** One period's figures of Speed to lead's cockpit (cma.speed_to_lead_figures, 0009zr) */
+/** One period's figures of Speed to lead's cockpit (cma.speed_to_lead_figures, 0009zu) */
 export interface SpeedToLeadPeriodFigures {
   deals: number;
   called: number;
@@ -1049,7 +1049,7 @@ export interface SpeedToLeadAttempt {
 /** The two views of the cockpit's deals list */
 export type SpeedToLeadView = "not_called" | "called";
 
-/** One lead deal of the cockpit's list (cma.speed_to_lead_deals_of, 0009zr) */
+/** One lead deal of the cockpit's list (cma.speed_to_lead_deals_of, 0009zu) */
 export interface SpeedToLeadDeal {
   dealId: string;
   connectionId: string;
@@ -1091,7 +1091,7 @@ export interface SpeedToLeadDeals {
   rows: SpeedToLeadDeal[];
 }
 
-/** Sales → Speed to lead's page in one read (cma.speed_to_lead_page, 0009zr) */
+/** Sales → Speed to lead's page in one read (cma.speed_to_lead_page, 0009zu) */
 export interface SpeedToLeadPage {
   figures: SpeedToLeadFigures;
   /** Every market of the period, never narrowed */
@@ -4749,12 +4749,12 @@ export interface CmaData {
    * or performance.team; another group CMA04
    */
   getSpeedToLeadSummary(me: Principal, range: HoursRange, group: SpeedToLeadGroup, market?: string | null): Promise<SpeedToLeadSummary>;
-  /** The cockpit's figures of the period and the previous one, narrowed to one market when given (0009zr) */
+  /** The cockpit's figures of the period and the previous one, narrowed to one market when given (0009zu) */
   getSpeedToLeadFigures(me: Principal, range: HoursRange, market: string | null): Promise<SpeedToLeadFigures>;
-  /** One view of the cockpit's deals list, limit (1 to 200) from offset, newest first (0009zr) */
+  /** One view of the cockpit's deals list, limit (1 to 200) from offset, newest first (0009zu) */
   getSpeedToLeadDeals(me: Principal, range: HoursRange, market: string | null, view: SpeedToLeadView, limit: number, offset: number): Promise<SpeedToLeadDeals>;
   /**
-   * Sales → Speed to lead's page in one read (0009zr): the figures, every market, the trend, the group's table and a page
+   * Sales → Speed to lead's page in one read (0009zu): the figures, every market, the trend, the group's table and a page
    * of 50 of one view of the deals list. Needs reports.view or performance.team; a group other than day, week, market,
    * agent or pipeline CMA04
    */

@@ -31,7 +31,7 @@
 -- Attempts that end speed to lead (the telephony rule is 235's): a deal closed before its first call reads
 -- closed_before_first_call and stays out of both percentages, the agent is the first attempt's telephony user (none
 -- here: no attempt has one; the deal's owner is deal_owner_user_id), the summary takes a market and the group total.
--- Since addition 0009zr (236, brief B40b) the row has no first_call_* (D36): A5 names first_attempt_at, and block B reads
+-- Since addition 0009zu (242, brief B40b) the row has no first_call_* (D36): A5 names first_attempt_at, and block B reads
 -- the first outbound CRM call it checked as the first Attempt's CRM call (first_attempt_call_id; under attempts.source
 -- crm the same call) and whether it is linked from the call link.
 -- Provoke: set provoke below to true; every block must then stop with FAIL, and the verdict

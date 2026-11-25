@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The client parts of Sales → Speed to lead's cockpit (addition 0009zr, brief B40b): the market buttons (K focuses the
+ * The client parts of Sales → Speed to lead's cockpit (addition 0009zu, brief B40b): the market buttons (K focuses the
  * chosen one; a click loads the whole page for that market, the choice shown at once while it loads), the deals list's
  * rows with their attempts opened and closed in place (Show attempts), and the refresh every 60 seconds while the period
  * reaches today, through the page's own route (router.refresh, no poll route), paused while the tab is hidden. Each part

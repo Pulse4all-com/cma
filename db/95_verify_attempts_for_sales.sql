@@ -64,7 +64,7 @@
 --       Attempt), where 0007d's measured 120 s to the CRM call
 --   B12 lost: dL2, lost and never attempted, is no longer a known answer of called before the cutoff (1of2 becomes 1of1)
 --   B14 the same deal out of the known answers of the period (8of11 becomes 8of10)
--- Amended for addition 0009zr (236, brief B40b, D36): cma.speed_to_lead_of no longer carries first_call_*, so B8 finds
+-- Amended for addition 0009zu (242, brief B40b, D36): cma.speed_to_lead_of no longer carries first_call_*, so B8 finds
 -- each deal's first outbound CRM call (linked or not) itself, as 0009zq's row did (cma.lead_calls_of from the creation
 -- less the pre-window, the earliest by start, then id); its answer is unchanged.
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead of PASS.
@@ -673,7 +673,7 @@ begin
                    and x.called_before_next_noon is not distinct from sl.before_next_noon as equal
           from cma.attempts_per_deal_of(v_t1, v_from, v_to, v_now) x
           join cma.speed_to_lead_of(v_t1, v_from, v_to) sl on sl.deal_id = x.deal_id
-          -- the deal's first outbound CRM call, linked or not, as 0009zq's first_call_* gave it (gone since 0009zr, D36)
+          -- the deal's first outbound CRM call, linked or not, as 0009zq's first_call_* gave it (gone since 0009zu, D36)
           left join lateral (
             select lc.is_linked, lc.effective_at
             from cma.lead_deals_of(v_t1, v_from, v_to) ld

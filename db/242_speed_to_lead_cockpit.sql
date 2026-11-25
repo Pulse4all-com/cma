@@ -1,19 +1,23 @@
 -- =============================================================================================
--- 236_speed_to_lead_cockpit.sql: addition 0009zr, Sales → Speed to lead as a cockpit (brief B40b)
+-- 242_speed_to_lead_cockpit.sql: addition 0009zu, Sales → Speed to lead as a cockpit (brief B40b)
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics: the goals, the stale days, the target, the cutoff, the markets'
 -- calendars and the attempts' source stay each tenant's settings and catalogs. Runs unchanged in every database, after
--- 234_speed_to_lead_one.sql (0009zq). Rerunnable, forward-only, in one transaction with a lock timeout.
--- Run as your own IAM login: dev first, then 237_verify_speed_to_lead_cockpit.sql there (normal and provoked), then the
--- verifies that read what this re-creates, each still PASS: 235, 41, 95 and 179, edited by this change (235: V1 takes
+-- 238_email_not_responding_speed.sql (0009zs), and in prod before 240 (0009zt, which waits for Yordi): its order check
+-- names 0009zs. Renumbered from 236/237 and 0009zr, which N07a took (Martin, 24 and 25 November 2026). Rerunnable,
+-- forward-only, in one transaction with a lock timeout.
+-- Run as your own IAM login: dev first, then 243_verify_speed_to_lead_cockpit.sql there (normal and provoked), then the
+-- verifies that read what this re-creates, each still PASS: 237 (N07a's, edited by this change: its copy of 234 names
+-- 234's columns and L1 compares the columns both row shapes have), 235, 41, 95 and 179, edited by this change (235: V1 takes
 -- either row shape and V2 finds the first outbound CRM call itself; 41: A5 names first_attempt_at and block B reads the
 -- first Attempt's CRM call; 95: B8 finds the first outbound CRM call itself; 179: E3 and E4 compare no first_call_*), and
--- unchanged 191 (its clock-at-read copies of cma.speed_to_lead_of and cma.open_leads_of), 73, 75, 81, 93, 99, 101, 103,
+-- unchanged 191 (its clock-at-read copies of cma.speed_to_lead_rows_of and cma.open_leads_of), 73, 75, 81, 93, 99, 101, 103,
 -- 121, 151, 155 (the readers of cma.open_leads_of and the follow-up), 113, 123, 137 (they read cma.check_tenant_setting's
 -- text), 161, 233, 14, 33 and 225; then 131_time_all.sql part b. 73, 75, 81, 93, 95, 99, 101, 103, 121, 151 and 155 run
 -- in dev only, as before.
--- Prod BEFORE the merge, as for 0009zq: 236, 237 and the reruns that run in prod (235, 41, 179, 191, 113, 123, 137, 161,
--- 233, 14, 33, 225); the live web keeps working on the new database: it maps the columns it knows (the dropped
+-- Prod BEFORE the merge, as for 0009zq: 242, 243 and the reruns that run in prod (237, 235, 41, 179, 191, 113, 123, 137,
+-- 161, 233, 14, 33, 225), outside office hours: 243 and 237 read speed to lead over every tenant's whole history several
+-- times, and the minutes after a migration are busy on prod's one vCPU (0009zr's dev runs, 24 and 25 November 2026); the live web keeps working on the new database: it maps the columns it knows (the dropped
 -- first_call_* read as absent), the summary's new columns are appended, and week is refused by the web before the
 -- database sees it. Locally main's verify:api answered alike on 235's and on this script's database (376 PASS, the same
 -- 6 FAIL of Flash and Active's local seed on both); Martin runs verify:api against dev before the merge.
@@ -35,11 +39,12 @@
 --                     and window_end (the Attempts' window's end: the deals list reads each page deal's attempts with it).
 --                     The brief's cutoff_at is not a column of its own: next_business_noon is that instant already (since
 --                     0009zq it follows speed_to_lead.next_day_cutoff), and the deals list returns it as cutoff_at
---   cma.speed_to_lead_of     (based on 234) each deal's calls read once (cma.deal_calls_of, which cma.lead_calls_of and
+--   cma.speed_to_lead_rows_of (based on 236_jobs_off_the_vcpu.sql; 0009zr's open-only bound kept, and
+--                     cma.speed_to_lead_of the same thin wrapper without it) each deal's calls read once (cma.deal_calls_of, which cma.lead_calls_of and
 --                     cma.deal_attempts_of both read from the same start), where 0009zq read them twice; the same deals
---                     and answers in every column it keeps (237 W3), the new columns from the same calls (W4)
---   cma.open_leads_of        (based on 234) the owner reference and the last call from the rows, no second read of the
---                     deals and their calls (open-decisions, B40b idea 2); the same rows in the same order (237 W5); jit off
+--                     and answers in every column it keeps (243 W3), the new columns from the same calls (W4)
+--   cma.open_leads_of        (based on 236_jobs_off_the_vcpu.sql; still the open lead deals only) the owner reference and the last call from the rows, no second read of the
+--                     deals and their calls (open-decisions, B40b idea 2); the same rows in the same order (243 W5); jit off
 --   cma.speed_to_lead_summary (based on 234) dropped and made again: three columns appended (attempts_mean,
 --                     attempts_median, conversation_share), the group week (the Monday of the business date's ISO week),
 --                     no_attempt's shares and medians null; from cma.speed_to_lead_groups_from
@@ -56,7 +61,7 @@
 -- fixture's subscriptions tenant, Postgres held to one CPU (taskset on the postmaster), each read seven times in one
 -- session and the steady calls given (the 6th and 7th included); a relative measure: prod runs it again). Before (0009zq)
 -- → this script, the previous month (October) unless named:
---   the follow-up job's cma.open_leads_of (its call, with ordinality)   1,160-1,360 → 700-710 ms
+--   the follow-up job's cma.open_leads_of (its call, with ordinality)   1,160-1,360 → 700-710 ms (24 Nov, before 0009zr)
 --   cma.speed_to_lead_summary total (the Dashboard tile, as cma_app)        690-910 → 430-440 ms
 --   cma.speed_to_lead_summary by day (as cma_app)                           710-910 → 435-445 ms
 --   cma.speed_to_lead_rows (as cma_app)                                     690-770 → 445-455 ms
@@ -66,6 +71,10 @@
 --     (October, with September for the previous period: figures, markets, trend, groups, the first 50 deals) 510-560 ms,
 --     the Called tab's page 2 590-600 ms, over 92 days (and the 92 before them) 815-875 ms
 --   cma.speed_to_lead_figures 480-515 ms, cma.speed_to_lead_deals_of (called, first page) 505-550 ms (the API's)
+-- Against 0009zs (N07a's open-only bound and the one definition in cma.speed_to_lead_rows_of; 25 November 2026, the same
+-- method, a noisier machine): the follow-up job's cma.open_leads_of 770-890 → 340-540 ms, the summary total 670-1,050 →
+-- 410-600 ms, cma.speed_to_lead_rows 750-950 → 430-550 ms; the page 500-555 ms (the Called tab's page 2 570-700), the
+-- deals list 530-640 ms and the figures 530-560 ms, as on 24 November within the noise.
 -- What made the difference: JIT. The body's estimated cost passes jit_above_cost, and compiling it took about 130 ms of
 -- each call (150 to 300 ms of the job's), more than it saved: jit off on the callers, as 0008zr's reads (132). Not on
 -- cma.speed_to_lead_of itself: a setting keeps it from being inlined, and its body was then planned with parameters for
@@ -96,8 +105,9 @@ set role cma_owner;
 
 do $$
 begin
-  if not exists (select 1 from cma.schema_migration where version = '0009zq') then
-    raise exception 'addition 0009zq (234_speed_to_lead_one.sql) must run before 0009zr';
+  -- 0009zs (N07c), not 0009zt: N07f's 240 waits in prod for Yordi, and this addition runs before it there
+  if not exists (select 1 from cma.schema_migration where version = '0009zs') then
+    raise exception 'addition 0009zs (238_email_not_responding_speed.sql) must run before 0009zu';
   end if;
 end
 $$;
@@ -109,16 +119,16 @@ $$;
 -- number from 0 to 100 or nothing. Pulse4all's values come from Martin; until then no tenant holds one
 insert into cma.setting (key, value_type, allowed_values, default_value, description) values
   ('speed_to_lead.goal_within_target_pct', 'text', null, '',
-     'The goal for the share of lead deals whose first attempt came within speed_to_lead.target_minutes business minutes, in percent (a whole number from 0 to 100), or nothing for no goal; Sales → Speed to lead colours its tile against it (addition 0009zr)'),
+     'The goal for the share of lead deals whose first attempt came within speed_to_lead.target_minutes business minutes, in percent (a whole number from 0 to 100), or nothing for no goal; Sales → Speed to lead colours its tile against it (addition 0009zu)'),
   ('speed_to_lead.goal_before_cutoff_pct', 'text', null, '',
-     'The goal for the share of lead deals called before speed_to_lead.next_day_cutoff on the next working day, in percent (a whole number from 0 to 100), or nothing for no goal; Sales → Speed to lead colours its tile against it (addition 0009zr)'),
+     'The goal for the share of lead deals called before speed_to_lead.next_day_cutoff on the next working day, in percent (a whole number from 0 to 100), or nothing for no goal; Sales → Speed to lead colours its tile against it (addition 0009zu)'),
   ('speed_to_lead.stale_business_days', 'integer', null, '2',
-     'A lead deal not called yet is stale on Sales → Speed to lead once it has waited more than this many working days of its market since its creation (a whole number from 1 to 30; addition 0009zr)')
+     'A lead deal not called yet is stale on Sales → Speed to lead once it has waited more than this many working days of its market since its creation (a whole number from 1 to 30; addition 0009zu)')
 on conflict (key) do update
   set value_type = excluded.value_type, allowed_values = excluded.allowed_values,
       default_value = excluded.default_value, description = excluded.description;
 
--- As 0009zl's (224), with the rules of the three settings of Speed to lead's cockpit (0009zr); every earlier rule kept
+-- As 0009zl's (224), with the rules of the three settings of Speed to lead's cockpit (0009zu); every earlier rule kept
 -- word for word (113, 123 and 137 read their text)
 -- based on: 224_subscription_rates_start.sql
 create or replace function cma.check_tenant_setting()
@@ -434,7 +444,7 @@ begin
         using errcode = 'CMA04';
     end if;
     new.value := (new.value::jsonb)::text;
-  -- Speed to lead's cockpit (0009zr): the two goals, a whole number of percent from 0 to 100 or nothing (no goal); a
+  -- Speed to lead's cockpit (0009zu): the two goals, a whole number of percent from 0 to 100 or nothing (no goal); a
   -- not-called deal's working days before it is stale, from 1 to 30
   elsif new.key in ('speed_to_lead.goal_within_target_pct', 'speed_to_lead.goal_before_cutoff_pct') then
     new.value := btrim(new.value);
@@ -482,24 +492,27 @@ begin
 end
 $$;
 comment on type cma.speed_to_lead_row is
-  'One lead deal as cma.speed_to_lead_of gives it (0007d, 0009zq, 0009zr): status called, not_called_open or closed_before_first_call; the measure from the creation to the first Attempt (first_attempt_*), the Attempts so far, the last one and the Conversations among them, and the end of the Attempts'' window; the first call, the first connected call and the last call shown beside it; the agent (the first attempt''s telephony user) and the deal''s owner apart (as a person and as the CRM''s reference)';
+  'One lead deal as cma.speed_to_lead_of gives it (0007d, 0009zq, 0009zu): status called, not_called_open or closed_before_first_call; the measure from the creation to the first Attempt (first_attempt_*), the Attempts so far, the last one and the Conversations among them, and the end of the Attempts'' window; the first call, the first connected call and the last call shown beside it; the agent (the first attempt''s telephony user) and the deal''s owner apart (as a person and as the CRM''s reference)';
 
 -- ---------------------------------------------------------------------------------------------
 -- 3. Speed to lead: one function, each deal's calls read once
 -- ---------------------------------------------------------------------------------------------
 -- As 0009zq's (234): one row per lead deal created in [p_from, p_to) (null: unbounded), the same deals, the same
--- end and the same answers in every column it keeps (237 compares them with 234's definition row for row). Each deal's
+-- end and the same answers in every column it keeps (243 compares them with 234's definition row for row). Each deal's
 -- calls are read once (cma.deal_calls_of, which cma.lead_calls_of and cma.deal_attempts_of both read from the same
 -- start), where 0009zq read them twice: the first call, the first connected call and the last call come from all of
 -- them; the Attempts are those cma.deal_attempts_of keeps (under attempts.source crm an outbound CRM call, else a
 -- linked outbound telephony call on a counted line, up to the window's end), in its order (the start, then the CRM
 -- call's id), so the first, the count, the last and the Conversations among them are its n = 1, its highest n, its
--- last and its conversation (237 compares each deal's with cma.deal_attempts_of's). The first outbound CRM call
+-- last and its conversation (243 compares each deal's with cma.deal_attempts_of's). The first outbound CRM call
 -- (first_call_*) is gone (D36); the deal's CRM owner reference is carried for the open leads, and the window's end
 -- (until: the earliest of the close, the contacts' first order and now, as cma.sales_deals_of's window_end) for the
--- deals list, which reads the attempts of its page's deals from cma.deal_attempts_of with it (0009zr)
--- based on: 234_speed_to_lead_one.sql
-create or replace function cma.speed_to_lead_of(p_tenant_id uuid, p_from timestamptz, p_to timestamptz)
+-- deals list, which reads the attempts of its page's deals from cma.deal_attempts_of with it (0009zu).
+-- Since 0009zr (236_jobs_off_the_vcpu.sql) the one definition is cma.speed_to_lead_rows_of, with an open-only bound
+-- (p_open_only: the lead deals not closed only, every row of those deals as the whole read gives it), and
+-- cma.speed_to_lead_of is that without the bound; both are kept as 0009zr made them, the body is this script's
+-- based on: 236_jobs_off_the_vcpu.sql
+create or replace function cma.speed_to_lead_rows_of(p_tenant_id uuid, p_from timestamptz, p_to timestamptz, p_open_only boolean)
 returns setof cma.speed_to_lead_row
 language sql stable
 as $$
@@ -532,6 +545,9 @@ as $$
     cross join s
     left join w on w.deal_id = ld.deal_id
     left join cma.crm_record cr on cr.tenant_id = p_tenant_id and cr.id = ld.deal_id
+    -- 0009zr's bound, kept: with p_open_only the lead deals not closed only (the follow-up's open leads); each deal's
+    -- row is its own
+    where not coalesce(p_open_only, false) or not ld.is_closed
   ),
   -- every call of each deal from the window's start, read once, each marked an Attempt as cma.deal_attempts_of marks
   -- it (its is_attempt and its window's end, p_until)
@@ -615,18 +631,29 @@ as $$
   from m
 $$;
 
--- No setting on this function: a setting keeps the planner from inlining it, and then its body is planned with
--- parameters for its bounds (2,000 ms in place of 700 for the open leads at three times prod's volume, measured). Its
--- callers carry jit off and, the plpgsql ones, force_custom_plan instead (sections 4 to 7)
+-- 0009zr's form, every lead deal in the period: the one definition above without the open-only bound (unchanged; made
+-- again so the function is planned against the row type as it is now)
+-- based on: 236_jobs_off_the_vcpu.sql
+create or replace function cma.speed_to_lead_of(p_tenant_id uuid, p_from timestamptz, p_to timestamptz)
+returns setof cma.speed_to_lead_row
+language sql stable
+as $$
+  select * from cma.speed_to_lead_rows_of(p_tenant_id, p_from, p_to, false)
+$$;
+
+-- No setting on these two functions: a setting keeps the planner from inlining them, and then the body is planned
+-- with parameters for its bounds (2,000 ms in place of 700 for the open leads at three times prod's volume, measured).
+-- Their callers carry jit off and, the plpgsql ones, force_custom_plan instead (sections 4 to 7)
 
 -- ---------------------------------------------------------------------------------------------
 -- 4. The open leads from the one function's rows (open-decisions, B40b idea 2)
 -- ---------------------------------------------------------------------------------------------
--- As 0009zq's (234): the not_called_open rows of cma.speed_to_lead_of, the same rows, columns and order (237 compares
+-- As 0009zq's (234): the not_called_open rows of cma.speed_to_lead_of, the same rows, columns and order (243 compares
 -- them with 234's definition). The owner's CRM reference and the last call now come from the row (deal_owner_ref,
 -- last_call_at: the latest call of the deal or its contacts from the window's start, as cma.lead_calls_of gave it), so
--- the deals and their calls are no longer read a second time
--- based on: 234_speed_to_lead_one.sql
+-- the deals and their calls are no longer read a second time. 0009zr's open-only bound is kept: only the lead deals
+-- not closed are read (a closed deal is never not_called_open)
+-- based on: 236_jobs_off_the_vcpu.sql
 create or replace function cma.open_leads_of(p_tenant_id uuid)
 returns setof cma.open_lead_row
 language sql stable
@@ -640,7 +667,7 @@ as $$
     select * from cma.business_calendar_of(p_tenant_id)
   ),
   r as (
-    select * from cma.speed_to_lead_of(p_tenant_id, null, null) x where x.status = 'not_called_open'
+    select * from cma.speed_to_lead_rows_of(p_tenant_id, null, null, true) x where x.status = 'not_called_open'
   )
   select p_tenant_id, r.deal_id, r.connection_id, r.deal_source_id, r.pipeline_id, r.pipeline_label,
          r.deal_owner_user_id, r.deal_owner_ref, r.market, r.created_at, r.waiting_business_seconds,
@@ -658,11 +685,11 @@ as $$
 $$;
 -- jit off, as 0008zr's reads (132): the inlined body's estimated cost passes jit_above_cost, and compiling it cost
 -- about 200 ms of each call at three times prod's volume (the follow-up job's call, with ordinality: 1,130 ms before
--- this script, 690 ms after; 236's header)
+-- this script, 690 ms after; 242's header)
 alter function cma.open_leads_of(uuid) set jit = off;
 
 -- ---------------------------------------------------------------------------------------------
--- 5. The parts of the cockpit, each from a set of rows already read (0009zr)
+-- 5. The parts of the cockpit, each from a set of rows already read (0009zu)
 -- ---------------------------------------------------------------------------------------------
 -- As Attempts per deal's (cma.attempts_figures_from and the rest, 0008z): the rows of cma.speed_to_lead_of are read
 -- once into an array, and each part is computed from it, so the page reads the deals and their calls once for all its
@@ -735,9 +762,9 @@ begin
 end
 $$;
 comment on type cma.speed_to_lead_figures_row is
-  'Speed to lead''s figures of a period and of the previous one (0009zr): the periods, the settings shown with them (target, cutoff, the two goals, stale days) and per period the deals, called, the two shares, the median, the open deals not called and the longest wait, closed before the first call, the Attempts per deal and the share with a Conversation';
+  'Speed to lead''s figures of a period and of the previous one (0009zu): the periods, the settings shown with them (target, cutoff, the two goals, stale days) and per period the deals, called, the two shares, the median, the open deals not called and the longest wait, closed before the first call, the Attempts per deal and the share with a Conversation';
 comment on type cma.speed_to_lead_deal_row is
-  'One lead deal of Speed to lead''s deals list (0009zr): ids, market, pipeline, creation, status, the measure, the cutoff, the owner as a person, the Attempts so far and the first 20 of them (jsonb: start, business seconds, connected, talk seconds, conversation, tag meaning keys, agent), stale, the timeline''s scales (the cutoff and 1.5 working days in business seconds), and the view''s count';
+  'One lead deal of Speed to lead''s deals list (0009zu): ids, market, pipeline, creation, status, the measure, the cutoff, the owner as a person, the Attempts so far and the first 20 of them (jsonb: start, business seconds, connected, talk seconds, conversation, tag meaning keys, agent), stale, the timeline''s scales (the cutoff and 1.5 working days in business seconds), and the view''s count';
 
 -- The groups of the rows created on business dates [p_from, p_to], narrowed to p_market when given: by day (business
 -- date), week (the Monday of its ISO week; business dates are the tenant's zone), market, agent (the first attempt's
@@ -811,7 +838,7 @@ $$;
 
 -- The figures of the period [p_from, p_to] and the previous one (p_prev_from to p_prev_to, cut on its last date at
 -- p_until's time of day in p_zone when p_until is given: cma.forms_previous_of's like for like), narrowed to p_market
--- when given. Per period: deals, called, the two shares and the median (as cma.speed_to_lead_groups_from's total: 237
+-- when given. Per period: deals, called, the two shares and the median (as cma.speed_to_lead_groups_from's total: 243
 -- compares them), the open deals not called yet and the longest any of them has waited in business seconds, the deals
 -- closed before their first call, the Attempts per deal and the share with a Conversation. With the settings the page
 -- shows them against: the target, the cutoff, the two goals (null without one) and the working days after which a deal
@@ -929,7 +956,7 @@ as $$
     from (select * from v where v.status = 'called') v
     join cma.crm_record cr on cr.tenant_id = p_tenant_id and cr.id = v.deal_id
     -- the deal's contacts as cma.counted_deals_of (92) gives them (the record's own contact and its associated ones; a
-    -- change of that expression there must change it here too: 237 W10 compares the attempts read with them), a
+    -- change of that expression there must change it here too: 243 W10 compares the attempts read with them), a
     -- lateral of the deal itself: a join of its own (a CTE over the page) ran the attempts once per pair of page deals
     cross join lateral (
       select array(select y from (select cr.contact_source_id as y where cr.contact_source_id is not null
@@ -973,7 +1000,7 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- Each checks the permission (reports.view or performance.team) and the period (cma.report_range: at most 92 days), reads
 -- cma.speed_to_lead_of once into an array and returns its part. jit off: the inlined body's estimated cost passes
--- jit_above_cost, and compiling it cost about 130 ms of each call at three times prod's volume (236's header);
+-- jit_above_cost, and compiling it cost about 130 ms of each call at three times prod's volume (242's header);
 -- force_custom_plan: a plpgsql statement turns to the generic plan after five calls on a connection, and the generic
 -- plan of the inlined body took twice the time or more (the sixth call of the deals list: 420 → 1,090 ms at three times
 -- prod's volume), as cma.courtesy_page_of (150) and cma.refresh_follow_up() (178)
@@ -1088,7 +1115,7 @@ $$;
 -- figures (narrowed to p_market), the markets (every market of the period, never narrowed: the page's market filter
 -- and its per-market card), the trend (per day, per week over 31 days; narrowed) with its grouping, the Group by
 -- table's groups (p_group; narrowed) and a page of the deals list (p_view, p_limit from p_offset; narrowed). The parts
--- are the same functions' as the summary's, the figures' and the deals list's, so the page and the API agree (237).
+-- are the same functions' as the summary's, the figures' and the deals list's, so the page and the API agree (243).
 -- One jsonb object: figures (an object), markets, trend, groups and deals (arrays of rows), trend_group, and
 -- working_weekdays (the weekdays with office hours in the market, or in any market: the trend shades the others)
 create or replace function cma.speed_to_lead_page(p_from date, p_to date, p_market text, p_group text, p_view text,
@@ -1161,7 +1188,7 @@ alter function cma.speed_to_lead_rows(date, date) set plan_cache_mode = force_cu
 -- ---------------------------------------------------------------------------------------------
 create or replace view cma_read.speed_to_lead as
   select * from cma_read.speed_to_lead_rows();
--- the readers' grant stated, as 232's, not left to cma_read's default privileges (237 W1 checks it)
+-- the readers' grant stated, as 232's, not left to cma_read's default privileges (243 W1 checks it)
 grant select on cma_read.speed_to_lead to cma_readonly;
 
 -- ---------------------------------------------------------------------------------------------
@@ -1180,6 +1207,7 @@ begin
     'cma.speed_to_lead_groups_from(cma.speed_to_lead_row[],date,date,text,text)',
     'cma.speed_to_lead_figures_from(uuid,cma.speed_to_lead_row[],date,date,date,date,timestamptz,text,text)',
     'cma.speed_to_lead_deals_from(uuid,cma.speed_to_lead_row[],date,date,text,text,integer,integer)',
+    'cma.speed_to_lead_rows_of(uuid,timestamptz,timestamptz,boolean)',
     'cma.speed_to_lead_of(uuid,timestamptz,timestamptz)',
     'cma.open_leads_of(uuid)'
   ] loop
@@ -1193,7 +1221,7 @@ $$;
 -- 10. Record the migration
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009zr', 'Speed to lead as a cockpit (Martin, 24 Nov 2026; brief B40b; D36): cma.speed_to_lead_row loses first_call_* and gains last_attempt_at, last_call_at, deal_owner_ref, conversations_so_far and window_end; cma.speed_to_lead_of reads each deal''s calls once; cma.open_leads_of (jit off) reads the owner reference and the last call from its rows; cma.speed_to_lead_summary gains attempts_mean, attempts_median, conversation_share and the group week, null shares in no_attempt; new cma.speed_to_lead_figures (the period and the previous one) and cma.speed_to_lead_deals_of (a view of the deals with their attempts, stale after speed_to_lead.stale_business_days); settings speed_to_lead.goal_within_target_pct, speed_to_lead.goal_before_cutoff_pct (0 to 100 or empty) and speed_to_lead.stale_business_days (1 to 30, default 2) checked by cma.check_tenant_setting')
+values ('0009zu', 'Speed to lead as a cockpit (Martin, 24 Nov 2026; brief B40b; D36): cma.speed_to_lead_row loses first_call_* and gains last_attempt_at, last_call_at, deal_owner_ref, conversations_so_far and window_end; cma.speed_to_lead_rows_of (0009zr''s one definition, its open-only bound and cma.speed_to_lead_of''s wrapper kept) reads each deal''s calls once; cma.open_leads_of (jit off) reads the owner reference and the last call from its rows; cma.speed_to_lead_summary gains attempts_mean, attempts_median, conversation_share and the group week, null shares in no_attempt; new cma.speed_to_lead_figures (the period and the previous one) and cma.speed_to_lead_deals_of (a view of the deals with their attempts, stale after speed_to_lead.stale_business_days); settings speed_to_lead.goal_within_target_pct, speed_to_lead.goal_before_cutoff_pct (0 to 100 or empty) and speed_to_lead.stale_business_days (1 to 30, default 2) checked by cma.check_tenant_setting')
 on conflict (version) do nothing;
 
 commit;

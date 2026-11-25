@@ -1,5 +1,5 @@
 -- =============================================================================================
--- 237_verify_speed_to_lead_cockpit.sql: verifies addition 0009zr, Sales → Speed to lead as a cockpit
+-- 243_verify_speed_to_lead_cockpit.sql: verifies addition 0009zu, Sales → Speed to lead as a cockpit
 -- (24 November 2026; brief B40b)
 -- =============================================================================================
 -- Universal: no seed is assumed. W1 checks the structure on the database itself; W2 to W14 work on two throwaway tenants
@@ -10,12 +10,12 @@
 -- UTC+2), as 235's; two deals of a market open around the clock are placed relative to now() for the checks that turn
 -- on the clock (W7, W8). Every check writes one row, OK or FAIL (its detail then starts "FAIL W<n>"), because Cloud SQL
 -- Studio shows no notices; the block ends with a row of its own ("ran to the end"), which the verdict requires, so a
--- block that an error ended reads FAIL. Run as your own IAM login after 236_speed_to_lead_cockpit.sql, dev first, then
+-- block that an error ended reads FAIL. Run as your own IAM login after 242_speed_to_lead_cockpit.sql, dev first, then
 -- prod.
--- Expected: W1 to W14 OK, then the verdict "PASS 0009zr". Provoked (verify.provoke true at the top): every row reads
+-- Expected: W1 to W16 OK, then the verdict "PASS 0009zu". Provoked (verify.provoke true at the top): every row reads
 -- FAIL with its own id, and the verdict PROVOKED, NOT A PASS.
 --
---   W1  structure: 0009zr recorded after 0009zq; cma.speed_to_lead_row has no first_call_* (D36) and ends in
+--   W1  structure: 0009zu recorded after 0009zs; cma.speed_to_lead_row has no first_call_* (D36) and ends in
 --       last_attempt_at, last_call_at, deal_owner_ref, conversations_so_far, window_end (35 columns), cma_read.speed_to_lead
 --       the same columns in the same order and the readers' only, and no function of cma or cma_read names a first_call_ column; the three
 --       settings (two goals text, empty; stale days integer, 2); the new functions and the summary the application's
@@ -50,8 +50,14 @@
 --   W13 the database refuses the summary, the figures, the deals list and the page to an agent (CMA06)
 --   W14 cma.speed_to_lead_summary answers as 234's (kept here verbatim) in every column 234 has, every group (day,
 --       market, agent, pipeline, total), on both fixture tenants and every tenant of the database (the last 92 days, as a
---       person holding reports.view); no_attempt's median, 80th percentile and shares aside (null since 0009zr)
--- Provoked, W3, W4, W5 and W14 also drop the first row of their older side, so each comparison shows a difference.
+--       person holding reports.view); no_attempt's median, 80th percentile and shares aside (null since 0009zu)
+--   W15 0009zr's work kept (236_jobs_off_the_vcpu.sql, Martin, 25 November 2026): cma.speed_to_lead_rows_of holds the one
+--       definition with the open-only bound, cma.speed_to_lead_of is it without the bound and cma.open_leads_of reads it
+--       with the bound, neither with a setting (both inlined); cma.job_gate_of and cma.web_busy are there, web_busy a
+--       definer function of cma_owner, the three the application's only; cma.refresh_follow_up_of keeps jit off
+--   W16 the open-only bound: for every tenant of the database, the open read gives the whole read's rows of the deals
+--       not closed, row for row (except all both ways)
+-- Provoked, W3, W4, W5, W14 and W16 also drop the first row of their older side, so each comparison shows a difference.
 -- =============================================================================================
 
 do $$
@@ -64,11 +70,11 @@ $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);                 -- 'true' to make every check fail
 
-drop table if exists pg_temp.verify_0009zr;
-create temporary table verify_0009zr (ord integer, check_name text, result text, detail text);
+drop table if exists pg_temp.verify_0009zu;
+create temporary table verify_0009zu (ord integer, check_name text, result text, detail text);
 
 -- One result row as four texts: OK when the check holds and the run is not provoked, else FAIL with its id
-create or replace function pg_temp.v9zr_row(p_ord integer, p_id text, p_name text, p_ok boolean, p_detail text)
+create or replace function pg_temp.v9zu_row(p_ord integer, p_id text, p_name text, p_ok boolean, p_detail text)
 returns text[]
 language sql stable
 as $$
@@ -80,7 +86,7 @@ as $$
 $$;
 
 -- The SQLSTATE a statement raises, or 'ok'
-create or replace function pg_temp.v9zr_code(p_sql text)
+create or replace function pg_temp.v9zu_code(p_sql text)
 returns text
 language plpgsql
 as $$
@@ -92,8 +98,8 @@ exception when others then
 end
 $$;
 
--- 234's cma.speed_to_lead_of, verbatim (its 34 columns as a table): W3 compares 0009zr's with it
-create or replace function pg_temp.v9zr_stl_234(p_tenant_id uuid, p_from timestamptz, p_to timestamptz)
+-- 234's cma.speed_to_lead_of, verbatim (its 34 columns as a table): W3 compares 0009zu's with it
+create or replace function pg_temp.v9zu_stl_234(p_tenant_id uuid, p_from timestamptz, p_to timestamptz)
 returns table (
   tenant_id uuid, deal_id uuid, connection_id uuid, deal_source_id text, pipeline_id text, pipeline_label text,
   business_date date, created_at timestamptz, market text, market_source text, is_closed boolean, status text,
@@ -221,9 +227,9 @@ as $$
   from m
 $$;
 
--- 234's cma.open_leads_of, verbatim: W5 compares 0009zr's with it (it reads the current cma.speed_to_lead_of, whose
+-- 234's cma.open_leads_of, verbatim: W5 compares 0009zu's with it (it reads the current cma.speed_to_lead_of, whose
 -- not_called_open rows W3 proves unchanged, and the deals and their calls a second time, as 0009zq did)
-create or replace function pg_temp.v9zr_open_leads_234(p_tenant_id uuid)
+create or replace function pg_temp.v9zu_open_leads_234(p_tenant_id uuid)
 returns setof cma.open_lead_row
 language sql stable
 as $$
@@ -259,7 +265,7 @@ as $$
 $$;
 
 -- W3: the rows of both definitions that differ, in the columns both have, for one tenant (both directions)
-create or replace function pg_temp.v9zr_w3(p_tenant uuid, out rows_now bigint, out differ bigint)
+create or replace function pg_temp.v9zu_w3(p_tenant uuid, out rows_now bigint, out differ bigint)
 language sql stable
 as $$
   with a as (select x.tenant_id, x.deal_id, x.connection_id, x.deal_source_id, x.pipeline_id, x.pipeline_label, x.business_date,
@@ -274,14 +280,14 @@ as $$
                     x.business_seconds, x.target_seconds, x.within_target, x.next_business_noon, x.before_next_noon,
                     x.waiting_business_seconds, x.first_attempt_call_id, x.first_attempt_at, x.attempts_so_far, x.deal_owner_user_id
              -- provoked: the old side loses its first deal, so the comparison must find a difference (133's pattern)
-             from (select y.*, row_number() over (order by y.deal_id) as rn from pg_temp.v9zr_stl_234(p_tenant, null, null) y) x
+             from (select y.*, row_number() over (order by y.deal_id) as rn from pg_temp.v9zu_stl_234(p_tenant, null, null) y) x
              where not (current_setting('verify.provoke')::boolean and x.rn = 1))
   select (select count(*) from a),
          (select count(*) from (select * from a except all select * from b) y) + (select count(*) from (select * from b except all select * from a) y)
 $$;
 
 -- W4: the deals whose new columns differ from what they are made of, for one tenant
-create or replace function pg_temp.v9zr_w4(p_tenant uuid, out rows_now bigint, out differ bigint)
+create or replace function pg_temp.v9zu_w4(p_tenant uuid, out rows_now bigint, out differ bigint)
 language sql stable
 as $$
   with s as (select greatest(0, cma.setting_of(p_tenant, 'speed_to_lead.pre_window_minutes')::integer) as pre,
@@ -318,8 +324,8 @@ as $$
          (select count(*) from (select * from x except all select * from y) q) + (select count(*) from (select * from y except all select * from x) q)
 $$;
 
--- W5: 0009zr's open leads against 234's, as text in the function's order, for one tenant
-create or replace function pg_temp.v9zr_w5(p_tenant uuid, out rows_now bigint, out same boolean)
+-- W5: 0009zu's open leads against 234's, as text in the function's order, for one tenant
+create or replace function pg_temp.v9zu_w5(p_tenant uuid, out rows_now bigint, out same boolean)
 language sql stable
 as $$
   select (select count(*) from cma.open_leads_of(p_tenant)),
@@ -328,14 +334,14 @@ as $$
             age_business_days, bucket_from, bucket_to, past_target, last_call_at, last_call_days, o))
          is not distinct from
          -- provoked: 234's side loses its first lead, so the comparison must find a difference
-         (select string_agg(x::text, '|' order by o) from pg_temp.v9zr_open_leads_234(p_tenant) with ordinality x(tenant_id, deal_id, connection_id,
+         (select string_agg(x::text, '|' order by o) from pg_temp.v9zu_open_leads_234(p_tenant) with ordinality x(tenant_id, deal_id, connection_id,
             deal_source_id, pipeline_id, pipeline_label, owner_user_id, owner_ref, market, created_at, waiting_business_seconds,
             age_business_days, bucket_from, bucket_to, past_target, last_call_at, last_call_days, o)
           where not (current_setting('verify.provoke')::boolean and o = 1))
 $$;
 
--- 234's cma.speed_to_lead_summary, verbatim: W14 compares 0009zr's with it in every column 234 has
-create or replace function pg_temp.v9zr_summary_234(p_from date, p_to date, p_group text, p_market text default null)
+-- 234's cma.speed_to_lead_summary, verbatim: W14 compares 0009zu's with it in every column 234 has
+create or replace function pg_temp.v9zu_summary_234(p_from date, p_to date, p_group text, p_market text default null)
 returns table (
   group_key                 text,
   group_label               text,
@@ -403,8 +409,8 @@ $$;
 
 -- W14: the groups of both summaries that differ (both directions), over 234's columns, for the acting tenant and period:
 -- every group (day, market, agent, pipeline, total); in no_attempt the median, the 80th percentile and both shares are
--- null by 0009zr's decision (234 gave the late shares there), so they are left out of that group's comparison
-create or replace function pg_temp.v9zr_w14(p_from date, p_to date, out groups_now bigint, out differ bigint)
+-- null by 0009zu's decision (234 gave the late shares there), so they are left out of that group's comparison
+create or replace function pg_temp.v9zu_w14(p_from date, p_to date, out groups_now bigint, out differ bigint)
 language plpgsql
 as $$
 declare
@@ -424,7 +430,7 @@ begin
                       case when x.group_key <> 'no_attempt' then x.within_target_pct end, case when x.group_key <> 'no_attempt' then x.before_next_noon_pct end,
                       x.open_not_called, x.closed_before_first_call
                -- provoked: 234's side loses its first group, so the comparison must find a difference
-               from (select y.*, row_number() over (order by y.group_key collate "C") as rn from pg_temp.v9zr_summary_234(p_from, p_to, g) y) x
+               from (select y.*, row_number() over (order by y.group_key collate "C") as rn from pg_temp.v9zu_summary_234(p_from, p_to, g) y) x
                where not (current_setting('verify.provoke')::boolean and x.rn = 1))
     select (select count(*) from (select * from a except all select * from b) y) + (select count(*) from (select * from b except all select * from a) y),
            (select count(*) from a)
@@ -444,8 +450,8 @@ declare
   v_ok boolean; v_txt text; v_bad text := '';
   v_type text; v_view text; v_cfg text;
 begin
-  v_ok := exists (select 1 from cma.schema_migration where version = '0009zr')
-      and exists (select 1 from cma.schema_migration where version = '0009zq');
+  v_ok := exists (select 1 from cma.schema_migration where version = '0009zu')
+      and exists (select 1 from cma.schema_migration where version = '0009zs');
   v_type := (select string_agg(a.attname || ':' || format_type(a.atttypid, a.atttypmod), ',' order by a.attnum)
              from pg_attribute a where a.attrelid = (select t.typrelid from pg_type t where t.oid = 'cma.speed_to_lead_row'::regtype)
                and a.attnum > 0 and not a.attisdropped);
@@ -479,6 +485,7 @@ begin
                                'cma.speed_to_lead_groups_from(cma.speed_to_lead_row[],date,date,text,text)',
                                'cma.speed_to_lead_figures_from(uuid,cma.speed_to_lead_row[],date,date,date,date,timestamptz,text,text)',
                                'cma.speed_to_lead_deals_from(uuid,cma.speed_to_lead_row[],date,date,text,text,integer,integer)',
+                               'cma.speed_to_lead_rows_of(uuid,timestamptz,timestamptz,boolean)',
                                'cma.speed_to_lead_of(uuid,timestamptz,timestamptz)', 'cma.speed_to_lead_rows(date,date)', 'cma.open_leads_of(uuid)'] loop
     if to_regprocedure(v_txt) is null then
       v_bad := v_bad || v_txt || ' missing; ';
@@ -491,6 +498,7 @@ begin
   select string_agg(p.proname || '=' || coalesce(array_to_string(p.proconfig, ','), '-'), ' ' order by p.proname collate "C") into v_cfg
   from pg_proc p
   where p.oid in ('cma.speed_to_lead_of(uuid,timestamptz,timestamptz)'::regprocedure, 'cma.open_leads_of(uuid)'::regprocedure,
+                  'cma.speed_to_lead_rows_of(uuid,timestamptz,timestamptz,boolean)'::regprocedure,
                   'cma.speed_to_lead_summary(date,date,text,text)'::regprocedure, 'cma.speed_to_lead_figures(date,date,text)'::regprocedure,
                   'cma.speed_to_lead_deals_of(date,date,text,text,integer,integer)'::regprocedure,
                   'cma.speed_to_lead_page(date,date,text,text,text,integer,integer)'::regprocedure,
@@ -498,6 +506,7 @@ begin
   if v_cfg is distinct from 'open_leads_of=jit=off speed_to_lead_deals_of=jit=off,plan_cache_mode=force_custom_plan '
                             || 'speed_to_lead_figures=jit=off,plan_cache_mode=force_custom_plan speed_to_lead_of=- '
                             || 'speed_to_lead_page=jit=off,plan_cache_mode=force_custom_plan speed_to_lead_rows=jit=off,plan_cache_mode=force_custom_plan '
+                            || 'speed_to_lead_rows_of=- '
                             || 'speed_to_lead_summary=jit=off,plan_cache_mode=force_custom_plan' then
     v_bad := v_bad || 'the reads'' settings are ' || coalesce(v_cfg, '-') || '; ';
   end if;
@@ -507,10 +516,87 @@ begin
      or position('speed_to_lead.goal_within_target_pct' in v_txt) = 0 or position('speed_to_lead.stale_business_days' in v_txt) = 0 then
     v_bad := v_bad || 'cma.check_tenant_setting lost a rule or lacks a new one; ';
   end if;
-  rows_ := rows_ || pg_temp.v9zr_row(1, 'W1', 'structure: the addition, the row type and the view, no first_call_, the settings, the grants, the reads'' settings',
-                                     v_ok and v_bad = '', case when not v_ok then '0009zr or 0009zq not recorded; ' else '' end
+  rows_ := rows_ || pg_temp.v9zu_row(1, 'W1', 'structure: the addition, the row type and the view, no first_call_, the settings, the grants, the reads'' settings',
+                                     v_ok and v_bad = '', case when not v_ok then '0009zu or 0009zs not recorded; ' else '' end
                                                           || coalesce(nullif(v_bad, ''), '35 columns, the five new last, no first_call_; the view the same; the three settings; grants and settings as designed'));
-  insert into verify_0009zr (ord, check_name, result, detail)
+  insert into verify_0009zu (ord, check_name, result, detail)
+  select rows_[4 * i - 3]::integer, rows_[4 * i - 2], rows_[4 * i - 1], rows_[4 * i] from generate_series(1, cardinality(rows_) / 4) i;
+end
+$$;
+
+-- ---------------------------------------------------------------------------------------------
+-- W15, W16: 0009zr's one definition, its open-only bound and the job gate, kept by 242
+-- ---------------------------------------------------------------------------------------------
+do $$
+declare
+  rows_ text[] := '{}';
+  v_bad text := '';
+  v_txt text;
+  t record;
+  n integer := 0;
+  x integer;
+  v_open integer := 0;
+begin
+  -- W15. the structure 0009zr made, kept
+  if to_regprocedure('cma.speed_to_lead_rows_of(uuid,timestamptz,timestamptz,boolean)') is null then
+    v_bad := v_bad || 'cma.speed_to_lead_rows_of missing; ';
+  else
+    v_txt := pg_get_functiondef('cma.speed_to_lead_rows_of(uuid,timestamptz,timestamptz,boolean)'::regprocedure);
+    if position('not coalesce(p_open_only, false) or not ld.is_closed' in v_txt) = 0 then
+      v_bad := v_bad || 'cma.speed_to_lead_rows_of lost the open-only bound; ';
+    end if;
+  end if;
+  v_txt := pg_get_functiondef('cma.speed_to_lead_of(uuid,timestamptz,timestamptz)'::regprocedure);
+  if position('cma.speed_to_lead_rows_of(p_tenant_id, p_from, p_to, false)' in v_txt) = 0 then
+    v_bad := v_bad || 'cma.speed_to_lead_of is not the one definition without the bound; ';
+  end if;
+  v_txt := pg_get_functiondef('cma.open_leads_of(uuid)'::regprocedure);
+  if position('cma.speed_to_lead_rows_of(p_tenant_id, null, null, true)' in v_txt) = 0 then
+    v_bad := v_bad || 'cma.open_leads_of does not read the open-only bound; ';
+  end if;
+  if exists (select 1 from pg_proc p
+             where p.oid in (to_regprocedure('cma.speed_to_lead_rows_of(uuid,timestamptz,timestamptz,boolean)'),
+                             'cma.speed_to_lead_of(uuid,timestamptz,timestamptz)'::regprocedure)
+               and p.proconfig is not null) then
+    v_bad := v_bad || 'a setting on the one definition or its wrapper (no longer inlined); ';
+  end if;
+  if to_regprocedure('cma.job_gate_of(text)') is null or to_regprocedure('cma.web_busy(text)') is null then
+    v_bad := v_bad || 'cma.job_gate_of or cma.web_busy missing; ';
+  else
+    if not (select p.prosecdef and pg_get_userbyid(p.proowner) = 'cma_owner' from pg_proc p where p.oid = 'cma.web_busy(text)'::regprocedure) then
+      v_bad := v_bad || 'cma.web_busy is not cma_owner''s definer function; ';
+    end if;
+    foreach v_txt in array array['cma.job_gate_of(text)', 'cma.web_busy(text)', 'cma.speed_to_lead_rows_of(uuid,timestamptz,timestamptz,boolean)'] loop
+      if not has_function_privilege('cma_app', v_txt, 'execute') or has_function_privilege('public', v_txt, 'execute') then
+        v_bad := v_bad || v_txt || ' not the application''s only; ';
+      end if;
+    end loop;
+  end if;
+  if not exists (select 1 from pg_proc p where p.oid = 'cma.refresh_follow_up_of(uuid,boolean)'::regprocedure and 'jit=off' = any (p.proconfig)) then
+    v_bad := v_bad || 'cma.refresh_follow_up_of lost jit off; ';
+  end if;
+  rows_ := rows_ || pg_temp.v9zu_row(15, 'W15', '0009zr kept: the one definition with its open-only bound, the wrapper, the open leads'' bound, the job gate',
+                                     v_bad = '', coalesce(nullif(v_bad, ''), 'speed_to_lead_rows_of with the bound, speed_to_lead_of its wrapper, open_leads_of bound, no setting on either; job_gate_of and web_busy kept; follow-up jit off'));
+  -- W16. the open-only bound gives the whole read's rows of the deals not closed, for every tenant of the database
+  for t in select y.id from cma.tenant y where y.status = 'active' order by y.slug collate "C" loop
+    perform set_config('app.tenant_id', t.id::text, true);
+    -- provoked: the whole read's side without its first open deal, a deliberate difference the comparison must see
+    select count(*) into x from (select * from cma.speed_to_lead_rows_of(t.id, null, null, true)
+                                 except all
+                                 select * from cma.speed_to_lead_of(t.id, null, null) z
+                                 where not z.is_closed
+                                   and (not current_setting('verify.provoke')::boolean
+                                        or z.deal_id <> (select min(w.deal_id::text)::uuid from cma.speed_to_lead_of(t.id, null, null) w where not w.is_closed))) a;
+    n := n + x;
+    select count(*) into x from (select * from cma.speed_to_lead_of(t.id, null, null) z where not z.is_closed
+                                 except all
+                                 select * from cma.speed_to_lead_rows_of(t.id, null, null, true)) a;
+    n := n + x;
+    v_open := v_open + (select count(*) from cma.speed_to_lead_rows_of(t.id, null, null, true));
+  end loop;
+  rows_ := rows_ || pg_temp.v9zu_row(16, 'W16', 'the open-only bound gives the whole read''s rows of the deals not closed, every tenant',
+                                     n = 0 and v_open > 0, format('%s rows differ over %s open lead deals', n, v_open));
+  insert into verify_0009zu (ord, check_name, result, detail)
   select rows_[4 * i - 3]::integer, rows_[4 * i - 2], rows_[4 * i - 1], rows_[4 * i] from generate_series(1, cardinality(rows_) / 4) i;
 end
 $$;
@@ -534,8 +620,8 @@ declare
 begin
   begin
     -- tenants, people and roles (as the owner)
-    v_t1 := cma.create_tenant('verify-0009zr-one', 'Verify 0009zr one', 'Europe/Amsterdam');
-    v_t2 := cma.create_tenant('verify-0009zr-two', 'Verify 0009zr two', 'Europe/Amsterdam');
+    v_t1 := cma.create_tenant('verify-0009zu-one', 'Verify 0009zu one', 'Europe/Amsterdam');
+    v_t2 := cma.create_tenant('verify-0009zu-two', 'Verify 0009zu two', 'Europe/Amsterdam');
     insert into cma.app_user (tenant_id, email, display_name) values (v_t1, 'verify-admin1@example.invalid', 'admin1') returning id into v_admin1;
     insert into cma.app_user (tenant_id, email, display_name) values (v_t1, 'verify-analyst1@example.invalid', 'analyst1') returning id into v_analyst1;
     insert into cma.app_user (tenant_id, email, display_name) values (v_t1, 'verify-anna@example.invalid', 'Anna Verify') returning id into v_anna;
@@ -550,11 +636,11 @@ begin
     select x.user_id into v_ing1 from cma.app_user_external_id x where x.tenant_id = v_t1 and x.system = 'ingest';
     select x.user_id into v_ing2 from cma.app_user_external_id x where x.tenant_id = v_t2 and x.system = 'ingest';
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id)
-    values (v_t1, 'verifycrm', 'Verify 0009zr CRM', 'portal-1') returning id into v_crm;
+    values (v_t1, 'verifycrm', 'Verify 0009zu CRM', 'portal-1') returning id into v_crm;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id)
-    values (v_t1, 'verifytel', 'Verify 0009zr telephony', 'tel-1') returning id into v_tel;
+    values (v_t1, 'verifytel', 'Verify 0009zu telephony', 'tel-1') returning id into v_tel;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id)
-    values (v_t2, 'verifycrm', 'Verify 0009zr CRM two', 'portal-2') returning id into v_crm2;
+    values (v_t2, 'verifycrm', 'Verify 0009zu CRM two', 'portal-2') returning id into v_crm2;
     perform set_config('role', 'cma_app', true);
 
     -- tenant one's configuration (the admin): NL Monday to Friday 09:00-17:00, GB open around the clock, the settings, the
@@ -683,11 +769,11 @@ begin
     perform set_config('app.user_id', v_admin1::text, true);
     v_txt := '';
     foreach d in array array['', '0', '100', ' 80 ', '101', '-1', 'x', '1.5'] loop
-      v_txt := v_txt || format('%s:%s ', quote_literal(d), pg_temp.v9zr_code(format('select cma.set_tenant_setting(%L, %L)', 'speed_to_lead.goal_within_target_pct', d)));
+      v_txt := v_txt || format('%s:%s ', quote_literal(d), pg_temp.v9zu_code(format('select cma.set_tenant_setting(%L, %L)', 'speed_to_lead.goal_within_target_pct', d)));
     end loop;
     v_txt := v_txt || '| ';
     foreach d in array array['1', '30', '0', '31', 'x', ''] loop
-      v_txt := v_txt || format('%s:%s ', quote_literal(d), pg_temp.v9zr_code(format('select cma.set_tenant_setting(%L, %L)', 'speed_to_lead.stale_business_days', d)));
+      v_txt := v_txt || format('%s:%s ', quote_literal(d), pg_temp.v9zu_code(format('select cma.set_tenant_setting(%L, %L)', 'speed_to_lead.stale_business_days', d)));
     end loop;
     perform cma.set_tenant_setting('speed_to_lead.goal_within_target_pct', ' 80 ');
     perform cma.set_tenant_setting('speed_to_lead.goal_before_cutoff_pct', '');
@@ -696,7 +782,7 @@ begin
     select v_txt || format('| stored %s; figures goals %s/%s stale %s', (select ts.value from cma.tenant_setting ts where ts.tenant_id = v_t1 and ts.key = 'speed_to_lead.goal_within_target_pct'),
                            coalesce(x.goal_within_target_pct::text, '-'), coalesce(x.goal_before_cutoff_pct::text, '-'), x.stale_business_days)
       into v_txt from cma.speed_to_lead_figures('2026-10-05', '2026-10-11') x;
-    rows_ := rows_ || pg_temp.v9zr_row(2, 'W2', 'the goals take 0 to 100 or nothing, the stale days 1 to 30; anything else CMA04',
+    rows_ := rows_ || pg_temp.v9zu_row(2, 'W2', 'the goals take 0 to 100 or nothing, the stale days 1 to 30; anything else CMA04',
       v_txt = $t$'':ok '0':ok '100':ok ' 80 ':ok '101':CMA04 '-1':CMA04 'x':CMA04 '1.5':CMA04 | '1':ok '30':ok '0':CMA04 '31':CMA04 'x':CMA04 '':CMA04 | stored 80; figures goals 80/- stale 2$t$,
       v_txt);
 
@@ -704,18 +790,18 @@ begin
     v_txt := ''; v_ok := true;
     for d in select te.id::text from cma.tenant te order by te.id loop
       perform set_config('app.tenant_id', d, true);
-      select * into r from pg_temp.v9zr_w3(d::uuid);
+      select * into r from pg_temp.v9zu_w3(d::uuid);
       v_ok := v_ok and r.differ = 0;
       v_txt := v_txt || format('%s: %s rows, %s differ; ', case d when v_t1::text then 'one' when v_t2::text then 'two' else 'tenant' end, r.rows_now, r.differ);
       if d = v_t1::text then v_ok := v_ok and r.rows_now = 13; end if;
     end loop;
-    rows_ := rows_ || pg_temp.v9zr_row(3, 'W3', 'cma.speed_to_lead_of answers as 234''s in every column both have', v_ok, v_txt);
+    rows_ := rows_ || pg_temp.v9zu_row(3, 'W3', 'cma.speed_to_lead_of answers as 234''s in every column both have', v_ok, v_txt);
 
     -- W4. the new columns are what they are made of, on both tenants and every tenant
     v_txt := ''; v_ok := true;
     for d in select te.id::text from cma.tenant te order by te.id loop
       perform set_config('app.tenant_id', d, true);
-      select * into r from pg_temp.v9zr_w4(d::uuid);
+      select * into r from pg_temp.v9zu_w4(d::uuid);
       v_ok := v_ok and r.differ = 0;
       v_txt := v_txt || format('%s: %s rows, %s differ; ', case d when v_t1::text then 'one' when v_t2::text then 'two' else 'tenant' end, r.rows_now, r.differ);
     end loop;
@@ -723,14 +809,14 @@ begin
     select string_agg(format('%s:%s/%s/%s', x.deal_source_id, x.attempts_so_far, x.conversations_so_far, coalesce(x.deal_owner_ref, '-')), ' '
                       order by x.deal_source_id collate "C")
       into v_txt2 from cma.speed_to_lead_of(v_t1, v_from, v_to) x where x.deal_source_id in ('dA', 'dM', 'dH');
-    rows_ := rows_ || pg_temp.v9zr_row(4, 'W4', 'the Attempts, the last call, the owner reference and the window''s end of every deal',
+    rows_ := rows_ || pg_temp.v9zu_row(4, 'W4', 'the Attempts, the last call, the owner reference and the window''s end of every deal',
       v_ok and v_txt2 = 'dA:1/1/o-2 dH:0/0/o-1 dM:22/0/o-9', v_txt || v_txt2);
 
     -- W5. the open leads as 234's, in order, on both tenants and every tenant
     v_txt := ''; v_ok := true;
     for d in select te.id::text from cma.tenant te order by te.id loop
       perform set_config('app.tenant_id', d, true);
-      select * into r from pg_temp.v9zr_w5(d::uuid);
+      select * into r from pg_temp.v9zu_w5(d::uuid);
       v_ok := v_ok and r.same;
       v_txt := v_txt || format('%s: %s leads, %s; ', case d when v_t1::text then 'one' when v_t2::text then 'two' else 'tenant' end, r.rows_now,
                                case when r.same then 'the same' else 'DIFFER' end);
@@ -738,7 +824,7 @@ begin
     end loop;
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_analyst1::text, true);
-    rows_ := rows_ || pg_temp.v9zr_row(5, 'W5', 'cma.open_leads_of gives 234''s rows in its order', v_ok, v_txt);
+    rows_ := rows_ || pg_temp.v9zu_row(5, 'W5', 'cma.open_leads_of gives 234''s rows in its order', v_ok, v_txt);
 
     -- W6. the figures equal the summary's total, for the period and the previous one; the page's parts equal the reads'
     select * into f from cma.speed_to_lead_figures('2026-10-05', '2026-10-11');
@@ -765,7 +851,7 @@ begin
          and j -> 'groups' = (select coalesce(jsonb_agg(to_jsonb(x) order by x.group_key), '[]') from cma.speed_to_lead_summary('2026-10-05', '2026-10-11', 'agent', 'NL') x)
          and j -> 'deals' = (select coalesce(jsonb_agg(to_jsonb(x) order by x.created_at desc, x.deal_id), '[]') from cma.speed_to_lead_deals_of('2026-10-05', '2026-10-11', 'NL', 'called', 50, 0) x)
          and jsonb_array_length(j -> 'markets') = 1 and jsonb_array_length(j -> 'deals') > 0;
-    rows_ := rows_ || pg_temp.v9zr_row(6, 'W6', 'the figures equal the summary''s total, both periods; the page''s parts equal the reads''',
+    rows_ := rows_ || pg_temp.v9zu_row(6, 'W6', 'the figures equal the summary''s total, both periods; the page''s parts equal the reads''',
       v_ok and v_ok2 and f.deals = 8 and f.prev_deals = 1 and f.prev_closed_before_first_call = 1, v_txt || case when v_ok2 then '; the page''s parts equal' else '; the page''s parts DIFFER' end);
 
     -- W7. the previous period: a past week against the week before, uncut; a period reaching today against the same
@@ -779,7 +865,7 @@ begin
     -- the cut: of dQ1 and dQ2 (seven days back, a minute either side of now's time of day) the previous period holds dQ1
     select v_txt || format('; cut: previous %s deal(s) in GB', x.prev_deals), v_ok and x.prev_deals = 1
       into v_txt, v_ok from cma.speed_to_lead_figures(v_today - 6, v_today, 'GB') x;
-    rows_ := rows_ || pg_temp.v9zr_row(7, 'W7', 'the previous period ends the day before the period, at the same length', v_ok, v_txt);
+    rows_ := rows_ || pg_temp.v9zu_row(7, 'W7', 'the previous period ends the day before the period, at the same length', v_ok, v_txt);
 
     -- W8. stale: dO (GB, open every day, three days old) at 2 and at 3; dN (a minute old) never
     select string_agg(format('%s:%s', x.deal_source_id, x.stale), ' ' order by x.deal_source_id collate "C") into v_txt
@@ -792,7 +878,7 @@ begin
     perform set_config('app.user_id', v_admin1::text, true);
     perform cma.set_tenant_setting('speed_to_lead.stale_business_days', '2');
     perform set_config('app.user_id', v_analyst1::text, true);
-    rows_ := rows_ || pg_temp.v9zr_row(8, 'W8', 'stale follows speed_to_lead.stale_business_days',
+    rows_ := rows_ || pg_temp.v9zu_row(8, 'W8', 'stale follows speed_to_lead.stale_business_days',
       v_txt = 'dN:f dO:t | at 3 dN:f dO:f', v_txt);
 
     -- W9. no_attempt: shares, median and 80th percentile null, attempts 0 (dH, dC, dX, dO, dN never attempted in the week:
@@ -805,7 +891,7 @@ begin
       into v_txt from cma.speed_to_lead_summary('2026-09-28', '2026-10-25', 'week') x;
     v_ok := v_txt = format('3 deals: median - p80 - within - before - conv - attempts 0.00/0.0 | week: 2 groups, 2 Mondays, %s deals',
                            (select x.deals from cma.speed_to_lead_summary('2026-09-28', '2026-10-25', 'total') x));
-    rows_ := rows_ || pg_temp.v9zr_row(9, 'W9', 'no_attempt''s shares and median null; the week group adds up', v_ok, v_txt);
+    rows_ := rows_ || pg_temp.v9zu_row(9, 'W9', 'no_attempt''s shares and median null; the week group adds up', v_ok, v_txt);
 
     -- W10. the deals list
     -- the views partition the period's not called and called deals, newest first
@@ -824,11 +910,11 @@ begin
     v_ok := v_ok and v_txt2 = 'dF:5,dM:5,dW:5,dP:5,dA:5';
     v_txt := v_txt || ' | pages ' || coalesce(v_txt2, '-');
     -- the checks of the view, the limit and the offset
-    v_txt := v_txt || ' | ' || pg_temp.v9zr_code('select * from cma.speed_to_lead_deals_of(''2026-10-05'', ''2026-10-11'', null, ''all'', 50, 0)')
-             || ',' || pg_temp.v9zr_code('select * from cma.speed_to_lead_deals_of(''2026-10-05'', ''2026-10-11'', null, ''called'', 0, 0)')
-             || ',' || pg_temp.v9zr_code('select * from cma.speed_to_lead_deals_of(''2026-10-05'', ''2026-10-11'', null, ''called'', 201, 0)')
-             || ',' || pg_temp.v9zr_code('select * from cma.speed_to_lead_deals_of(''2026-10-05'', ''2026-10-11'', null, ''called'', 50, -1)')
-             || ',' || pg_temp.v9zr_code('select cma.speed_to_lead_page(''2026-10-05'', ''2026-10-11'', null, ''total'', ''called'', 50, 0)');
+    v_txt := v_txt || ' | ' || pg_temp.v9zu_code('select * from cma.speed_to_lead_deals_of(''2026-10-05'', ''2026-10-11'', null, ''all'', 50, 0)')
+             || ',' || pg_temp.v9zu_code('select * from cma.speed_to_lead_deals_of(''2026-10-05'', ''2026-10-11'', null, ''called'', 0, 0)')
+             || ',' || pg_temp.v9zu_code('select * from cma.speed_to_lead_deals_of(''2026-10-05'', ''2026-10-11'', null, ''called'', 201, 0)')
+             || ',' || pg_temp.v9zu_code('select * from cma.speed_to_lead_deals_of(''2026-10-05'', ''2026-10-11'', null, ''called'', 50, -1)')
+             || ',' || pg_temp.v9zu_code('select cma.speed_to_lead_page(''2026-10-05'', ''2026-10-11'', null, ''total'', ''called'', 50, 0)');
     v_ok := v_ok and v_txt like '% | CMA04,CMA04,CMA04,CMA04,CMA04';
     -- each listed deal's attempts are cma.deal_attempts_of's (the first 20), with the true count beside them
     select count(*) filter (where q.differs), string_agg(q.src || ':' || q.n_list || '/' || q.n_true, ' ' order by q.src collate "C")
@@ -858,7 +944,7 @@ begin
             and j -> 0 ->> 'agent_name' = 'Anna Verify'
             and v_txt2 = 'agent_name,agent_user_id,business_seconds,connected,conversation,n,started_at,tag_meanings,talk_seconds';
     v_txt := v_txt || format(' | dP tags %s agent %s | keys %s', j -> 0 -> 'tag_meanings', j -> 0 ->> 'agent_name', v_txt2);
-    rows_ := rows_ || pg_temp.v9zr_row(10, 'W10', 'the deals list: views, order, pages, checks, the attempts as cma.deal_attempts_of''s', v_ok, v_txt);
+    rows_ := rows_ || pg_temp.v9zu_row(10, 'W10', 'the deals list: views, order, pages, checks, the attempts as cma.deal_attempts_of''s', v_ok, v_txt);
 
     -- W11. a Conversation: dA's call (answered, 60 s); the week's share of deals with one is the summary's and the figures'
     select format('dA %s conversation(s); share summary %s figures %s', (select x.conversations_so_far from cma.speed_to_lead_of(v_t1, v_from, v_to) x where x.deal_source_id = 'dA'),
@@ -867,7 +953,7 @@ begin
              and s.conversation_share = round(100.0 * 1 / 8, 1) and fg.conversation_share = s.conversation_share
       into v_txt, v_ok
     from cma.speed_to_lead_summary('2026-10-05', '2026-10-11', 'total') s, cma.speed_to_lead_figures('2026-10-05', '2026-10-11') fg;
-    rows_ := rows_ || pg_temp.v9zr_row(11, 'W11', 'a Conversation counts in conversations_so_far and the share of deals with one', v_ok, v_txt);
+    rows_ := rows_ || pg_temp.v9zu_row(11, 'W11', 'a Conversation counts in conversations_so_far and the share of deals with one', v_ok, v_txt);
 
     -- W12. tenant two's reads hold none of tenant one's deals
     select array_agg(x.deal_id) into v_ids from cma.speed_to_lead_of(v_t1, null, null) x;
@@ -885,7 +971,7 @@ begin
       into v_txt;
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_analyst1::text, true);
-    rows_ := rows_ || pg_temp.v9zr_row(12, 'W12', 'tenant isolation on the figures, the deals list, the page and the summary',
+    rows_ := rows_ || pg_temp.v9zu_row(12, 'W12', 'tenant isolation on the figures, the deals list, the page and the summary',
       v_txt = 'figures 2 deals; list dA (0 of one); page 2 deals, 0 of one; summary 2; of one as two 0', v_txt);
 
     -- W14. the summary answers as 234's in every column 234 has (no_attempt's measures aside), every group, on both
@@ -903,9 +989,9 @@ begin
         continue;
       end if;
       if d in (v_t1::text, v_t2::text) then
-        select * into r from pg_temp.v9zr_w14('2026-09-28', '2026-10-11');
+        select * into r from pg_temp.v9zu_w14('2026-09-28', '2026-10-11');
       else
-        select * into r from pg_temp.v9zr_w14(((now() at time zone (select te.timezone from cma.tenant te where te.id = d::uuid))::date) - 91,
+        select * into r from pg_temp.v9zu_w14(((now() at time zone (select te.timezone from cma.tenant te where te.id = d::uuid))::date) - 91,
                                                (now() at time zone (select te.timezone from cma.tenant te where te.id = d::uuid))::date);
       end if;
       v_ok := v_ok and r.differ = 0 and (d <> v_t1::text or r.groups_now > 0);
@@ -913,17 +999,17 @@ begin
     end loop;
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_analyst1::text, true);
-    rows_ := rows_ || pg_temp.v9zr_row(14, 'W14', 'the summary answers as 234''s in every column 234 has, every group', v_ok, v_txt);
+    rows_ := rows_ || pg_temp.v9zu_row(14, 'W14', 'the summary answers as 234''s in every column 234 has, every group', v_ok, v_txt);
 
     -- W13. the database refuses the reads to a person holding neither reports.view nor performance.team (an agent):
     --      CMA06 from the summary, the figures, the deals list and the page, whatever the web checked before
     perform set_config('app.user_id', v_anna::text, true);
-    v_txt := pg_temp.v9zr_code('select * from cma.speed_to_lead_summary(''2026-10-05'', ''2026-10-11'', ''day'')')
-             || ',' || pg_temp.v9zr_code('select * from cma.speed_to_lead_figures(''2026-10-05'', ''2026-10-11'')')
-             || ',' || pg_temp.v9zr_code('select * from cma.speed_to_lead_deals_of(''2026-10-05'', ''2026-10-11'', null, ''called'', 50, 0)')
-             || ',' || pg_temp.v9zr_code('select cma.speed_to_lead_page(''2026-10-05'', ''2026-10-11'', null, ''day'', ''called'', 50, 0)');
+    v_txt := pg_temp.v9zu_code('select * from cma.speed_to_lead_summary(''2026-10-05'', ''2026-10-11'', ''day'')')
+             || ',' || pg_temp.v9zu_code('select * from cma.speed_to_lead_figures(''2026-10-05'', ''2026-10-11'')')
+             || ',' || pg_temp.v9zu_code('select * from cma.speed_to_lead_deals_of(''2026-10-05'', ''2026-10-11'', null, ''called'', 50, 0)')
+             || ',' || pg_temp.v9zu_code('select cma.speed_to_lead_page(''2026-10-05'', ''2026-10-11'', null, ''day'', ''called'', 50, 0)');
     perform set_config('app.user_id', v_analyst1::text, true);
-    rows_ := rows_ || pg_temp.v9zr_row(13, 'W13', 'an agent is refused every read in the database (CMA06)',
+    rows_ := rows_ || pg_temp.v9zu_row(13, 'W13', 'an agent is refused every read in the database (CMA06)',
       v_txt = 'CMA06,CMA06,CMA06,CMA06', v_txt);
 
     raise exception using errcode = 'CMAOK';
@@ -933,32 +1019,32 @@ begin
       rows_ := rows_ || array['99', 'block ended early', 'FAIL', 'FAIL block: error ' || sqlstate || ': ' || sqlerrm];
   end;
   perform set_config('role', 'cma_owner', true);
-  insert into verify_0009zr (ord, check_name, result, detail)
+  insert into verify_0009zu (ord, check_name, result, detail)
   select rows_[4 * i - 3]::integer, rows_[4 * i - 2], rows_[4 * i - 1], rows_[4 * i] from generate_series(1, cardinality(rows_) / 4) i;
-  insert into verify_0009zr values (98, 'ran to the end',
+  insert into verify_0009zu values (98, 'ran to the end',
     case when v_provoke or cardinality(rows_) / 4 <> 13 or '99' = any (rows_) then 'FAIL' else 'OK' end,
     format('%s fixture rows', cardinality(rows_) / 4));
 end
 $$;
 
-drop function if exists pg_temp.v9zr_w3(uuid);
-drop function if exists pg_temp.v9zr_w4(uuid);
-drop function if exists pg_temp.v9zr_w5(uuid);
-drop function if exists pg_temp.v9zr_w14(date, date);
-drop function if exists pg_temp.v9zr_summary_234(date, date, text, text);
-drop function if exists pg_temp.v9zr_open_leads_234(uuid);
-drop function if exists pg_temp.v9zr_stl_234(uuid, timestamptz, timestamptz);
-drop function if exists pg_temp.v9zr_code(text);
-drop function if exists pg_temp.v9zr_row(integer, text, text, boolean, text);
+drop function if exists pg_temp.v9zu_w3(uuid);
+drop function if exists pg_temp.v9zu_w4(uuid);
+drop function if exists pg_temp.v9zu_w5(uuid);
+drop function if exists pg_temp.v9zu_w14(date, date);
+drop function if exists pg_temp.v9zu_summary_234(date, date, text, text);
+drop function if exists pg_temp.v9zu_open_leads_234(uuid);
+drop function if exists pg_temp.v9zu_stl_234(uuid, timestamptz, timestamptz);
+drop function if exists pg_temp.v9zu_code(text);
+drop function if exists pg_temp.v9zu_row(integer, text, text, boolean, text);
 
 select check_name, result, detail
-from (select ord, check_name, result, detail from pg_temp.verify_0009zr
+from (select ord, check_name, result, detail from pg_temp.verify_0009zu
       union all
       select 1000000, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when exists (select 1 from pg_temp.verify_0009zr where result <> 'OK') then 'FAIL'
-                  when (select count(*) from pg_temp.verify_0009zr where result = 'OK') <> 15 then 'FAIL'
-                  else 'PASS 0009zr' end,
-             format('237_verify_speed_to_lead_cockpit: %s OK, %s FAIL', (select count(*) from pg_temp.verify_0009zr where result = 'OK'),
-                    (select count(*) from pg_temp.verify_0009zr where result <> 'OK'))) x
+                  when exists (select 1 from pg_temp.verify_0009zu where result <> 'OK') then 'FAIL'
+                  when (select count(*) from pg_temp.verify_0009zu where result = 'OK') <> 17 then 'FAIL'
+                  else 'PASS 0009zu' end,
+             format('243_verify_speed_to_lead_cockpit: %s OK, %s FAIL', (select count(*) from pg_temp.verify_0009zu where result = 'OK'),
+                    (select count(*) from pg_temp.verify_0009zu where result <> 'OK'))) x
 order by ord;

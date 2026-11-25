@@ -10,6 +10,9 @@
 -- Provoked (verify.provoke true at the top): every row FAIL and the verdict PROVOKED, NOT A PASS; F1, L1 and L2 then also
 -- compare with a deliberate difference (one stored outcome removed, one deal and one open lead left out of 234's side),
 -- which their details show (1 row differs).
+-- Edited by 0009zu (242_speed_to_lead_cockpit.sql, brief B40b, D36): 242 drops first_call_* from cma.speed_to_lead_row
+-- and appends five columns, so 234's copy below names its own columns, and L1 compares every column before 0009zu and
+-- the 30 columns both shapes have from 0009zu on (243 compares 242's new columns); L2 is unchanged.
 --
 --   S1  0009zr recorded after 0009zq; cma.web_busy(text) SECURITY DEFINER owned by cma_owner with its search path pinned; it, cma.job_gate_of(text),
 --       cma.speed_to_lead_rows_of and cma.renewal_outcomes_of(uuid, uuid[], text[]) the application's only (not
@@ -75,8 +78,19 @@ end
 $$;
 
 -- The previous definitions, verbatim: 234's cma.speed_to_lead_of and cma.open_leads_of, 210's cma.renewal_outcomes_of
+-- (edited by 0009zu, 242: 234's columns named here, so the copy compiles whichever row type ran last; since 0009zu
+-- the row has no first_call_* and five more columns, and L1 then compares the columns both have)
 create or replace function pg_temp.v9zr_stl_234(p_tenant_id uuid, p_from timestamptz, p_to timestamptz)
-returns setof cma.speed_to_lead_row
+returns table (
+  tenant_id uuid, deal_id uuid, connection_id uuid, deal_source_id text, pipeline_id text, pipeline_label text,
+  business_date date, created_at timestamptz, market text, market_source text, is_closed boolean, status text,
+  first_call_id uuid, first_call_source_id text, first_call_at timestamptz, first_call_linked boolean,
+  first_any_call_at timestamptz, first_any_direction text, inbound_first boolean, first_connected_at timestamptz,
+  agent_user_id uuid, agent_ref text, agent_from text, elapsed_seconds integer, business_seconds integer,
+  target_seconds integer, within_target boolean, next_business_noon timestamptz, before_next_noon boolean,
+  waiting_business_seconds integer, first_attempt_call_id uuid, first_attempt_at timestamptz, attempts_so_far integer,
+  deal_owner_user_id uuid
+)
 language sql stable
 as $$
   -- materialized, so the settings are read once per call (folded into the query, once per deal)
@@ -605,23 +619,35 @@ declare
   rows1  integer := 0;
   rows2  integer := 0;
   x      integer;
+  -- every column before 0009zu; from 0009zu on (242, which edits this check) the 30 columns both row shapes have
+  v_cols text := case when exists (select 1 from cma.schema_migration where version = '0009zu')
+                      then 'tenant_id, deal_id, connection_id, deal_source_id, pipeline_id, pipeline_label, business_date, '
+                           'created_at, market, market_source, is_closed, status, first_any_call_at, first_any_direction, '
+                           'inbound_first, first_connected_at, agent_user_id, agent_ref, agent_from, elapsed_seconds, '
+                           'business_seconds, target_seconds, within_target, next_business_noon, before_next_noon, '
+                           'waiting_business_seconds, first_attempt_call_id, first_attempt_at, attempts_so_far, deal_owner_user_id'
+                      else '*' end;
 begin
   for t in select y.id, y.timezone from cma.tenant y where y.status = 'active' order by y.slug collate "C" loop
     perform set_config('app.tenant_id', t.id::text, true);
     v_from := (date_trunc('month', (now() at time zone t.timezone)) - interval '1 month') at time zone t.timezone;
     v_to := date_trunc('month', (now() at time zone t.timezone)) at time zone t.timezone;
     -- provoked: 234's side without its first deal, a deliberate difference the comparison must see
-    select count(*) into x from (select * from cma.speed_to_lead_of(t.id, null, null)
-                                 except all
-                                 select * from pg_temp.v9zr_stl_234(t.id, null, null) z
-                                 where not current_setting('verify.provoke')::boolean
-                                    or z.deal_id <> (select min(w.deal_id::text)::uuid from pg_temp.v9zr_stl_234(t.id, null, null) w)) a;
+    execute format('select count(*) from (select %1$s from cma.speed_to_lead_of($1, null, null)
+                                          except all
+                                          select %1$s from pg_temp.v9zr_stl_234($1, null, null) z
+                                          where not current_setting(''verify.provoke'')::boolean
+                                             or z.deal_id <> (select min(w.deal_id::text)::uuid from pg_temp.v9zr_stl_234($1, null, null) w)) a', v_cols)
+      into x using t.id;
     n1 := n1 + x;
-    select count(*) into x from (select * from pg_temp.v9zr_stl_234(t.id, null, null) except all select * from cma.speed_to_lead_of(t.id, null, null)) a;
+    execute format('select count(*) from (select %1$s from pg_temp.v9zr_stl_234($1, null, null) except all select %1$s from cma.speed_to_lead_of($1, null, null)) a', v_cols)
+      into x using t.id;
     n1 := n1 + x;
-    select count(*) into x from (select * from cma.speed_to_lead_of(t.id, v_from, v_to) except all select * from pg_temp.v9zr_stl_234(t.id, v_from, v_to)) a;
+    execute format('select count(*) from (select %1$s from cma.speed_to_lead_of($1, $2, $3) except all select %1$s from pg_temp.v9zr_stl_234($1, $2, $3)) a', v_cols)
+      into x using t.id, v_from, v_to;
     n1 := n1 + x;
-    select count(*) into x from (select * from pg_temp.v9zr_stl_234(t.id, v_from, v_to) except all select * from cma.speed_to_lead_of(t.id, v_from, v_to)) a;
+    execute format('select count(*) from (select %1$s from pg_temp.v9zr_stl_234($1, $2, $3) except all select %1$s from cma.speed_to_lead_of($1, $2, $3)) a', v_cols)
+      into x using t.id, v_from, v_to;
     n1 := n1 + x;
     rows1 := rows1 + (select count(*) from cma.speed_to_lead_of(t.id, null, null));
     -- provoked: 234's side without its first open lead, a deliberate difference the comparison must see
