@@ -6994,7 +6994,7 @@ per current tag (telephony_call_tag with untagged_at null; any tag, counted or n
 
 **Who may see it** `reports.view` or `performance.team`
 
-**Refresh** On page load (server component); the API route GET /api/v1/reports/calls/tags computes on request from live tables (no snapshot)
+**Refresh** On page load (server component), streamed after the first paint (the read starts once the overview and the tag use have answered); the API route GET /api/v1/reports/calls/tags computes on request from live tables (no snapshot)
 
 **Computed in** `cma.calls_per_tag` (0009zw); `cma.calls_per_tag_of` (0009zw); `cma.calls_of` (0009b); `cma.calls_figures_of` (0008zc); `callsPerTag` in src/lib/reports.ts; `CallsPerTagTable` in src/components/CallsParts.tsx
 
@@ -7014,7 +7014,7 @@ with s as (select t.timezone as tz from cma.tenant t where t.id = :tenant_id), c
 
 **Notes**
 
-The tag use (calls.tag_bars, calls.tags_by_group) counts conversations only, so the outbound outcome tags (Not Reached, Wrong Number) and short calls show only here. The rows do not add up to the Total row: a call with two tags counts under each. The verify query returns the tag rows by tag key and one row with a null key for Untagged. Day as Reports → Calls (each line's market zone, not the tenant's; docs/definitions.md, Day, As built today).
+The tag use (calls.tag_bars, calls.tags_by_group) counts conversations only, so the outbound outcome tags (Not Reached, Wrong Number) and short calls show only here. The rows need not add up to the Total row: a call with two tags counts under each. The verify query returns the tag rows by tag key and one row with a null key for Untagged. Day as Reports → Calls (each line's market zone, not the tenant's; docs/definitions.md, Day, As built today).
 
 ### /reports/calls-per-agent
 

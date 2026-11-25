@@ -12,9 +12,9 @@
  * Counts, seconds, line and tag names only: no number, no customer name, no call id, never the hash.
  */
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
-import type { CallsByDirection, CallsFigures, CallsGroup, CallsPerTagRow, CallsRow, TagUseRow } from "@/lib/data";
+import type { CallsByDirection, CallsFigures, CallsGroup, CallsPerTag, CallsPerTagRow, CallsRow, TagUseRow } from "@/lib/data";
 import {
   CALLS_GROUPS, callsBars, callsChange, columnShare, countAxis, fillHint, fmtCount, fmtShare, INBOUND_CLASS, nextCallsGroup, OTHER_TAGS_CLASS, OUTBOUND_CLASS,
   TAG_CLASS, TAG_NOT_COUNTED_CLASS, tagTable, topTags, weekNumber,
@@ -303,6 +303,35 @@ export function TagTable({ rows, groups, total, group, copy, locale, conversatio
 }
 
 /**
+ * The Calls per tag section (addition 0009zw): its heading with the hint at once, the table streamed when its read answers
+ * (the page starts the read after the overview and the tag use), an outline of the table's frame until then. Keyed by the
+ * period and filters, so a new view shows the outline again rather than the previous table
+ */
+export function CallsPerTagPart({ read, totals, more, copy, locale, viewKey }: {
+  read: Promise<CallsPerTag>; totals: CallsByDirection; more?: { href: string; label: string }; copy: Copy; locale: Locale; viewKey: string;
+}) {
+  const t = copy.calls;
+  const h = copy.hints;
+  return (
+    <section aria-labelledby="calls-per-tag-title">
+      <h3 id="calls-per-tag-title" className="mb-3 text-body font-semibold text-p4a-heading">
+        <HintLabel label={t.perTagTitle}>
+          <HeaderHint label={h.about.replace("{label}", t.perTagTitle)} text={h.callsPerTag} more={more} />
+        </HintLabel>
+      </h3>
+      <Suspense key={viewKey} fallback={<div className="h-40 animate-pulse rounded-input bg-p4a-border" data-testid="calls-per-tag-pending" aria-hidden="true" />}>
+        <CallsPerTagAnswer read={read} totals={totals} copy={copy} locale={locale} />
+      </Suspense>
+    </section>
+  );
+}
+
+async function CallsPerTagAnswer({ read, totals, copy, locale }: { read: Promise<CallsPerTag>; totals: CallsByDirection; copy: Copy; locale: Locale }) {
+  const r = await read;
+  return <CallsPerTagTable rows={r.rows} untagged={r.untagged} totals={totals} copy={copy} locale={locale} />;
+}
+
+/**
  * Calls per tag (addition 0009zw; docs/definitions.md, Calls per tag): the whole period's calls per current tag in
  * three columns, Outbound, Inbound and Total, each cell a count and its share of that column's calls in scope; tags by
  * Total, most first, a tag that does not count in Muted (as elsewhere for a tag that does not count); then Untagged and
@@ -334,7 +363,7 @@ export function CallsPerTagTable({ rows, untagged, totals, copy, locale }: {
             <th className={th}><HintLabel label={t.perTagTag}>{hint(t.perTagTag, h.callsPerTagTag)}</HintLabel></th>
             <th className={`${th} text-right`}><HintLabel label={t.outbound}>{hint(t.outbound, h.callsPerTagOutbound)}</HintLabel></th>
             <th className={`${th} text-right`}><HintLabel label={t.inbound}>{hint(t.inbound, h.callsPerTagInbound)}</HintLabel></th>
-            <th className={`${th} text-right`}><HintLabel label={t.perTagTotal}>{hint(t.perTagTotal, h.callsPerTagTotal)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={copy.reports.total}>{hint(copy.reports.total, h.callsPerTagTotal)}</HintLabel></th>
           </tr>
         </thead>
         <tbody>
@@ -356,7 +385,7 @@ export function CallsPerTagTable({ rows, untagged, totals, copy, locale }: {
         </tbody>
         <tfoot>
           <tr className="text-p4a-body" data-testid="calls-per-tag-total">
-            <td className="h-10 whitespace-nowrap px-2 font-semibold">{t.perTagTotal}</td>
+            <td className="h-10 whitespace-nowrap px-2 font-semibold">{copy.reports.total}</td>
             {cells(totals, true)}
           </tr>
         </tfoot>

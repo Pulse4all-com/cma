@@ -5,16 +5,17 @@
 -- subtransaction that is always rolled back, so nothing stays (synthetic data only: people v9zw-…@example.invalid, an
 -- invented line and tags, calls on Tuesday 6 October 2026 in Europe/Amsterdam, so the verdict never depends on when it
 -- runs); block E reads every active tenant of the database it runs in (the Pulse4all tenants in dev and prod) over its last
--- 14 dates, as the owner with the tenant's context set (each read filters on the tenant it is given), and prints counts only, never a row of anyone. Run as your
--- own IAM login after 246_calls_per_tag.sql, dev first, then prod. Cloud SQL Studio shows no notices: a check that fails
+-- 14 dates, as the owner with the tenant's context set (each read filters on the tenant it is given), and prints counts
+-- only, never a row of anyone. Run as your own IAM login after 246_calls_per_tag.sql, dev first, then prod. Cloud SQL
+-- Studio shows no notices: a check that fails
 -- raises "FAIL <id>: …" and stops its block; every check that passed writes one row, and the last row is the verdict:
--- "calls_per_tag ok | 9 PASS, 0 FAIL" (provoked: "PROVOKED, NOT A PASS | 0 PASS, 9 FAIL"). A block that stopped counts
+-- "calls_per_tag ok | 10 PASS, 0 FAIL" (provoked: "PROVOKED, NOT A PASS | 0 PASS, 10 FAIL"). A block that stopped counts
 -- its checks as FAIL; the verdict is reached only when the client goes on after an error (psql -v ON_ERROR_STOP=0, as the
 -- provoked run does; with ON_ERROR_STOP=1, and in Studio, the run ends at the first FAIL, which names the check).
 --
 --   S1  0009zw recorded, after 0009zv; cma.calls_per_tag_of a stable SQL function with jit off and 50 rows, its columns
 --       tag_key, tag_name, meaning, is_counted, outbound, inbound, calls; cma.calls_per_tag a stable plpgsql function with
---       row_kind first; both invoker, owned by cma_owner, executable by cma_app only (not cma_readonly, not PUBLIC)
+--       50 rows and row_kind first; both invoker, owned by cma_owner, executable by cma_app only (not cma_readonly, not PUBLIC)
 --   B1  per current tag on the synthetic date: a call with two tags under each, a missed inbound call with a tag under it,
 --       a tag that does not count listed (is_counted false) with its meaning, a removed tag not counted and its call
 --       untagged, a call of the next date left out; tags by calls, most first; Untagged last with tag_key null
@@ -23,6 +24,8 @@
 --   B3  the Untagged row equals cma.calls_figures_of's untagged; every tag's calls at least its conversations in
 --       cma.calls_tag_use_of
 --   B4  refused: an agent (CMA06), a range over 92 days and a malformed line (CMA04)
+--   B5  tenants apart: a second throwaway tenant's id, asked under the first tenant's context, gives only the Untagged row,
+--       0 0 0, though the second tenant has a tagged call that date
 --   E1  per active tenant, per date of its last 14: the Untagged row (calls) equals cma.calls_figures_of's untagged
 --   E2  the same dates: the Untagged row's outbound and inbound plus the distinct tagged calls per direction (cma.calls_of)
 --       equal cma.calls_figures_of's outbound and inbound
@@ -100,11 +103,11 @@ begin
     raise exception 'FAIL S1: % without rows 50, jit off or its seven columns (%; %; %)', v_of, p.prorows, p.proconfig, p.proargnames;
   end if;
   select * into p from pg_proc where oid = to_regprocedure(v_app);
-  if array_to_string(p.proargnames[6:], ',') <> 'row_kind,tag_key,tag_name,meaning,is_counted,outbound,inbound,calls' then
-    raise exception 'FAIL S1: % columns are %', v_app, p.proargnames;
+  if p.prorows <> 50 or array_to_string(p.proargnames[6:], ',') <> 'row_kind,tag_key,tag_name,meaning,is_counted,outbound,inbound,calls' then
+    raise exception 'FAIL S1: % without rows 50 or its columns (%; %)', v_app, p.prorows, p.proargnames;
   end if;
   insert into verify_0009zw values (1, 'S1 addition, functions and rights', 'PASS',
-    'calls_per_tag_of: stable sql, jit off, rows 50; calls_per_tag: stable plpgsql, row_kind first; invoker, cma_owner, cma_app only');
+    'calls_per_tag_of: stable sql, jit off, rows 50; calls_per_tag: stable plpgsql, rows 50, row_kind first; invoker, cma_owner, cma_app only');
 end
 $$;
 
@@ -114,6 +117,7 @@ declare
   v_provoke boolean := current_setting('verify.provoke')::boolean;
   v_rows    text[] := '{}';
   v_t uuid; v_admin uuid; v_analyst uuid; v_agent uuid; v_ing uuid; v_tel uuid;
+  v_t2 uuid; v_ing2 uuid; v_tel2 uuid;
   v_d       timestamptz := timestamptz '2026-10-06 08:00:00+00';   -- Tuesday 6 October 2026, 10:00 in Amsterdam
   v_day     date := date '2026-10-06';
   v_nr      jsonb := '[{"tagRef": "tg-nr", "name": "Not Reached"}]';
@@ -234,6 +238,26 @@ begin
     end if;
     v_rows := v_rows || array['14', 'B4 refused: an agent (CMA06), more than 92 days and a malformed line (CMA04)', 'PASS', v_got];
 
+    -- B5. a second tenant with a tagged call that date, asked for under the first tenant's context: nothing of it
+    perform set_config('role', 'cma_owner', true);
+    v_t2 := cma.create_tenant('verify-0009zw-two', 'Verify 0009zw two', 'Europe/Amsterdam');
+    select x.user_id into v_ing2 from cma.app_user_external_id x where x.tenant_id = v_t2 and x.system = 'ingest';
+    insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind)
+    values (v_t2, 'verifytel', 'Verify 0009zw telephony two', 'tel-v9zw-2', 'telephony') returning id into v_tel2;
+    perform set_config('role', 'cma_app', true);
+    perform set_config('app.tenant_id', v_t2::text, true);
+    perform set_config('app.user_id', v_ing2::text, true);
+    perform cma.ingest_upsert_telephony_catalog(v_tel2, 'tag', '[{"tagRef": "tg-nr", "name": "Not Reached"}]');
+    perform cma.ingest_upsert_telephony_calls(v_tel2, jsonb_build_array(pg_temp.v9zw_call('t2', 'outbound', v_d, 5, 8, v_nr)));
+    select pg_temp.v9zw_rows(v_t2, v_day, v_day, null, null) into v_got;          -- its own context: the call is there
+    perform set_config('app.tenant_id', v_t::text, true);
+    perform set_config('app.user_id', v_analyst::text, true);
+    v_got := v_got || ' || ' || pg_temp.v9zw_rows(v_t2, v_day, v_day, null, null);
+    if v_provoke or v_got is distinct from 'Not Reached:-:t:1/0/1 | untagged:-:-:0/0/0 || untagged:-:-:0/0/0' then
+      raise exception 'FAIL B5: % (expected its own tag in its own context, nothing under the first tenant''s)', coalesce(v_got, 'no rows');
+    end if;
+    v_rows := v_rows || array['15', 'B5 tenants apart: a second tenant''s id under the first tenant''s context gives only Untagged 0 0 0', 'PASS', v_got];
+
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
     when sqlstate 'CMAOK' then null;
@@ -249,12 +273,14 @@ do $$
 declare
   v_provoke boolean := current_setting('verify.provoke')::boolean;
   t record;
-  v_user uuid;
   v_today date; v_day date;
   v_dates integer := 0; v_calls bigint := 0; v_tags bigint := 0;
   v_e1 text; v_e2 text; v_e3 text; v_e4 text;
   v_detail text := '';
 begin
+  if v_provoke then
+    raise exception 'FAIL E1: provoked';
+  end if;
   for t in select x.id, x.slug from cma.tenant x where x.status = 'active' order by x.slug collate "C" loop
     perform set_config('role', 'cma_owner', true);
     perform set_config('app.tenant_id', t.id::text, true);
@@ -270,7 +296,7 @@ begin
       from cma.calls_figures_of(t.id, v_day, v_day, null, null, 'day') f where f.group_key is null;
       -- the Untagged row's calls equal untagged (E1); its outbound and inbound plus the distinct tagged calls per direction
       -- equal the figures' outbound and inbound (E2)
-      if v_provoke or split_part(v_e1, '/', 3) <> split_part(split_part(v_e2, '|', 1), '/', 1) then
+      if split_part(v_e1, '/', 3) is distinct from split_part(split_part(v_e2, '|', 1), '/', 1) or v_e1 is null then
         raise exception 'FAIL E1 %, %: the Untagged row % against calls_figures_of''s untagged %', t.slug, v_day, v_e1, split_part(v_e2, '/', 1);
       end if;
       select format('%s/%s', split_part(v_e1, '/', 1)::integer + count(*) filter (where c.is_tagged and c.direction = 'outbound'),
@@ -310,6 +336,9 @@ declare
   v_a text; v_b text; v_n integer;
   v_detail text := '';
 begin
+  if v_provoke then
+    raise exception 'FAIL E4: provoked';
+  end if;
   for t in select x.id, x.slug from cma.tenant x where x.status = 'active' order by x.slug collate "C" loop
     perform set_config('role', 'cma_owner', true);
     perform set_config('app.tenant_id', t.id::text, true);
@@ -330,7 +359,7 @@ begin
       from cma.calls_per_tag(v_day, v_day, null, null) c where c.row_kind = 'total';
       select format('%s/%s/%s', f.calls, f.inbound, f.outbound) into v_b
       from cma.calls_figures_of(t.id, v_day, v_day, null, null, 'day') f where f.group_key is null;
-      if v_provoke or v_a is distinct from v_b then
+      if v_a is distinct from v_b then
         perform set_config('role', 'cma_owner', true);
         raise exception 'FAIL E4 %, %: total row % against calls_figures_of %', t.slug, v_day, coalesce(v_a, 'none'), coalesce(v_b, 'none');
       end if;
@@ -344,16 +373,16 @@ begin
 end
 $$;
 
--- Verdict: one row per check that passed, then the verdict (9 checks; a block that stopped counts its checks as FAIL)
+-- Verdict: one row per check that passed, then the verdict (10 checks; a block that stopped counts its checks as FAIL)
 select check_name, result, detail
 from (select ord, check_name, result, detail from verify_0009zw
       union all
       select 999, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0009zw where result = 'PASS') = 9 then 'calls_per_tag ok'
+                  when (select count(*) from verify_0009zw where result = 'PASS') = 10 then 'calls_per_tag ok'
                   else 'FAIL' end,
              format('%s PASS, %s FAIL', (select count(*) from verify_0009zw where result = 'PASS'),
-                                        9 - (select count(*) from verify_0009zw where result = 'PASS'))) x
+                                        10 - (select count(*) from verify_0009zw where result = 'PASS'))) x
 order by ord;
 drop function if exists pg_temp.v9zw_rows(uuid, date, date, text, text);
 drop function if exists pg_temp.v9zw_call(text, text, timestamptz, integer, integer, jsonb);

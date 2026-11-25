@@ -3695,20 +3695,23 @@ export const postgresData: CmaData = {
     });
   },
 
-  async getCallsPerTag(me, range, filter, withTotals = true): Promise<CallsPerTag> {
+  async getCallsPerTag(me, range, filter, opts): Promise<CallsPerTag> {
+    const withTotals = opts?.withTotals ?? true;
+    const withConnections = opts?.withConnections ?? true;
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
       // the function checks the permission, the range and the filters first; its total row is cma.calls_figures_of's
       const r = await q.query<{ row_kind: "tag" | "untagged" | "total"; tag_key: string | null; tag_name: string | null; meaning: TagMeaning | null;
         is_counted: boolean | null; outbound: number; inbound: number; calls: number }>(
         `select * from cma.calls_per_tag($1::date, $2::date, $3, $4, $5)`, [range.from, range.to, filter.market, filter.line, withTotals]);
-      const connections = await readConnections(q);
+      // the connection check only when asked: Reports → Calls has it from its overview
+      const telephony = withConnections ? (await readConnections(q)).telephony : null;
       const counts = (x: { outbound: number; inbound: number; calls: number } | undefined): CallsByDirection =>
         ({ outbound: x?.outbound ?? 0, inbound: x?.inbound ?? 0, calls: x?.calls ?? 0 });
       const total = r.rows.find((x) => x.row_kind === "total");
       return {
-        ...range, filter, telephony: connections.telephony,
-        rows: connections.telephony ? r.rows.filter((x) => x.row_kind === "tag").map((x) => ({
+        ...range, filter, telephony,
+        rows: telephony !== false ? r.rows.filter((x) => x.row_kind === "tag").map((x) => ({
           tagKey: x.tag_key!, tagName: x.tag_name!, meaning: x.meaning, isCounted: x.is_counted ?? true, ...counts(x),
         })) : [],
         untagged: counts(r.rows.find((x) => x.row_kind === "untagged")),

@@ -1456,7 +1456,8 @@ export interface CallsPerTag {
   from: DateKey;
   to: DateKey;
   filter: CallsFilter;
-  telephony: boolean;
+  /** False when the tenant has no telephony connected (no rows); null when the caller asked without the check */
+  telephony: boolean | null;
   /** By calls, most first, then by name */
   rows: CallsPerTagRow[];
   untagged: CallsByDirection;
@@ -4832,8 +4833,11 @@ export interface CmaData {
   getCallsOverview(me: Principal, range: HoursRange, group: CallsGroup, filter: CallsFilter): Promise<CallsOverview>;
   /** Conversations per group and current tag, and over the whole period. Needs reports.view or performance.team */
   getCallsTagUse(me: Principal, range: HoursRange, group: CallsGroup, filter: CallsFilter): Promise<CallsTagUse>;
-  /** Calls per tag (addition 0009zw); withTotals false leaves totals null (one read of the calls less) */
-  getCallsPerTag(me: Principal, range: HoursRange, filter: CallsFilter, withTotals?: boolean): Promise<CallsPerTag>;
+  /**
+   * Calls per tag (addition 0009zw). withTotals false leaves totals null (one read of the calls less) and withConnections
+   * false skips the connection check (telephony null): Reports → Calls has both from its overview. Both default to true
+   */
+  getCallsPerTag(me: Principal, range: HoursRange, filter: CallsFilter, opts?: { withTotals?: boolean; withConnections?: boolean }): Promise<CallsPerTag>;
   /** The same figures per person, the not-linked calls as one row, and the total. Needs performance.team */
   getCallsPerAgent(me: Principal, range: HoursRange, filter: CallsFilter): Promise<CallsPerAgent>;
   /** Per person the conversations per counted tag and the untagged ones. Needs performance.team */

@@ -4816,11 +4816,12 @@ export const mockData: CmaData = {
     return { ...range, group, filter, telephony, rows: callsTagUse(mockCallRecords(me, range, filter), range.from, range.to, group, mockCallTags(me)) };
   },
 
-  async getCallsPerTag(me, range, filter, withTotals = true): Promise<CallsPerTag> {
+  async getCallsPerTag(me, range, filter, opts): Promise<CallsPerTag> {
     assertCalls(me, range, filter, null, ["reports.view", "performance.team"]);
-    const telephony = connectionsOf(me).telephony;
+    const connected = connectionsOf(me).telephony;
     const { rows, untagged, totals } = callsPerTag(mockCallRecords(me, range, filter), range.from, range.to, mockCallTags(me));
-    return { ...range, filter, telephony, rows: telephony ? rows : [], untagged, totals: withTotals ? totals : null };
+    return { ...range, filter, telephony: (opts?.withConnections ?? true) ? connected : null, rows: connected ? rows : [], untagged,
+      totals: (opts?.withTotals ?? true) ? totals : null };
   },
 
   async getCallsPerAgent(me, range, filter): Promise<CallsPerAgent> {

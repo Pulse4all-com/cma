@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   return forPrincipal(async (me) => {
     requireAnyPermission(me, REPORT_PERMISSIONS);
     const { range, filter } = callsParams(new URL(request.url).searchParams, false);
-    const r = await data().getCallsPerTag(me, range, filter, true);
+    const r = await data().getCallsPerTag(me, range, filter, { withTotals: true, withConnections: true });
     return ok({ from: r.from, to: r.to, filter: r.filter, telephony: r.telephony, rows: r.rows, untagged: r.untagged, totals: r.totals });
   });
 }

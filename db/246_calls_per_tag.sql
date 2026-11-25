@@ -4,8 +4,9 @@
 -- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after 244_auto_close_office_hours.sql
 -- (0009zv). Rerunnable, forward-only, in one transaction with a lock timeout. Run as your own IAM login: dev first, then
 -- 247_verify_calls_per_tag.sql there (normal, then provoked), then prod in the same order. No function is re-created (the
--- two functions are new), so no earlier verify reads what changed and none needs running again; 131_time_all.sql's new
--- row (calls {P}, calls per tag) is read the next time Martin runs it.
+-- two functions are new), so no earlier verify reads what changed and none needs running again; 131_time_all.sql's two
+-- new rows (calls per tag {P}: the page's read, streamed after its first paint; calls api {P}, calls per tag with totals:
+-- the API's) are read the next time Martin runs it.
 -- No table, view, column or setting changes (the data map is unchanged), no seed need run again, nothing stored needs
 -- computing: both functions compute when read.
 --
@@ -32,10 +33,12 @@
 --                  totals is true (the default), one 'total' row: cma.calls_figures_of's calls, inbound and outbound for
 --                  the same period and filters (the calls in scope, not the sum of the rows). Reports → Calls passes
 --                  false and uses the overview's total, which is that same row, so the page reads cma.calls_of once
---                  more, not twice; /api/v1/reports/calls/tags passes true
+--                  more, not twice, and streams the table after its first paint; /api/v1/reports/calls/tags passes true
 --
--- Measured locally (three times prod's volume, web/verify/perf-volume-fixture.sql): see the PR. 131_time_all.sql gains
--- the page's read (totals false) in part b, a report core against the 500 ms overview budget.
+-- Measured locally as the application, Postgres held to one CPU, three times prod's volume
+-- (web/verify/perf-volume-fixture.sql, eight calls per session): the page's read 650-1,150 ms for a month, the tag use's own 650-790; the API's read (with the
+-- total row) 1,500-3,700 ms. Both are over the 500 ms report-core budget at that volume, as the tag use already is, so
+-- 131_time_all.sql's two new rows read FAIL there; prod's run of 131 decides whether the read needs a faster form.
 -- SQLSTATEs as cma.calls_tag_use: CMA04 a range or filter refused, CMA06 not permitted.
 --
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
@@ -132,6 +135,7 @@ returns table (
   calls       integer
 )
 language plpgsql stable
+rows 50
 as $$
 declare
   v_tenant uuid := cma.current_tenant_id();

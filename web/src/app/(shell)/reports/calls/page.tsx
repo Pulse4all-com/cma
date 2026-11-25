@@ -1,12 +1,10 @@
-import { CallsChart, CallsDateLine, CallsGroupSwitch, CallsLegend, CallsPerTagTable, CallsTile, DeltaLine, previousLabel, TagBars, TagTable } from "@/components/CallsParts";
-import { HeaderHint } from "@/components/HeaderHint";
-import { HintLabel } from "@/components/HintLabel";
+import { CallsChart, CallsDateLine, CallsGroupSwitch, CallsLegend, CallsPerTagPart, CallsTile, DeltaLine, previousLabel, TagBars, TagTable } from "@/components/CallsParts";
 import { CallsFilters } from "@/components/CallsFilters";
 import { PeriodBar } from "@/components/PeriodBar";
 import { NoReportPermission, NotConnected } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
-import { data, dataIsMock, type CallsGroup } from "@/lib/data";
+import { data, dataIsMock, streamed, type CallsGroup } from "@/lib/data";
 import { holdsAny } from "@/lib/nav";
 import { resolvePeriod } from "@/lib/period";
 import {
@@ -30,7 +28,7 @@ import { pickCopy } from "@/lib/copy";
  * Connected), their connected rate and their talk time; and the tags following the grouping: the untagged
  * share over every call, the whole period's tags as bars over the conversations (top twelve and Other) and
  * the groups by tags as a table with counts and row shares; below them Calls per tag, every call of the period per
- * current tag by direction (addition 0009zw), with the overview's total as its Total row. Talk time runs from the answer to the end, as
+ * current tag by direction (addition 0009zw), with the overview's total as its Total row, streamed after the first paint. Talk time runs from the answer to the end, as
  * the telephony system counts it, averaged over the answered calls (addition 0008zc). Shown to people
  * holding reports.view or performance.team; the database checks again on every read. A tenant without
  * telephony sees "No telephony connected", never 0. Counts, seconds, line and tag names only: no
@@ -57,12 +55,16 @@ export default async function CallsPage({ searchParams }: PageProps<"/reports/ca
   const { range, period, invalid } = resolvePeriod(sp, today, MAX_REPORT_DAYS);
   const group: CallsGroup = parseCallsGroup(sp.group) ?? "day";
   const { filter, problem } = parseCallsFilter(sp.market, sp.line);
-  // Calls per tag without its totals: they are the overview's (cma.calls_figures_of), so the calls are read once less
-  const [overview, tagUse, perTag] = await Promise.all([
+  const [overview, tagUse] = await Promise.all([
     data().getCallsOverview(me, period, group, filter),
     data().getCallsTagUse(me, period, group, filter),
-    data().getCallsPerTag(me, period, filter, false),
   ]);
+  // Calls per tag (addition 0009zw) streams after the first paint: started once the overview and the tag use have answered,
+  // so on the database's one vCPU it does not hold up the page's top; only with calls to show. Without its totals and its
+  // connection check: both are the overview's (its total is cma.calls_figures_of's), so the calls are read once more, not twice
+  const perTagRead = overview.telephony && overview.total.calls > 0
+    ? streamed(() => data().getCallsPerTag(me, period, filter, { withTotals: false, withConnections: false }))
+    : null;
   const periodQuery: Record<string, string> =
     range === "custom" && !invalid ? { range, from: period.from, to: period.to } : { range };
   const total = overview.total;
@@ -176,16 +178,12 @@ export default async function CallsPage({ searchParams }: PageProps<"/reports/ca
                     </section>
                   </>
                 )}
-                {/* every call per current tag by direction, whole period (docs/definitions.md, Calls per tag; addition 0009zw) */}
-                <section aria-labelledby="calls-per-tag-title">
-                  <h3 id="calls-per-tag-title" className="mb-3 text-body font-semibold text-p4a-heading">
-                    <HintLabel label={t.perTagTitle}>
-                      <HeaderHint label={h.about.replace("{label}", t.perTagTitle)} text={h.callsPerTag} more={metricsMore(me.permissions, "calls.calls_per_tag", h.howComputed)} />
-                    </HintLabel>
-                  </h3>
-                  <CallsPerTagTable rows={perTag.rows} untagged={perTag.untagged}
-                    totals={{ outbound: total.outbound, inbound: total.inbound, calls: total.calls }} copy={copy} locale={me.locale} />
-                </section>
+                {/* every call per current tag by direction, whole period (docs/definitions.md, Calls per tag; addition 0009zw), streamed */}
+                {perTagRead ? (
+                  <CallsPerTagPart read={perTagRead} totals={{ outbound: total.outbound, inbound: total.inbound, calls: total.calls }}
+                    more={metricsMore(me.permissions, "calls.calls_per_tag", h.howComputed)} copy={copy} locale={me.locale}
+                    viewKey={`${period.from}|${period.to}|${filter.market ?? ""}|${filter.line ?? ""}`} />
+                ) : null}
                 <p className="max-w-3xl text-caption text-p4a-grey">{t.tagNote}</p>
               </div>
             )}

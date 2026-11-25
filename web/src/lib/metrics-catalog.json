@@ -14043,7 +14043,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "On page load (server component); the API route GET /api/v1/reports/calls/tags computes on request from live tables (no snapshot)",
+      "refresh": "On page load (server component), streamed after the first paint (the read starts once the overview and the tag use have answered); the API route GET /api/v1/reports/calls/tags computes on request from live tables (no snapshot)",
       "settings": [],
       "computed_in": {
         "sql": [
@@ -14089,7 +14089,7 @@
         "api.md, GET /api/v1/reports/calls/tags",
         "decisions.md 25 Nov 2026 (Definitions: Calls per tag)"
       ],
-      "notes": "The tag use (calls.tag_bars, calls.tags_by_group) counts conversations only, so the outbound outcome tags (Not Reached, Wrong Number) and short calls show only here. The rows do not add up to the Total row: a call with two tags counts under each. The verify query returns the tag rows by tag key and one row with a null key for Untagged. Day as Reports → Calls (each line's market zone, not the tenant's; docs/definitions.md, Day, As built today).",
+      "notes": "The tag use (calls.tag_bars, calls.tags_by_group) counts conversations only, so the outbound outcome tags (Not Reached, Wrong Number) and short calls show only here. The rows need not add up to the Total row: a call with two tags counts under each. The verify query returns the tag rows by tag key and one row with a null key for Untagged. Day as Reports → Calls (each line's market zone, not the tenant's; docs/definitions.md, Day, As built today).",
       "status": [
         "verified",
         "cadence_unconfirmed"
