@@ -48,7 +48,7 @@ run_init () {
 #   rc        exit 0
 #   commit    a migration: exit 0 and COMMIT (with its last "INSERT 0 n", the schema_migration row)
 #   verify    a verify: exit 0 and a verdict row that says PASS or verified, no failure count, not PROVOKED
-#   provoked  a provoked verify: the verdict row says PROVOKED
+#   provoked  a provoked verify: the verdict row says PROVOKED and counts no passing check (0 OK / 0 PASS)
 #   refused   a dev-only verify in prod: the script refused the database (REFUSED: …)
 verdict_of () {
   local check=$1 f=$2 rc=$3 row
@@ -58,14 +58,17 @@ verdict_of () {
     commit)   if [ "$rc" = 0 ] && grep -qx 'COMMIT' "$f"; then echo "OK $(grep -E '^INSERT 0 [0-9]+$' "$f" | tail -1), COMMIT"; else echo "FAIL no COMMIT"; fi ;;
     verify)   if [ "$rc" = 0 ] && grep -qE 'PASS|verified' <<<"$row" && ! grep -qE '\| FAIL( |$)|(^|[^0-9])[1-9][0-9]* FAIL|PROVOKED' <<<"$row"; then
                 echo "OK $row"; else echo "FAIL ${row:-no verdict row}"; fi ;;
-    provoked) if grep -q 'PROVOKED' <<<"$row"; then echo "OK $row"; else echo "FAIL not provoked: ${row:-no verdict row}"; fi ;;
+    provoked) if grep -q 'PROVOKED' <<<"$row" && ! grep -qE '(^|[^0-9])[1-9][0-9]* (OK|PASS|ok)' <<<"$row"; then
+                echo "OK $row"; else echo "FAIL not provoked, or a check passed: ${row:-no verdict row}"; fi ;;
     refused)  if grep -q 'REFUSED: ' "$f"; then echo "OK refused, as expected: $(grep -o 'REFUSED: [^"]*' "$f" | head -1 | cut -c1-90)"; else echo "FAIL no refusal"; fi ;;
     *)        echo "FAIL unknown check $check" ;;
   esac
 }
 
-# step <label> <timeout s> <check> <command>: returns 0 when the verdict is OK. The command runs in bash -c, so it sees
-# the exported variables and functions only (PGCONN, RUN_TMP, OPERATOR, psql_file, psql_cma, psql_val, …)
+# step <label> <timeout s> <check> <command>: returns 0 when the verdict is OK. The command runs in bash -c with pipefail
+# (a pipe fails when any part fails), so it sees the exported variables and functions only (PGCONN, RUN_TMP, OPERATOR,
+# psql_file, psql_cma, psql_val, …). Its timeout process is kept in STEP_PID_FILE: an interrupt ends the step first
+# (end_step), so nothing keeps running behind the summary; a migration ended mid-way rolls back (one transaction)
 step () {
   local label=$1 limit=$2 check=$3 cmd=$4
   local n=$(( ${#RUN_SUMMARY[@]} + 1 ))
@@ -74,8 +77,12 @@ step () {
   say "== $(date +%T)  $label"
   t0=$(date +%s)
   next=$HEARTBEAT_S
-  ( timeout -k 20 "$limit" bash -c "$cmd" </dev/null; echo $? > "$rcf" ) 2>&1 | mask | tee -a "$RUN_LOG" "$out" &
+  STEP_PID_FILE="$RUN_TMP/$n.pid"
+  STEP_LABEL="$label"
+  ( timeout -k 20 "$limit" bash -c "set -o pipefail; $cmd" </dev/null & echo $! > "$STEP_PID_FILE"; wait $!; echo $? > "$rcf" ) 2>&1 \
+    | mask | tee -a "$RUN_LOG" "$out" &
   pid=$!
+  STEP_PIPE_PID=$pid
   while kill -0 "$pid" 2>/dev/null; do
     sleep 1
     el=$(( $(date +%s) - t0 ))
@@ -85,6 +92,8 @@ step () {
     fi
   done
   wait "$pid"
+  STEP_PID_FILE=""
+  STEP_PIPE_PID=""
   el=$(( $(date +%s) - t0 ))
   rc="$(cat "$rcf" 2>/dev/null || echo 255)"
   verdict="$(verdict_of "$check" "$out" "$rc")"
@@ -117,13 +126,35 @@ run_finish () {
   [ "$RUN_FAILED" = 0 ] && [ "$rc" = 0 ]
 }
 
-stop_run () { say ""; say "== $(date +%T)  STOPPED: $*"; RUN_FAILED=1; run_finish; exit 1; }
+# end_step: a step still running (an interrupt) gets TERM through its timeout, which passes it on to the command, and is
+# waited for (30 s, then KILL), so its output lands before the summary and nothing runs on unseen
+end_step () {
+  local tpid i
+  [ -n "${STEP_PID_FILE:-}" ] && [ -s "$STEP_PID_FILE" ] || return 0
+  tpid="$(cat "$STEP_PID_FILE")"
+  kill -0 "$tpid" 2>/dev/null || return 0
+  say "… ending the running step (TERM to its process ${tpid})"
+  kill -TERM "$tpid" 2>/dev/null
+  for i in $(seq 1 30); do kill -0 "$tpid" 2>/dev/null || break; sleep 1; done
+  kill -0 "$tpid" 2>/dev/null && { kill -KILL "$tpid" 2>/dev/null; pkill -KILL -P "$tpid" 2>/dev/null; say "… killed it after 30 s"; }
+  [ -n "${STEP_PIPE_PID:-}" ] && wait "$STEP_PIPE_PID" 2>/dev/null
+  RUN_SUMMARY+=("$(printf '%-4s %-62s ended by the interrupt' FAIL "${STEP_LABEL:-a step}" | cut -c1-230)")
+  STEP_PID_FILE=""
+}
+
+stop_run () { trap - INT TERM; end_step; say ""; say "== $(date +%T)  STOPPED: $*"; RUN_FAILED=1; run_finish; exit 1; }
 
 # The database ------------------------------------------------------------------------------------------------------
 
 psql_file () { psql "$PGCONN" -X -v ON_ERROR_STOP=1 -f "$1"; }
 psql_cma () { psql "$PGCONN" -X -q -v ON_ERROR_STOP=1 -c "set role cma_owner;" -c "$1" -c "reset role;"; }
-psql_val () { timeout "${PSQL_TIMEOUT:-60}" psql "$PGCONN" -X -q -At -v ON_ERROR_STOP=1 -c "set role cma_owner;" -c "$1" -c "reset role;" </dev/null; }
+# psql_val: one value or a few lines, unaligned; the client's timeout PSQL_TIMEOUT (60 s) and the same less 5 s on the
+# server, so a read the client gave up on does not keep running in the database
+psql_val () {
+  local t="${PSQL_TIMEOUT:-60}"
+  timeout "$t" psql "$PGCONN" -X -q -At -v ON_ERROR_STOP=1 -c "set statement_timeout = '$(( t > 10 ? t - 5 : t ))s';" \
+    -c "set role cma_owner;" -c "$1" -c "reset role;" </dev/null
+}
 export -f psql_file psql_cma psql_val
 
 # db_connect dev|prod: cma_db in this shell (PGCONN stays set), up to five tries while the proxy comes up, then the
@@ -145,6 +176,7 @@ db_connect () {
     dev)  [[ "$PGCONN" == *"port=5433"* ]] || stop_run "PGCONN is not dev's proxy port (5433)"; want=t ;;
     prod) [[ "$PGCONN" == *"port=5434"* ]] || stop_run "PGCONN is not prod's proxy port (5434)"; want=f ;;
   esac
+  pgrep -f "cloud-sql-proxy.*cma-${env}-pg" >/dev/null || stop_run "no cloud-sql-proxy for cma-${env}-pg is running"
   seed="$(psql_val "select exists (select 1 from cma.app_user u join cma.tenant t on t.id = u.tenant_id where u.email = 'agent.two@example.com' and u.status = 'active')")"
   [ "$seed" = "$want" ] || stop_run "the database does not look like ${env} (dev seed present: ${seed:-unknown})"
   note "connected to ${env}; dev seed present: ${seed}"
@@ -159,7 +191,9 @@ export REGION
 no_run_proxy () {
   if pgrep -f "run services proxy" >/dev/null; then
     pkill -f "run services proxy"
-    sleep 2
+    sleep 3
+    pgrep -f "run services proxy" >/dev/null && { pkill -KILL -f "run services proxy"; sleep 1; }
+    pgrep -f "run services proxy" >/dev/null && stop_run "a 'gcloud run services proxy' keeps running: stop it, then rerun"
     note "stopped a running 'gcloud run services proxy' (a gcloud write hangs while it runs)"
   fi
 }
@@ -209,13 +243,18 @@ execute_job () {
 wait_execution () {
   local project=$1 name s last=""
   name="$(cat "$RUN_TMP/execution")"
+  local done ok failed running
   while true; do
+    # comma-separated: a count of 0 is left out by the API, an empty field that a comma keeps (a tab, being whitespace
+    # to read, would collapse it and move the failed count into the succeeded one)
     s="$(timeout 60 gcloud run jobs executions describe "$name" --project="$project" --region="$REGION" \
-      --format='value(status.completionTime,status.succeededCount,status.failedCount,status.runningCount)' 2>/dev/null | tr '\t' ' ')"
-    [ "$s" = "$last" ] || { echo "state: completion ${s:-?} (completionTime succeeded failed running)"; last="$s"; }
-    case "$s" in
-      [0-9]*) [ "$(awk '{print $2}' <<<"$s")" = 1 ] && return 0; return 1 ;;
-    esac
+      --format='csv[no-heading](status.completionTime,status.succeededCount,status.failedCount,status.runningCount)' 2>/dev/null)"
+    IFS=, read -r done ok failed running <<<"$s"
+    [ "$s" = "$last" ] || { echo "state: completed ${done:--}, succeeded ${ok:-0}, failed ${failed:-0}, running ${running:-0}"; last="$s"; }
+    if [ -n "$done" ]; then
+      [ "${ok:-0}" = 1 ] && [ "${failed:-0}" = 0 ] && return 0
+      return 1
+    fi
     sleep 15
   done
 }
@@ -226,12 +265,15 @@ wait_execution () {
 purge_lines () {
   local project=$1 name out i
   name="$(cat "$RUN_TMP/execution")"
+  local prev=-1 count
   for i in $(seq 1 16); do
     out="$(timeout 90 gcloud logging read "resource.type=\"cloud_run_job\" AND labels.\"run.googleapis.com/execution_name\"=\"${name}\" AND jsonPayload.message:\"reconcile: sync_run retention\"" \
       --project="$project" --freshness=3h --order=asc \
       --format='value(jsonPayload.message,jsonPayload.tenant,jsonPayload.deleted,jsonPayload.batches,jsonPayload.more,jsonPayload.code,jsonPayload.ms)' 2>/dev/null)"
-    [ -n "$out" ] && break
-    echo "no retention line yet (logging lags), ${i} of 16"
+    count=0; [ -n "$out" ] && count="$(wc -l <<<"$out")"
+    [ "$count" -gt 0 ] && [ "$count" = "$prev" ] && break
+    echo "${count} retention line(s) so far (logging lags; read until the number holds), ${i} of 16"
+    prev=$count
     sleep 15
   done
   echo "message | tenant | deleted | batches | more | code | ms"

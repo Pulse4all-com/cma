@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tools/runners/n07f-first-purge.sh: the first sync_run purge in prod, by hand and watched (N07f, #321, decision D13;
-# MORNING_RUNBOOK step 6). Outside office hours only: it refuses between 07:00 and 22:00 Amsterdam (--now insists).
+# MORNING_RUNBOOK step 6). Outside office hours only: it refuses between 07:00 and 22:00 Amsterdam (--now insists), and
+# between 03:00 and 04:30, around the scheduled reconcile at 03:30 (always).
 #
 #   cd ~/cma && git switch -q main && git pull -q --ff-only && bash tools/runners/n07f-first-purge.sh
 #
@@ -14,8 +15,12 @@
 source "$(dirname "$0")/lib.sh"
 run_init n07f-first-purge "0009zt-purge-$(date +%F)"
 hour=$((10#$(TZ=Europe/Amsterdam date +%H)))
+minute=$((10#$(TZ=Europe/Amsterdam date +%M)))
 if [ "$hour" -ge 7 ] && [ "$hour" -lt 22 ] && [ "${1:-}" != "--now" ]; then
   stop_run "outside office hours only: from 22:00 to 07:00 Amsterdam (it is $(TZ=Europe/Amsterdam date +%H:%M) there; --now insists)"
+fi
+if [ "$hour" = 3 ] || { [ "$hour" = 4 ] && [ "$minute" -lt 30 ]; }; then
+  stop_run "not from 03:00 to 04:30 Amsterdam: the scheduled reconcile runs at 03:30 (it is $(TZ=Europe/Amsterdam date +%H:%M))"
 fi
 on_main
 JOBS="ingest-reconcile"
@@ -25,13 +30,6 @@ db_connect prod
 has_0009zt || stop_run "0009zt is not in prod: run tools/runners/n07f-prod.sh first"
 step "prod: ingest-reconcile on the image with the purge (read)" 120 rc 'jobs_on_image p4a-cma-prod "$IMAGE"' \
   || stop_run "prod's reconcile is not on ${IMAGE}: run tools/runners/n07f-ingest.sh first"
-
-step "prod: no reconcile running now (read; a running one is waited for)" 3900 rc '
-  name="$(timeout 60 gcloud run jobs executions list --job=ingest-reconcile --project=p4a-cma-prod --region="$REGION" \
-    --limit=1 --sort-by="~metadata.creationTimestamp" --format="value(metadata.name)")"
-  [ -n "$name" ] || { echo "no execution yet"; exit 0; }
-  echo "$name" > "$RUN_TMP/execution"
-  wait_execution p4a-cma-prod; echo "the newest execution ${name} is complete"; exit 0'
 
 BOUND="$(date -u +%Y-%m-%dT%H:00:00Z)"
 export BOUND
@@ -52,14 +50,22 @@ group by t.slug order by t.slug collate \"C\""
 export ROWS_SQL HOURS_SQL
 
 step "prod: the run rows before (slug|succeeded|failed|succeeded past|failed past)" 600 rc 'PSQL_TIMEOUT=540 psql_val "$ROWS_SQL" | tee "$RUN_TMP/rows.before"'
-step "prod: the hourly counts before (slug|runs|failed)" 300 rc 'psql_val "$HOURS_SQL" | tee "$RUN_TMP/hours.before"'
+step "prod: the hourly counts before (slug|runs|failed)" 300 rc 'psql_val "$HOURS_SQL" | tee "$RUN_TMP/hours.before" && test -s "$RUN_TMP/hours.before"' \
+  || stop_run "the hourly counts could not be read: nothing to compare with"
 
+# just before the execute: a reconcile running now (the advisory lock would make this one skip) is waited for
+step "prod: no reconcile running now (read; a running one is waited for)" 3900 rc '
+  name="$(timeout 60 gcloud run jobs executions list --job=ingest-reconcile --project=p4a-cma-prod --region="$REGION" \
+    --limit=1 --sort-by="~metadata.creationTimestamp" --format="value(metadata.name)")" || exit 1
+  [ -n "$name" ] || { echo "no execution yet"; exit 0; }
+  echo "$name" > "$RUN_TMP/execution"
+  wait_execution p4a-cma-prod; echo "the newest execution ${name} is complete"; exit 0' || stop_run "cannot tell whether a reconcile runs"
 no_run_proxy
 step "prod: execute ingest-reconcile" 240 rc 'execute_job p4a-cma-prod ingest-reconcile' || stop_run "the reconcile did not start"
 step "prod: the reconcile runs (polled)" 3900 rc 'wait_execution p4a-cma-prod'
 step "prod: the retention lines, one per tenant" 600 rc 'purge_lines p4a-cma-prod'
 
 step "prod: the run rows after (slug|succeeded|failed|succeeded past|failed past)" 600 rc 'PSQL_TIMEOUT=540 psql_val "$ROWS_SQL" | tee "$RUN_TMP/rows.after"'
-step "prod: the hourly counts after, the same as before" 300 rc 'psql_val "$HOURS_SQL" | tee "$RUN_TMP/hours.after" && diff "$RUN_TMP/hours.before" "$RUN_TMP/hours.after" && echo "the same"'
+step "prod: the hourly counts after, the same as before" 300 rc 'psql_val "$HOURS_SQL" | tee "$RUN_TMP/hours.after" && test -s "$RUN_TMP/hours.after" && diff "$RUN_TMP/hours.before" "$RUN_TMP/hours.after" && echo "the same"'
 note "Browser (prod): System health, the 24-hour counts as before the purge"
 run_finish

@@ -20,6 +20,7 @@ step "the pull request (read)" 120 rc \
      --jq "\"#\(.number) \(.title)\n\(.state) \(.headRefName) → \(.baseRefName), head \(.headRefOid), mergeable \(.mergeable), \(.mergeStateStatus)\""' \
   || stop_run "gh cannot read #${PR}"
 [ "$(timeout 60 gh pr view "$PR" --json state --jq .state)" = OPEN ] || stop_run "#${PR} is not open"
+[ "$(timeout 60 gh pr view "$PR" --json baseRefName --jq .baseRefName)" = main ] || stop_run "#${PR}'s base is not main: retarget it first"
 [ "$(timeout 60 gh pr view "$PR" --json headRefOid --jq .headRefOid)" = "$HEAD_SHA" ] || stop_run "#${PR}'s head is not ${HEAD_SHA}: someone pushed since; look again"
 
 step "the files: does the merge build prod?" 120 rc '
@@ -60,10 +61,17 @@ if [ "$BUILD" = 1 ]; then
     done'
 else
   step "no build expected: none starts within 2 minutes (read)" 300 rc '
+    reads=0
     for i in $(seq 1 8); do
-      s="$(eval "$BUILDS" 2>/dev/null)"
-      [ -n "$s" ] && { echo "a build started after all: ${s}"; exit 1; }
+      if s="$(eval "$BUILDS" 2>&1)"; then
+        reads=$(( reads + 1 ))
+        [ -n "$s" ] && { echo "a build started after all: ${s}"; exit 1; }
+      else
+        echo "the builds list did not answer: ${s}"
+      fi
       sleep 15
-    done; echo "no build for ${MERGE_SHA:0:7}, as expected"'
+    done
+    [ "$reads" -ge 4 ] || { echo "only ${reads} of 8 reads answered: cannot tell"; exit 1; }
+    echo "no build for ${MERGE_SHA:0:7} in ${reads} reads, as expected"'
 fi
 run_finish

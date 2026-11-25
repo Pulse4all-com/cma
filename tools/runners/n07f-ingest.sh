@@ -46,6 +46,7 @@ fi
 step "dev: the reconcile's schedule (read)" 120 rc \
   'timeout 60 gcloud scheduler jobs describe ingest-reconcile --project=p4a-cma-dev --location="$REGION" --format="value(schedule,timeZone,state)"'
 
+no_run_proxy
 step "dev: execute ingest-reconcile" 240 rc 'execute_job p4a-cma-dev ingest-reconcile' || stop_run "the dev reconcile did not start"
 step "dev: the reconcile runs (polled)" 3900 rc 'wait_execution p4a-cma-dev' || stop_run "the dev reconcile failed"
 step "dev: the retention lines, one per tenant" 600 rc 'purge_lines p4a-cma-dev' || stop_run "no clean retention line in dev"
