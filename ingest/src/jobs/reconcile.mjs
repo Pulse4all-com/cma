@@ -182,6 +182,7 @@ async function reconcileJob({ connectionId = null, lookbackMinutes = DEFAULT_LOO
       seen.add(c.tenantId);
       const r = await purgeRunRows(contextOf(c));
       total.purged = (total.purged ?? 0) + r.deleted;
+      if (r.skipped) total.purgeSkipped = (total.purgeSkipped ?? 0) + 1;
       if (r.error) total.failed += 1;
     }
   }
@@ -191,13 +192,15 @@ async function reconcileJob({ connectionId = null, lookbackMinutes = DEFAULT_LOO
 
 export const PURGE_BATCH = 2000;
 export const PURGE_BATCHES = 50;
-/** The purge's signature as 240_audit_and_retention.sql creates it (verify/retention.mjs reads that script to compare) */
+/** The purge's signature as its latest definition in db/ creates it (verify/retention.mjs reads the scripts to compare) */
 export const PURGE_SIGNATURE = "cma.sync_run_purge(integer,text,uuid)";
 
 /**
  * One tenant's run rows past their retention (cma.sync_run_purge, 0009zt), batch by batch while the database says there is
- * more. A database before 0009zt, or a batch that fails (a lock or statement timeout), stops the tenant's purge for
- * tonight with one warning; the reconcile still succeeds. One log line per tenant: deleted, batches, more, ms.
+ * more. A database without the function (before 0009zt, or a signature that no longer matches PURGE_SIGNATURE) purges
+ * nothing, with one warning (code function_missing); a batch that fails (a lock or statement timeout) stops the tenant's
+ * purge for tonight with one warning; the reconcile still succeeds. One log line per tenant: deleted, batches, more, ms.
+ * The existence check runs once per tenant, in the first batch's transaction.
  */
 export async function purgeRunRows(ctx, { batch = PURGE_BATCH, batches = PURGE_BATCHES, tenantTx = withTenant } = {}) {
   const started = Date.now();
@@ -207,13 +210,18 @@ export async function purgeRunRows(ctx, { batch = PURGE_BATCH, batches = PURGE_B
   try {
     while (more && n < batches) {
       const r = await tenantTx({ ...ctx, actorLabel: "ingest:reconcile" }, async (q) => {
-        const has = (await q.query("select to_regprocedure($1) is not null as has", [PURGE_SIGNATURE])).rows[0]?.has;
-        if (!has) return null;
+        if (n === 0) {
+          const has = (await q.query("select to_regprocedure($1) is not null as has", [PURGE_SIGNATURE])).rows[0]?.has;
+          if (!has) return null;
+        }
         await q.query("set local lock_timeout = '2s'");
         await q.query("set local statement_timeout = '30s'");
         return (await q.query("select cma.sync_run_purge($1) as r", [batch])).rows[0].r;
       });
-      if (!r) return { deleted: 0, skipped: true };
+      if (!r) {
+        warn("reconcile: sync_run retention skipped", { tenant: ctx.tenantId, code: "function_missing", signature: PURGE_SIGNATURE });
+        return { deleted: 0, skipped: true };
+      }
       n += 1;
       deleted += Number(r.deleted ?? 0);
       more = Boolean(r.more);
