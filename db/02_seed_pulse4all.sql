@@ -707,7 +707,12 @@ do $$
 declare
   v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
 begin
-  if to_regclass('cma.setting') is null or not exists (select 1 from cma.setting where key = 'workday.auto_close_office_hours') then
+  -- two steps: the catalog itself only exists from 0003b on
+  if to_regclass('cma.setting') is null then
+    raise notice 'the settings catalog does not exist yet (migration 0003b): rerun this seed after 13_tenant_settings.sql';
+    return;
+  end if;
+  if not exists (select 1 from cma.setting where key = 'workday.auto_close_office_hours') then
     raise notice 'Closing at the office hours does not exist yet (addition 0009zv): rerun this seed after 244_auto_close_office_hours.sql';
     return;
   end if;

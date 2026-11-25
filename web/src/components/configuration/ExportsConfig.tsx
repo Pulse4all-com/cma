@@ -102,7 +102,7 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
   const valueLabel = (v: string) => (VALUE_KEYS[v] ? t[VALUE_KEYS[v]] : v);
 
   /** workday.auto_close_office_hours (addition 0009zv): a choice saved at once, as the export settings; the hint states the
-   * order of the close and the tenant's default close time (workday.auto_close_at) */
+   * order of the close and the tenant's usual closing time (workday.auto_close_at) */
   function officeHoursClose() {
     const s = valueOf(OFFICE_HOURS_CLOSE_SETTING);
     const closeAt = valueOf("workday.auto_close_at")?.value;

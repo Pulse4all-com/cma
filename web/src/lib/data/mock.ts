@@ -1544,7 +1544,7 @@ const MOCK_SETTINGS: TenantSetting[] = [
   // split shifts (addition 0008zp): on, as Pulse4all Subscriptions has it (seed 02); the catalog default is off
   { key: "workday.clock_in_again", value: "true", isDefault: false },
   // forgotten clock-outs (addition 0009zv): closed at the Default market's office hours, as Pulse4all Subscriptions has it
-  // (seed 02); the default close time 17:00 (seed 02, addition 0008b) the hint names
+  // (seed 02); the usual closing time 17:00 (seed 02, addition 0008b) the hint names
   { key: "workday.auto_close_office_hours", value: "true", isDefault: false },
   { key: "workday.auto_close_at", value: "17:00", isDefault: false },
   // courtesy (addition 0009a): set up sixty days back, so the mock's page has orders in every state; the rest at the catalog defaults
