@@ -1,0 +1,47 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ true
+(1 row)
+
+psql:225_verify_subscription_rates_start.sql:39: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+psql:225_verify_subscription_rates_start.sql:317: NOTICE:  relation "subscription_facts_units" already exists, skipping
+psql:225_verify_subscription_rates_start.sql:317: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
+psql:225_verify_subscription_rates_start.sql:317: NOTICE:  relation "subscription_facts_take" already exists, skipping
+psql:225_verify_subscription_rates_start.sql:317: NOTICE:  relation "subscription_facts_units" already exists, skipping
+psql:225_verify_subscription_rates_start.sql:317: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
+psql:225_verify_subscription_rates_start.sql:317: NOTICE:  relation "subscription_facts_take" already exists, skipping
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                                   check_name                                                                                   | result |                                                                detail                                                                 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+---------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0009zl recorded, after 0009zh                                                                                                                                      | PASS   | 
+ A2 the setting (text, empty by default); the three functions the application's and no one else's, JIT off on the rate start and the page; the floor read in the four functions | PASS   | text: jit=off jit=off 4
+ A3 every tenant's store starts equal 210's, each the later of 210's and the tenant's floor                                                                                     | PASS   | 15 stores, 0 differ; 1 tenants with a floor
+ A4 the facts' inputs key equals 210's for every tenant without the setting                                                                                                     | PASS   | 1 tenants without a floor, 0 with another key
+ A5 the stored take follows each tenant's floor: no store's start and no complete month before it (or the take is older than the setting)                                       | PASS   | pulse4all-subscriptions 2026-06: 0 starts and 0 complete rows before it
+ B1 the setting's form: 2026-13, 2026-6, June, 2026-06-01 and 1999-12 refused (CMA04); empty and 2026-06 taken                                                                  | PASS   | CMA04 CMA04 CMA04 CMA04 CMA04 ok ok
+ B2 a floor one month after the earliest store's start: each store's start the later of its own and the floor, no complete month before it, the inputs key changed              | PASS   | 15 stores, 0 off the later of their own and the floor, 3 later than it; 0 complete rows before the floor; key changed (floor 2025-08)
+ B3 the page: no rate and no movement before the floor, the movements from it as before, the document naming the floor; Active's card on a month from it (or none)              | PASS   | 0 rates before the floor, 0 months with movements before it, 0 months from it changed; floor 2025-08-01; card from the floor
+ B4 renewal survival and the renewal outcomes as before the floor; the floor emptied again gives 210's starts and key                                                           | PASS   | survival same, outcomes same; emptied: 0 starts off 210's, key as before
+ verdict                                                                                                                                                                        | PASS   | 225_verify_subscription_rates_start: 9 PASS, 0 FAIL
+(10 rows)
+
+RESET
