@@ -11,7 +11,9 @@
 -- 02_seed_pulse4all.sql again (Pulse4all Subscriptions' value), then the verifies that read cma.close_forgotten_workdays,
 -- each still PASS and none edited: 27 (configuration: the scheduler's permission and a tenant without settings), 47
 -- (the window and the close: throwaway tenants without the setting, so shift, default, last event and window end as
--- before) and 127 (split shifts: A8, a later session closed at its own start). Prod the same after the merge.
+-- before) and 127 (split shifts: A8, a later session closed at its own start); then web/verify/scheduler.mjs (the job end
+-- to end on dev, edited by this change to expect the office hours' end for the test agent when it applies). Prod the same
+-- after the merge, without the scheduler verifier (dev only).
 --
 -- Why (Martin, 24 November 2026): the sweep closes a forgotten day at the person's published planned shift end, else at
 -- workday.auto_close_at (Pulse4all 17:00). An agent who works a market's office hours without a published shift is

@@ -246,7 +246,7 @@ workday.ended_at = max(occurred_at) over the day's effective end events, set onl
 - own day only
 - today in the caller's zone
 
-**Time** ended_at is an instant; shown in the viewer's zone. A system end set by the sweep is the shift end, the auto-close time or the day's last event, never after the window end.
+**Time** ended_at is an instant; shown in the viewer's zone. A system end set by the sweep is the shift end, else (workday.auto_close_office_hours, addition 0009zv) the end of that day's office hours of the person's Default market, else the auto-close time, or the day's last event, never after the window end.
 
 **Settings**
 
@@ -254,12 +254,13 @@ workday.ended_at = max(occurred_at) over the day's effective end events, set onl
 |---|---|---|
 | `workday.auto_close_grace_minutes` | 120 | 60 |
 | `workday.auto_close_at` | 24:00 | 17:00 |
+| `workday.auto_close_office_hours` | false | true (seed 02, Pulse4all Subscriptions, addition 0009zv); Pulse4all Invest the default |
 
 **Who may see it** `workday.own`
 
 **Refresh** on page load
 
-**Computed in** `cma.refresh_workday` (0003); `cma.close_forgotten_workdays` (0008b); `DayBlock` in src/app/page.tsx
+**Computed in** `cma.refresh_workday` (0003); `cma.close_forgotten_workdays` (0009zv); `DayBlock` in src/app/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -4217,12 +4218,13 @@ workday.ended_at (the last end, set when the last effective event is an end), hh
 |---|---|---|
 | `workday.auto_close_grace_minutes` | 120 | 60 |
 | `workday.auto_close_at` | 24:00 | 17:00 |
+| `workday.auto_close_office_hours` | false | true (seed 02, Pulse4all Subscriptions, addition 0009zv); Pulse4all Invest the default |
 
 **Who may see it** `workday.team`
 
 **Refresh** on page load
 
-**Computed in** `cma.team_hours` (0003); `cma.close_forgotten_workdays` (0008b); `TeamHoursPage` in src/app/team/hours/page.tsx
+**Computed in** `cma.team_hours` (0003); `cma.close_forgotten_workdays` (0009zv); `TeamHoursPage` in src/app/team/hours/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -4497,6 +4499,7 @@ chip shown when needsCorrection and not isCapped. needs_correction (workday_summ
 |---|---|---|
 | `workday.auto_close_grace_minutes` | 120 | 60 |
 | `workday.auto_close_at` | 24:00 | 17:00 |
+| `workday.auto_close_office_hours` | false | true (seed 02, Pulse4all Subscriptions, addition 0009zv); Pulse4all Invest the default |
 
 **Who may see it** `workday.team`
 
