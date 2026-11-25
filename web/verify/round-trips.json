@@ -598,5 +598,73 @@
       200,
       404
     ]
+  },
+  {
+    "path": "/api/v1/reports/follow-up/updated",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "kind": "prefetch",
+    "subject": "agent-two",
+    "from": "/",
+    "path": "/day",
+    "tx": 3,
+    "rt": 13
+  },
+  {
+    "kind": "prefetch",
+    "subject": "agent-two",
+    "from": "/",
+    "path": "/messages",
+    "tx": 2,
+    "rt": 10
+  },
+  {
+    "kind": "prefetch",
+    "subject": "agent-two",
+    "from": "/",
+    "path": "/schedule",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "kind": "prefetch",
+    "subject": "manager",
+    "from": "/",
+    "path": "/live/newco",
+    "tx": 2,
+    "rt": 16
+  },
+  {
+    "kind": "prefetch",
+    "subject": "manager",
+    "from": "/",
+    "path": "/team/hours",
+    "tx": 4,
+    "rt": 17
+  },
+  {
+    "path": "/api/v1/telemetry/navigation",
+    "subject": "agent-two",
+    "method": "POST",
+    "headers": {
+      "content-type": "application/json",
+      "sec-fetch-site": "same-origin"
+    },
+    "body": {
+      "route": "/day",
+      "kind": "navigation",
+      "firstFrameMs": 40,
+      "contentMs": 180,
+      "interaction": "0-100"
+    },
+    "status": [
+      204
+    ],
+    "tx": 0,
+    "rt": 0,
+    "note": "the navigation beacon (brief N07, WP1): one log line, no database read, so a beacon costs no transaction"
   }
 ]

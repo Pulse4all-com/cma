@@ -1713,7 +1713,7 @@ expect("reviews routes: All is range=all without a from, to a date, by month (an
   [true, true, true, true, true, true], [false, false, false, false, false, false]);
 // no reviewer and no review text anywhere in the report's type, data layer, mirror, parts, page or copy keys
 const rvNoText = { "lib/reviews.ts": src("../src/lib/reviews.ts"), "components/ReviewParts.tsx": src("../src/components/ReviewParts.tsx"),
-  "app/reports/reviews/page.tsx": src("../src/app/reports/reviews/page.tsx") };
+  "app/(shell)/reports/reviews/page.tsx": src("../src/app/(shell)/reports/reviews/page.tsx") };
 const RV_PERSONAL = /fullName|\.email\b|mobile|\.comment\b|\.title\b(?!\s*=)|reviewerName|reviewText/;
 expect("reviews: no reviewer's name, email, phone, title or text in the mirror, the parts or the page",
   Object.entries(rvNoText).filter(([, text]) => RV_PERSONAL.test(text.replace(/t\.title|copy\.[a-zA-Z.]+title/gi, ""))).map(([f]) => f), [], ["lib/reviews.ts"]);
@@ -1849,7 +1849,7 @@ expect("maintenance: the debt status filter's address, the mirror's pause (in th
   ["", "-", "all", "", false, [0, 0, 0, 0, 0], "in_debt,look"]);
 // the routes and the data layer, from their source: the report's permissions, the reads with their parameters, the
 // file's default bucket and size; no name, email, phone or address in the type, the mirror, the parts, the page or the file
-const mtPage0 = src("../src/app/reports/maintenance/page.tsx");
+const mtPage0 = src("../src/app/(shell)/reports/maintenance/page.tsx");
 const mtRoutes = [src("../src/app/api/v1/reports/maintenance/route.ts"), src("../src/app/api/v1/reports/maintenance/rows/route.ts"),
   src("../src/app/api/v1/reports/maintenance/export/route.ts")];
 const mtApi = src("../src/lib/api/maintenance.ts");
@@ -1861,7 +1861,7 @@ expect("maintenance routes: reports.view or performance.team, the reads with the
    mtPage0.includes("holdsAny(me, REPORT_PERMISSIONS)")],
   [true, true, true, true, true, true], [false, true, true, true, true, true]);
 const mtNoPersonal = { "lib/maintenance.ts": src("../src/lib/maintenance.ts"), "components/MaintenanceParts.tsx": src("../src/components/MaintenanceParts.tsx"),
-  "app/reports/maintenance/page.tsx": mtPage0, "lib/csv.ts (maintenanceCsv)": src("../src/lib/csv.ts").split("// ---- Reports > Maintenance")[1] ?? "",
+  "app/(shell)/reports/maintenance/page.tsx": mtPage0, "lib/csv.ts (maintenanceCsv)": src("../src/lib/csv.ts").split("// ---- Reports > Maintenance")[1] ?? "",
   "lib/data/types.ts (MaintenanceRow)": (src("../src/lib/data/types.ts").split("export interface MaintenanceRow {")[1] ?? "").split("\n}\n")[0] ?? "" };
 const MT_PERSONAL = /firstName|lastName|first_name|last_name|fullName|\.email\b|email:|phone|address|postcode|customerName|customer_name/i;
 expect("maintenance: no customer's name, email, phone or address in the type, the mirror, the parts, the page or the file",
@@ -1971,13 +1971,13 @@ expect("cohorts: the chart's newest eight lines with the reached ages only; the 
 // refused with a 400; no name, email, phone or address in the type, the mirror, the parts or the page
 const lcRoute = src("../src/app/api/v1/reports/lead-cohorts/route.ts");
 const lcApi = src("../src/lib/api/cohorts.ts");
-const lcPage = src("../src/app/reports/lead-cohorts/page.tsx");
+const lcPage = src("../src/app/(shell)/reports/lead-cohorts/page.tsx");
 expect("lead cohorts route: reports.view or performance.team, the period and split refused with a 400, the read with its parameters",
   [lcRoute.includes("requireAnyPermission(me, REPORT_PERMISSIONS);"), /throw new ApiError\(400, "invalid_period"/.test(lcApi), /throw new ApiError\(400, "invalid_split"/.test(lcApi),
    pgLayer.includes("cma.lead_cohorts_report($1::date, $2::date, $3, $4, $5, $6, $7)") && pgLayer.includes("[range.from, range.to, period, filter.market, filter.sourceChannel, split, filter.pipeline]"),
    lcPage.includes("holdsAny(me, REPORT_PERMISSIONS)")],
   [true, true, true, true, true], [false, true, true, true, true]);
-const lcNoPersonal = { "lib/cohorts.ts": src("../src/lib/cohorts.ts"), "components/CohortParts.tsx": src("../src/components/CohortParts.tsx"), "app/reports/lead-cohorts/page.tsx": lcPage,
+const lcNoPersonal = { "lib/cohorts.ts": src("../src/lib/cohorts.ts"), "components/CohortParts.tsx": src("../src/components/CohortParts.tsx"), "app/(shell)/reports/lead-cohorts/page.tsx": lcPage,
   "lib/data/types.ts (LeadCohortRow)": (src("../src/lib/data/types.ts").split("export interface LeadCohortRow {")[1] ?? "").split("\n}\n")[0] ?? "" };
 expect("lead cohorts: no customer's name, email, phone or address in the type, the mirror, the parts or the page",
   Object.entries(lcNoPersonal).filter(([, text]) => MT_PERSONAL.test(text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, ""))).map(([f]) => f),
@@ -2195,14 +2195,14 @@ expect("courtesy orders: the previous period counts orders as the tile does (3 o
 // refused with a 400; no name, email, phone or address in the type, the mirror, the parts or the page
 const ctRoute = src("../src/app/api/v1/reports/courtesy/route.ts");
 const ctApi = src("../src/lib/api/courtesy.ts");
-const ctPageSrc = src("../src/app/reports/courtesy/page.tsx");
+const ctPageSrc = src("../src/app/(shell)/reports/courtesy/page.tsx");
 expect("courtesy route: reports.view or performance.team, the period, group and filters refused with a 400, the read with its parameters",
   [ctRoute.includes("requireAnyPermission(me, REPORT_PERMISSIONS);"), /throw new ApiError\(400, "invalid_period"/.test(ctApi), /throw new ApiError\(400, "invalid_group"/.test(ctApi),
    /throw new ApiError\(400, "invalid_state"/.test(ctApi),
    pgLayer.includes("cma.courtesy_page($1::date, $2::date, $3, $4, $5, $6, $7)") && pgLayer.includes("[range.from, range.to, period, group, filter.market, filter.segment, filter.state]"),
    ctPageSrc.includes("holdsAny(me, REPORT_PERMISSIONS)")],
   [true, true, true, true, true, true], [false, true, true, true, true, true]);
-const ctNoPersonal = { "lib/courtesy.ts": src("../src/lib/courtesy.ts"), "components/CourtesyParts.tsx": src("../src/components/CourtesyParts.tsx"), "app/reports/courtesy/page.tsx": ctPageSrc,
+const ctNoPersonal = { "lib/courtesy.ts": src("../src/lib/courtesy.ts"), "components/CourtesyParts.tsx": src("../src/components/CourtesyParts.tsx"), "app/(shell)/reports/courtesy/page.tsx": ctPageSrc,
   "lib/data/types.ts (CourtesyListRow)": (src("../src/lib/data/types.ts").split("export interface CourtesyListRow {")[1] ?? "").split("\n}\n")[0] ?? "" };
 expect("courtesy: no customer's name, email, phone or address in the type, the mirror, the parts or the page",
   Object.entries(ctNoPersonal).filter(([, text]) => MT_PERSONAL.test(text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, ""))).map(([f]) => f),

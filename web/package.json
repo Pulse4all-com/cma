@@ -43,10 +43,13 @@
     "verify:jobs": "node verify/jobs.mjs",
     "verify:refresh-follow-up": "node verify/refresh-follow-up.mjs",
     "verify:perf": "node verify/perf.mjs",
+    "verify:shell": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/shell.mjs",
+    "verify:optimistic": "node verify/optimistic.mjs",
     "verify:cache": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/cache.mjs",
     "verify:function-bases": "node ../tools/verify-function-bases.mjs",
     "verify:pledges": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/pledges.mjs",
     "verify:active": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./verify/lib/alias.mjs verify/active.mjs",
+    "verify:telemetry": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/telemetry.mjs",
     "verify:subscriptions": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./verify/lib/alias.mjs verify/subscriptions.mjs"
   },
   "dependencies": {

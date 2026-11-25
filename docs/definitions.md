@@ -405,6 +405,86 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Used by | Every figure that ties a call to a deal or contact: `attempts.*`, `speed_to_lead.*`, `first_orders.*`, `orders_per_person.*`, `email.not_responding.*`, `callbacks.*`, `data_quality.telephony_call_unlinked` |
 | As built today | `cma.call_link` with `method` `hash_time` only (`34`): the equal keyed hash of the other party's number, the same direction, at most 120 seconds apart, nearest first, each side once; the CRM call's time and direction are used for that pairing. The hash normalises a number with a default region (the line's or market's country) before it is hashed, so a national-format number is hashed too, and a number that is not a possible phone number gets none (`ingest/src/core/hash.mjs`). The HubSpot adapter reads no Aircall call id from the logged call (`CALL_PROPERTIES`) |
 
+## Measurement terms
+
+The words of the navigation beacon and the request log line (night N07, 25 November 2026). They measure how long the Workspace takes for the person; they hold no person, no tenant, no path with an id and no query string, and nothing is stored in the database (docs/decisions.md, 25 Nov 2026, "A navigation beacon writes one log line ..."). "Navigation" here is a client navigation, a move to another page; it is not the rail's navigation (the navigation model of `lib/nav`, its groups and items).
+
+### Time to first frame
+
+| Field | Value |
+|---|---|
+| Term | Time to first frame |
+| Key | Beacon and log field `firstFrameMs` (whole milliseconds) |
+| Definition | The time from the click on a link (a navigation) or from the navigation's start (a page opened or reloaded, a document) to the destination's first frame, which may be its route skeleton. |
+| Source | The browser, measured by `NavigationBeacon` and sent to `POST /api/v1/telemetry/navigation`, which writes one log line with `message` "navigation" |
+| Counts / does not count | Not reported when longer than 120 seconds (a tab left in the background); never a person, a tenant, an id or a query string |
+| Unit and display | Milliseconds; shown only by `tools/perf/request-percentiles.mjs` as p50, p75 and p95 per route pattern |
+| Time rule | None; a duration |
+| Scope | One route pattern (`/live/[org]` for any contact center's board, `other` for a path the navigation model does not name) |
+| Equivalent in the source system | None |
+| Not to use | "Load time", "page speed" |
+| Status | Decided |
+| Decided | 25 November 2026; docs/decisions.md, 25 Nov 2026, "Definitions: Time to first frame, Time to content, Interaction delay and Request kind ..." |
+| Used by | `tools/perf/request-percentiles.mjs`; `web/src/lib/telemetry.ts`; `web/verify/telemetry.mjs` |
+| As built today | `NavigationBeacon.tsx` sends the beacon with `fetch` and `keepalive`; the route checks identity only and has no rate limit. Matches the definition |
+
+### Time to content
+
+| Field | Value |
+|---|---|
+| Term | Time to content |
+| Key | Beacon and log field `contentMs` (whole milliseconds, or null) |
+| Definition | The time from the same start as Time to first frame to the first frame without the destination's route skeleton (the page's own content is shown). Null when the content was not reached within the beacon's wait. |
+| Source | The browser, as Time to first frame; the skeleton is the element `data-route-skeleton` |
+| Counts / does not count | Never earlier than the Time to first frame of the same navigation |
+| Unit and display | Milliseconds; p50, p75 and p95 per route pattern, with the count of beacons without content |
+| Time rule | None; a duration |
+| Scope | As Time to first frame |
+| Equivalent in the source system | None |
+| Not to use | "Load time", "page speed" |
+| Status | Decided |
+| Decided | 25 November 2026; docs/decisions.md, 25 Nov 2026, "Definitions: Time to first frame, Time to content, Interaction delay and Request kind ..." |
+| Used by | `tools/perf/request-percentiles.mjs`; `web/src/lib/telemetry.ts` |
+| As built today | Matches the definition |
+
+### Interaction delay
+
+| Field | Value |
+|---|---|
+| Term | Interaction delay |
+| Key | Beacon and log field `interaction`, one of the buckets `none`, `0-100`, `100-200`, `200-500`, `500+` (milliseconds) |
+| Definition | The duration of the person's latest interaction before the beacon (the browser's Event Timing duration), in one of five buckets. |
+| Source | The browser's Event Timing API |
+| Counts / does not count | `none` when the browser gives no interaction or has no Event Timing; a bucket's lower bound is inclusive, its upper bound exclusive |
+| Unit and display | The share of beacons per bucket, per route pattern |
+| Time rule | None; a duration |
+| Scope | As Time to first frame |
+| Equivalent in the source system | None |
+| Not to use | "Click delay", "lag" |
+| Status | Decided |
+| Decided | 25 November 2026; docs/decisions.md, 25 Nov 2026, "Definitions: Time to first frame, Time to content, Interaction delay and Request kind ..." |
+| Used by | `tools/perf/request-percentiles.mjs`; `web/src/lib/telemetry.ts` |
+| As built today | Matches the definition |
+
+### Request kind
+
+| Field | Value |
+|---|---|
+| Term | Request kind |
+| Key | Request log field `kind`, one of `document`, `navigation`, `prefetch`, `api`; the beacon's own `kind` is `document` or `navigation` |
+| Definition | What a request is: `api` for a route under `/api/`; `prefetch` for the client router's prefetch (Next-Router-Prefetch); `navigation` for the client router's other requests (the RSC header); `document` for a page opened, reloaded or typed. |
+| Source | The server, from the route and the request headers (`requestKindOf`) |
+| Counts / does not count | A prefetch is not a navigation: it is counted apart so that prefetching does not read as a person's wait |
+| Unit and display | A label in the request log line; `tools/perf/request-percentiles.mjs` groups by route and kind |
+| Time rule | None |
+| Scope | Every request the server logs |
+| Equivalent in the source system | None |
+| Not to use | "Navigation" for the rail or its items (the navigation model) |
+| Status | Decided |
+| Decided | 25 November 2026; docs/decisions.md, 25 Nov 2026, "Definitions: Time to first frame, Time to content, Interaction delay and Request kind ..." |
+| Used by | `web/src/lib/telemetry.ts`; `instrumentation.node.ts`; `tools/perf/request-percentiles.mjs` |
+| As built today | Matches the definition. Server-Timing's total on a page stops at the first byte |
+
 ## Legacy call terms
 
 Decided with addition 0008zg (25 October 2026). The calls a former telephony system made before the current one are not in `cma.telephony_call`; what that system recorded for them is imported once from its export as legacy call outcomes. The current telephony system's calls are never copied: they stay Calls and are read through the tag meanings (Tag).
@@ -754,7 +834,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Status | Decided |
 | Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Assets → Pledge lists: the download is exactly the current file" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
 | Used by | Assets → Pledge lists; the checks of that page (`unknown_loan`, `no_model_values`, `no_first_shipped`, `no_language`, `customer_ref_invalid`, `no_start_date`) |
-| As built today | `cma.pledge_page()`, `cma.pledge_finding_rows(check, limit)` and `cma.pledge_file(date)` (`168`), read by `web/src/app/reports/pledge-lists/page.tsx` and the two API routes. Matches the definition |
+| As built today | `cma.pledge_page()`, `cma.pledge_finding_rows(check, limit)` and `cma.pledge_file(date)` (`168`), read by `web/src/app/(shell)/reports/pledge-lists/page.tsx` and the two API routes. Matches the definition |
 
 ### Loan
 
@@ -3727,7 +3807,7 @@ Decided by Martin on 24 November 2026 (addition 0009zp), applying Kira's rule in
 | Status | Decided |
 | Decided | 24 November 2026 (Martin); docs/decisions.md, 24 Nov 2026, "Definitions: Call center work and Overall are the two groups of Reports → Intake" (this PR, addition 0009zp) |
 | Used by | `intake.form_submissions`, `intake.lead_deals_created`, `intake.lead_deals_closed`, `intake.tickets_created`, `intake.tickets_closed`, `intake.calls_in`, `intake.calls_out`, `intake.tagged_calls`, `intake.volume_bar`; Reports → Intake |
-| As built today | `web/src/app/reports/intake/page.tsx`, copy `intake.groupWork` and `hints.groupWork`. Matches the definition |
+| As built today | `web/src/app/(shell)/reports/intake/page.tsx`, copy `intake.groupWork` and `hints.groupWork`. Matches the definition |
 
 ### Overall (Intake group)
 
@@ -3746,7 +3826,7 @@ Decided by Martin on 24 November 2026 (addition 0009zp), applying Kira's rule in
 | Status | Decided |
 | Decided | 24 November 2026 (Martin); docs/decisions.md, 24 Nov 2026, "Definitions: Call center work and Overall are the two groups of Reports → Intake" (this PR, addition 0009zp) |
 | Used by | `intake.other_deals_created`, `intake.new_customers`, `intake.first_orders`, `intake.repeat_orders`, `intake.renewals`, `dashboard.intake.first_orders`; Reports → Intake, Dashboard (Intake row) |
-| As built today | `web/src/app/reports/intake/page.tsx`, `web/src/components/IntakeRow.tsx`; copy keys as above. Matches the definition |
+| As built today | `web/src/app/(shell)/reports/intake/page.tsx`, `web/src/components/IntakeRow.tsx`; copy keys as above. Matches the definition |
 
 ## Retired words
 
@@ -3801,7 +3881,7 @@ Where the code or the catalog says something else than this file: every retired 
 | W13 | `web/src/lib/copy.ts` | `attempts.noteCrm` | Attempts are outbound calls logged in the customer records | Attempts come from the telephony system only (R1) |
 | W17 | `web/src/lib/copy.ts` | `speedToLead.intro` "first outbound call"; Dutch `speedToLead.intro`, `speedToLead.minutesNote` "belpoging"; Dutch `attempts.speed`, `attempts.colMedianSpeed`, `attempts.speedTitle`, `attempts.speedCol`, `hints.atOutcomes` "speed to lead" | The first outbound (CRM) call; two Dutch labels for one term | The first attempt; one Dutch label, "Snelheid tot lead", and one Dutch word for attempt, "poging" |
 | W18 | `web/src/lib/copy.ts` | `email.conversation`, `email.opened` "Conversations opened" ("Gesprekken geopend"), `email.waitingIntro`, `emailPerAgent.intro`, hints `emailOpened`, `emailOpenedCol`, `emailClosedCol`, `emailWait*`, `emailAgentReplies`, `emailAgentClosed` | Conversation for an inbox thread | Another word for the email thread: Conversation is a call term (to settle when Email is defined) |
-| W19 | `web/src/lib/copy.ts`; `web/src/app/api/v1/reports/first-orders/route.ts`, `callbacks-kept/route.ts`; `web/src/app/reports/orders-per-person/page.tsx` | `reports.noTelephony` "No telephony connected", `noShop`, `noEmail`, `noOrders`, `noTelephonyHint`, `noShopHint`, `noFormsHint`; the API field `connected` of First orders, Callbacks kept and Orders per person | Connected for a source that is set up | Another word, to choose in the definitions brief (for example "set up"): Connected is a call term. Customers → Reviews already says "set up" (`isSetUp`, `is_set_up`; Review terms) |
+| W19 | `web/src/lib/copy.ts`; `web/src/app/api/v1/reports/first-orders/route.ts`, `callbacks-kept/route.ts`; `web/src/app/(shell)/reports/orders-per-person/page.tsx` | `reports.noTelephony` "No telephony connected", `noShop`, `noEmail`, `noOrders`, `noTelephonyHint`, `noShopHint`, `noFormsHint`; the API field `connected` of First orders, Callbacks kept and Orders per person | Connected for a source that is set up | Another word, to choose in the definitions brief (for example "set up"): Connected is a call term. Customers → Reviews already says "set up" (`isSetUp`, `is_set_up`; Review terms) |
 | W20 | `web/src/lib/copy.ts`; `web/src/lib/csv.ts` | `funnel.colReachedWon`, `funnelFile.reachedWon`, `hints.fnColReachedWon` ("Reached won", "Gewonnen bereikt"); API `reachedWon` | Reached for a deal won now | A word that is not retired (for example "Won now") |
 | W21 | `web/src/lib/data/types.ts` | API fields `unanswered`, `unansweredByReason` (Inbound) | 0008i's words (the Calls, Calls per agent and Attempts per deal fields took the terms' keys in addition 0008zc) | The term's camelCase key (`missedInbound`) |
 | W25 | `web/src/components/configuration/SourceConfig.tsx` (Configuration → Sources, Lines); the Data quality page | The number of counted lines | Not shown: Lines lists each line with its Counted switch, and a line Aircall adds arrives counted | Data quality or Configuration → Sources shows the number of counted lines, so the list can be compared with the 46-number filter in Aircall Analytics (Call, Scope) after a line is added in Aircall |

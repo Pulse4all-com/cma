@@ -186,7 +186,7 @@ expect("C1 a change against an earlier month end: its direction and size; none w
       matureCohorts(Array.from({ length: 9 }, (_, i) => ({ ...two, cohort: `c${i}` })), 6).length],
     [0.9, null, null, ["2026-03-01"], 6], [0.9, 0.4, 0, ["2026-05-01", "2026-03-01"], 9]);
   // the lines' colours: Deep Blue, Leaf Green, Denim, Inkt, Light Blue of the series order (never Soft Rose, index 4); the sixth dashed
-  const page = src("app/reports/active/page.tsx");
+  const page = src("app/(shell)/reports/active/page.tsx");
   expect("C4 no line takes Soft Rose: five colours, the sixth line the first colour again, dashed; the retention's x is the age in months",
     [[...LINE_COLOURS], LINE_COLOURS.includes(4), [0, 4, 5, 6].map((i) => lineStyle(i)), /colour: \[[^\]]*\b4\b[^\]]*\]\[i %/.test(page), /x: a\.age, y: share/.test(page), /xLabels=\{\[\{ x: 0, text: "0" \}, \.\.\.ages\.filter\(\(a\) => a <= reach\)\.map\(\(a\) => \(\{ x: a,/.test(page)],
     [[0, 1, 3, 5, 2], false, [{ colour: 0, dashed: false }, { colour: 2, dashed: false }, { colour: 0, dashed: true }, { colour: 1, dashed: true }], false, true, true],
@@ -270,7 +270,7 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
 
 // ---- T. The copy ---------------------------------------------------------------------------------------------------------------
 {
-  const pageFiles = ["app/reports/active/page.tsx", "components/ActiveParts.tsx", "components/ActiveFilters.tsx"];
+  const pageFiles = ["app/(shell)/reports/active/page.tsx", "components/ActiveParts.tsx", "components/ActiveFilters.tsx"];
   const text = pageFiles.map(src).join("\n");
   // every t.<key> the page reads (t is activeCopy[locale] in all three files), every hints.mh_<key>, and the list's header keys
   const used = new Set([...text.matchAll(/\bt\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => m[1]));
@@ -334,7 +334,7 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
   expect("W1 a split in whole percentages adds up to 100 by the largest remainder: 2,000 random splits, each part within a point of its share",
     [sets, bad, wholePercents([9.4, 9.5, 81.1].map((x) => x * 10)), wholePercents([1, 1, 1]), wholePercents([0, 0]), wholePercents([5]), wholePercents([176, 20, 22])],
     [2000, 0, [9, 10, 81], [34, 33, 33], [0, 0], [100], [81, 9, 10]], [2000, 1, [9, 10, 82], [33, 33, 33], [50, 50], [99], [81, 9, 11]]);
-  const page = src("app/reports/active/page.tsx");
+  const page = src("app/(shell)/reports/active/page.tsx");
   const parts = src("components/ActiveParts.tsx");
   expect("W2 the page's splits use it: the channels under Active customers, the markets' shares, the comparison's share of the base; a part that rounds to nothing reads < 1%",
     [/wholePercents\(ACTIVE_CHANNELS\.map/.test(page), /wholePercents\(rows\.map\(\(r\) => r\.share \?\? 0\)\)/.test(parts), /wholePercents\(\[r\.a \?\? 0, r\.b \?\? 0, r\.unknown \?\? 0\]\)/.test(parts),
@@ -356,7 +356,7 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
   const doc = mockActive({ tenantId: "t1", permissions: ["reports.view"] }, fromMonthOf("24", new Date().toISOString().slice(0, 10)), { market: null, segment: null, channel: null }, "month");
   const from = doc.months[0]?.month ?? "9999";
   const inside = doc.notes.historyStarts.filter((h) => h.date >= from);
-  const page = src("app/reports/active/page.tsx");
+  const page = src("app/(shell)/reports/active/page.tsx");
   const charts = src("components/ActiveCharts.tsx");
   const seed = readFileSync(new URL("../../db/03_seed_dev_test_data.sql", import.meta.url), "utf8");
   expect("S1 the mock has a store whose history starts inside the default 24 months (the dev seed's second store too); the hero draws a marker for each",
@@ -458,12 +458,12 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
       ACTIVE_CURSOR.test("bm90IGEgY3Vyc29y"), ACTIVE_CURSOR.test("eyJrIjpbXSwicyI6IjEifQ==")],
     [true, true, null, null, true, "CMA04", "CMA04", false, true, false, false], [false, false, "x", "x", false, "ok", "ok", true, false, true, true]);
   const pending = src("components/ActivePending.tsx");
-  const pageSrc = src("app/reports/active/page.tsx");
+  const pageSrc = src("app/(shell)/reports/active/page.tsx");
   const clientFiles = ["components/ActiveFilters.tsx", "components/ActivePending.tsx"];
   expect("N4 the page's client code is the filters and one small component (D14): no fetch, no observer, no timer of its own; every sortable link and toggle carries the pending mark",
     [clientFiles.every((f) => src(f).startsWith('"use client"')), /\bfetch\(|XMLHttpRequest|IntersectionObserver|setInterval|setTimeout|EventSource|WebSocket/.test(pending),
       /useLinkStatus/.test(pending), (src("components/ActiveParts.tsx").match(/<LinkMark \/>/g) ?? []).length >= 6,
-      ["components/ActiveCharts.tsx", "components/ActiveParts.tsx", "app/reports/active/page.tsx"].some((f) => src(f).startsWith('"use client"'))],
+      ["components/ActiveCharts.tsx", "components/ActiveParts.tsx", "app/(shell)/reports/active/page.tsx"].some((f) => src(f).startsWith('"use client"'))],
     [true, false, true, true, false], [false, true, false, false, true]);
   expect("N5 four streamed parts and a fixed height for every data panel (D15, D16): the page names each panel once, the Print button waits for all four parts",
     [ACTIVE_PARTS.join(","), Object.keys(ACTIVE_PANEL_HEIGHT).filter((id) => !new RegExp(`layer\\("${id}", "(top|rest|list)"\\)`).test(pageSrc)),
@@ -549,7 +549,7 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
   expect("B5 the list under a band: every band's total is the band's customers, its rows are of the band alone, a band of another setting is refused",
     [totals.join(","), under("3-5").rows.every((r) => r.devices >= 3 && r.devices <= 5), under("0").rows.every((r) => r.devices === 0), under(null).total === active, refused],
     [part.bands.map((b) => b.customers).join(","), true, true, true, "CMA04"], ["", false, false, false, null]);
-  const pageSrc = src("app/reports/active/page.tsx");
+  const pageSrc = src("app/(shell)/reports/active/page.tsx");
   const partsSrc = src("components/ActiveParts.tsx");
   expect("B6 the page: the panel after the mix with its own height and split, the list's band in the read and the file, a document without the part says so, labels without the word AED",
     [pageSrc.indexOf('layer("devices", "rest")') > pageSrc.indexOf('layer("mix", "rest")'), pageSrc.indexOf('layer("devices", "rest")') < pageSrc.indexOf('layer("list", "list")'),
@@ -562,7 +562,7 @@ expect("F2 the address holds only what is chosen; the file's name: market, segme
 
 // ---- addition 0009n: the present's source, and the attribution's note on both pages ---------------------------------------
 {
-  const pageSrc = src("app/reports/active/page.tsx");
+  const pageSrc = src("app/(shell)/reports/active/page.tsx");
   const partsSrc = src("components/FirstOrderParts.tsx");
   const sentence = (lang, where) => (where === "active" ? activeCopy[lang].noteAttributionStart : copy[lang].firstOrders.historyMeaning);
   expect("O5 the present says where it was read from: the take's answer is 'As of' the take's moment, the live one 'Updated'; an answer without the key is live",

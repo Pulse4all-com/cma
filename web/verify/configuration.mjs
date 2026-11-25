@@ -292,7 +292,7 @@ expect("history start: digit by digit then Enter and blur saves exactly once; ou
   [["2026-11-03"], [], "2026-10-05", [], [null]],
   [["0002-11-03", "0020-11-03", "0202-11-03", "2026-11-03", "2026-11-03"], ["2026-09-30"], "2026-09-30", ["2026-10-05"], []]);
 const sourceConfigSrc = readFileSync(new URL("../src/components/configuration/SourceConfig.tsx", import.meta.url), "utf8");
-const sourcePageSrc = readFileSync(new URL("../src/app/configuration/sources/[id]/page.tsx", import.meta.url), "utf8");
+const sourcePageSrc = readFileSync(new URL("../src/app/(shell)/configuration/sources/[id]/page.tsx", import.meta.url), "utf8");
 expect("history start: the field saves through commitDate on Enter and blur, keyed by the stored date, its range from intake.start_date to today; no save on change",
   [/commitDate\(input, leaving, reviews\.historyStartDate, reviews\.historyMin, reviews\.historyMax,/.test(sourceConfigSrc),
     /onKeyDown=\{\(e\) => \{ if \(e\.key === "Enter"\) \{ e\.preventDefault\(\); saveHistoryStart\(e\.currentTarget, false\); \} \}\}/.test(sourceConfigSrc),

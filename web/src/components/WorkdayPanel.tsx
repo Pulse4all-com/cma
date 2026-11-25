@@ -35,11 +35,12 @@ import { useEffect, useOptimistic, useRef, useState, useSyncExternalStore, useTr
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { HoursMarket, WorkStatus, Workday } from "@/lib/data";
-import type { Copy } from "@/lib/copy";
+import type { Copy, Locale } from "@/lib/copy";
 import { agentGroupOf, GROUP_BG } from "@/lib/dashboard";
 import { Badge, Button, Card, Keycap } from "./primitives";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { workedSeconds } from "@/lib/live";
+import { dayEnded, dayWithStatus, workedSeconds } from "@/lib/live";
+import { fmtTime } from "@/lib/time";
 
 /** A one-second clock as an external store: no setState in effects, no hydration mismatch */
 function subscribe(onTick: () => void) {
@@ -73,9 +74,14 @@ export function WorkdayPanel({
   endedLabel,
   sessionStartedLabel = null,
   dayEndsLabel,
+  timeZone,
+  locale,
   copy,
 }: {
   workday: Workday;
+  /** The person's zone and language, for the time of a change shown before the server's answer (D3) */
+  timeZone: string;
+  locale: Locale;
   /** The tenant's active statuses, in the tenant's order */
   statuses: WorkStatus[];
   /** The tenant's active hours markets, in the markets' order (addition 0009zo); none: no select */
@@ -105,14 +111,24 @@ export function WorkdayPanel({
   const [marketFailed, setMarketFailed] = useState(false);
   /** The market just set, for the live region */
   const [announcedMarket, setAnnouncedMarket] = useState<string | null>(null);
-  /** The market as picked, shown at once while the change and the refresh are in flight; the server's value after */
-  const [shownMarket, showMarket] = useOptimistic(workday.hoursMarket);
+  /**
+   * The day as the server last answered it (night N07, decision D3): the page's own read, replaced by a write's answer
+   * (POST /api/v1/me/status and /day/end answer the day from the write's transaction, as GET /api/v1/me/day reads it), and
+   * by the page's next read when it arrives. `day` is that answer with the change in flight shown at once over it
+   * (useOptimistic): the new status, its colour and the clock as the database will count it within the click's frame; a
+   * refusal drops it when the transition ends and the problem line says so
+   */
+  const [served, setServed] = useState<{ from: Workday; day: Workday }>({ from: workday, day: workday });
+  if (served.from !== workday) setServed({ from: workday, day: workday });
+  const [day, showDay] = useOptimistic(served.from === workday ? served.day : workday);
+  /** Since when the status runs, in the person's zone: the server's label, or the change's own time while it is new */
+  const statusSinceShown = day.statusSince === workday.statusSince ? statusSinceLabel : day.statusSince ? fmtTime(day.statusSince, timeZone, locale) : null;
   /** The status whose button gets the focus back once the change has landed */
   const refocus = useRef<string | null>(null);
-  const working = workday.status === "working";
+  const working = day.status === "working";
   // Whether ending now still leaves room to clock in again today: the setting on, the window open
-  const againAfterEnd = workday.clockInAgain && now !== null && now < Date.parse(workday.dayEndsAt);
-  const current = statuses.find((s) => s.key === workday.statusKey);
+  const againAfterEnd = day.clockInAgain && now !== null && now < Date.parse(day.dayEndsAt);
+  const current = statuses.find((s) => s.key === day.statusKey);
   const group = useRef<HTMLDivElement>(null);
 
   /** The buttons that can be chosen now (the current, pressed status and the one in flight are not) */
@@ -129,7 +145,7 @@ export function WorkdayPanel({
     const active = document.activeElement;
     if (active && active !== document.body && !group.current?.contains(active)) return;
     Array.from(group.current?.querySelectorAll<HTMLButtonElement>("button") ?? []).find((b) => b.dataset.statusKey === key)?.focus();
-  }, [pending, workday.statusKey]);
+  }, [pending, day.statusKey]);
 
   /** The S shortcut clicks the group itself: move focus to the first choosable status */
   function enterGroup(e: ReactMouseEvent<HTMLDivElement>) {
@@ -161,52 +177,70 @@ export function WorkdayPanel({
     if (pendingKey !== null) return;
     setStatusFailed(false);
     setPendingKey(key);
+    const status = statuses.find((s) => s.key === key) ?? null;
     startTransition(async () => {
+      // At once, within the click's frame (D3): the new status pressed, its badge, its time and the clock
+      showDay(dayWithStatus(day, status, Date.now()));
       const res = await fetch("/api/v1/me/status", {
         method: "POST",
         headers: { "content-type": "application/json", "x-cma-request": "1" },
         body: JSON.stringify({ key }),
       }).catch(() => null);
-      if (!res?.ok) setStatusFailed(true);
-      else setAnnounced(statuses.find((s) => s.key === key)?.name ?? key);
+      const answer = res?.ok ? await answerOf(res) : null;
+      if (!answer) setStatusFailed(true);
+      else {
+        setServed({ from: workday, day: answer });
+        setAnnounced(status?.name ?? key);
+      }
       refocus.current = key;
-      // Also after a refusal: the day may have ended in another tab
-      router.refresh();
       setPendingKey(null);
+      // The page read again after the answer is on the screen, in a transition: the labels formatted on the server and a
+      // Back within 30 seconds (the client router cache, D4) show the new day; also after a refusal, since the day may
+      // have ended in another tab
+      startTransition(() => router.refresh());
     });
   }
 
   function changeMarket(code: string) {
-    if (pendingKey !== null || pendingMarket !== null || !code || code === shownMarket) return;
+    if (pendingKey !== null || pendingMarket !== null || !code || code === day.hoursMarket) return;
     setMarketFailed(false);
     setStatusFailed(false);
     setPendingMarket(code);
     startTransition(async () => {
-      showMarket(code);
-      // The market alone: the database books the status in force again under it (D3)
+      showDay(dayWithStatus(day, null, Date.now(), code));
+      // The market alone: the database books the status in force again under it (addition 0009zo, D3)
       const res = await fetch("/api/v1/me/status", {
         method: "POST",
         headers: { "content-type": "application/json", "x-cma-request": "1" },
         body: JSON.stringify({ hoursMarket: code }),
       }).catch(() => null);
-      if (!res?.ok) setMarketFailed(true);
-      else setAnnouncedMarket(hoursMarkets.find((m) => m.code === code)?.name ?? code);
-      // Also after a refusal: the day may have ended in another tab, or the market gone inactive
-      router.refresh();
+      const answer = res?.ok ? await answerOf(res) : null;
+      if (!answer) setMarketFailed(true);
+      else {
+        setServed({ from: workday, day: answer });
+        setAnnouncedMarket(hoursMarkets.find((m) => m.code === code)?.name ?? code);
+      }
       setPendingMarket(null);
+      // Also after a refusal: the day may have ended in another tab, or the market gone inactive
+      startTransition(() => router.refresh());
     });
   }
 
   function confirmEnd() {
     setStatusFailed(false);
     startTransition(async () => {
+      // At once (D3): the day shown ended, the clock stopped; the dialog closes with it
+      showDay(dayEnded(day, Date.now()));
+      setConfirming(false);
       // The same guarded route the API verifier covers (assertSameSiteWrite), not a server action: one
       // write rule for every write (the IT audit of 17 October 2026). A refusal shows the status problem
       // line; the refresh then shows the day as the database has it (ended in another tab, for example)
-      const res = await fetch("/api/v1/me/day/end", { method: "POST", headers: { "x-cma-request": "1" } });
-      if (!res.ok && res.status !== 409) setStatusFailed(true);
-      setConfirming(false);
-      router.refresh();
+      const res = await fetch("/api/v1/me/day/end", { method: "POST", headers: { "x-cma-request": "1" } }).catch(() => null);
+      const answer = res?.ok ? await answerOf(res) : null;
+      if (answer) setServed({ from: workday, day: answer });
+      else if (res?.status !== 409) setStatusFailed(true);
+      // The page follows: the Clock in card again on a day that may take another session
+      startTransition(() => router.refresh());
     });
   }
 
@@ -216,7 +250,7 @@ export function WorkdayPanel({
         <div className="flex items-center gap-3">
           <Badge tone="neutral">{copy.myDay.dayEnded}</Badge>
         </div>
-        <p className="mt-4 text-body">{workday.canClockInAgain ? copy.myDay.sessionEndedBody : copy.myDay.dayEndedBody}</p>
+        <p className="mt-4 text-body">{day.canClockInAgain ? copy.myDay.sessionEndedBody : copy.myDay.dayEndedBody}</p>
         <dl className="mt-6 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-small">
           <dt className="text-p4a-muted">{copy.myDay.startedAt}</dt>
           <dd className="tabular">{startedLabel}</dd>
@@ -233,17 +267,17 @@ export function WorkdayPanel({
         <Badge tone="neutral">
           <span className="inline-flex items-center gap-2">
             {current ? <StatusDot status={current} /> : null}
-            {current?.name ?? workday.statusName ?? copy.myDay.working}
+            {current?.name ?? day.statusName ?? copy.myDay.working}
           </span>
         </Badge>
         {hoursMarkets.length > 0 ? (
           <Badge tone="neutral">
-            <span data-testid="current-hours-market">{shownMarket ?? copy.myDay.noMarket}</span>
+            <span data-testid="current-hours-market">{day.hoursMarket ?? copy.myDay.noMarket}</span>
           </Badge>
         ) : null}
-        {statusSinceLabel ? (
+        {statusSinceShown ? (
           <span className="text-small text-p4a-muted">
-            {copy.myDay.workingSince} <span className="tabular text-p4a-body">{statusSinceLabel}</span>
+            {copy.myDay.workingSince} <span className="tabular text-p4a-body">{statusSinceShown}</span>
           </span>
         ) : null}
         <span className="ml-auto text-small text-p4a-muted">
@@ -261,7 +295,7 @@ export function WorkdayPanel({
         className="tabular text-clock font-semibold text-p4a-heading"
         aria-live="off"
       >
-        {hms(worked(workday, now))}
+        {hms(worked(day, now))}
       </p>
       <div className="mt-6">
         <p className="text-caption text-p4a-grey">{copy.myDay.statusLabel}</p>
@@ -276,7 +310,7 @@ export function WorkdayPanel({
           onKeyDown={moveInGroup}
         >
           {statuses.map((s) => {
-            const isCurrent = s.key === workday.statusKey;
+            const isCurrent = s.key === day.statusKey;
             return (
               <Button
                 key={s.key}
@@ -308,17 +342,17 @@ export function WorkdayPanel({
               {copy.myDay.hoursMarket} <Keycap>M</Keycap>
             </span>
             <select
-              value={shownMarket ?? ""}
+              value={day.hoursMarket ?? ""}
               data-shortcut="m"
               data-testid="hours-market-select"
               disabled={pendingMarket !== null}
               onChange={(e) => changeMarket(e.target.value)}
               className="h-10 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue"
             >
-              {shownMarket === null ? <option value="" disabled>{copy.myDay.noMarket}</option> : null}
-              {shownMarket !== null && !hoursMarkets.some((m) => m.code === shownMarket) ? (
+              {day.hoursMarket === null ? <option value="" disabled>{copy.myDay.noMarket}</option> : null}
+              {day.hoursMarket !== null && !hoursMarkets.some((m) => m.code === day.hoursMarket) ? (
                 // A market no longer offered: shown as booked, not choosable
-                <option value={shownMarket} disabled>{shownMarket}</option>
+                <option value={day.hoursMarket} disabled>{day.hoursMarket}</option>
               ) : null}
               {hoursMarkets.map((m) => (
                 <option key={m.code} value={m.code}>
@@ -374,4 +408,10 @@ export function WorkdayPanel({
  */
 function StatusDot({ status }: { status: WorkStatus }) {
   return <span aria-hidden="true" className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${GROUP_BG[agentGroupOf(status)]}`} />;
+}
+
+/** A write's answer: the day from the write's own transaction ({ data: Workday }), or null when it cannot be read */
+async function answerOf(res: Response): Promise<Workday | null> {
+  const body = (await res.json().catch(() => null)) as { data?: Workday | null } | null;
+  return body?.data ?? null;
 }

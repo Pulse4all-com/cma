@@ -2500,7 +2500,8 @@ async function expectIrreversibleConfirmations() {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     const writes = [];
-    p.on("request", (r) => { if (r.method() !== "GET" && new URL(r.url()).pathname.startsWith("/api/v1/") && !new URL(r.url()).pathname.startsWith("/api/v1/me/messages")) writes.push(`${r.method()} ${new URL(r.url()).pathname}`); });
+    // the navigation beacon (POST /api/v1/telemetry/navigation, brief N07) writes no data: not a write of the dialog
+    p.on("request", (r) => { if (r.method() !== "GET" && new URL(r.url()).pathname.startsWith("/api/v1/") && !new URL(r.url()).pathname.startsWith("/api/v1/me/messages") && !new URL(r.url()).pathname.startsWith("/api/v1/telemetry/")) writes.push(`${r.method()} ${new URL(r.url()).pathname}`); });
     await p.goto(BASE + path);
     await settle(p);
     await p.waitForLoadState("networkidle");
@@ -2527,7 +2528,7 @@ async function expectIrreversibleConfirmations() {
       const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "agent-two" } });
       const p = await ctx.newPage();
       const writes = [];
-      p.on("request", (r) => { const u = new URL(r.url()); if (r.method() !== "GET" && u.pathname.startsWith("/api/v1/") && !u.pathname.startsWith("/api/v1/me/messages")) writes.push(`${r.method()} ${u.pathname}`); });
+      p.on("request", (r) => { const u = new URL(r.url()); if (r.method() !== "GET" && u.pathname.startsWith("/api/v1/") && !u.pathname.startsWith("/api/v1/me/messages") && !u.pathname.startsWith("/api/v1/telemetry/")) writes.push(`${r.method()} ${u.pathname}`); });
       await p.goto(BASE + "/day");
       await settle(p);
       await p.waitForLoadState("networkidle");

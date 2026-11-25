@@ -217,7 +217,7 @@ expect("a hint's numbers on their way are blanks of a number's width, its words 
     [{ text: "Working statuses", blank: false }], { text: "00h 00m", blank: true }],
   [[], [], null]);
 const src = (rel) => readFileSync(new URL(`../src/${rel}`, import.meta.url), "utf8");
-const pageSrc = src("app/reports/dashboard/page.tsx");
+const pageSrc = src("app/(shell)/reports/dashboard/page.tsx");
 const rowSrc = src("components/IntakeRow.tsx");
 expect("the page starts its parts' reads at once, as a streamed part, before it waits for any; the parts are the time, the counts and the speed",
   [/const reads = streamed\(\(\) => data\(\)\.getDashboardReads\(me, period\)\);\s*const timeRead = held\("time", reads\.time\);\s*const countsRead = held\("counts", reads\.counts\);\s*const speedRead = held\("speed", reads\.speed\);\s*const \[time, counts, speed\] = await Promise\.all\(/.test(pageSrc),

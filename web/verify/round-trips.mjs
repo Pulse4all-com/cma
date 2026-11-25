@@ -61,13 +61,21 @@ async function holds(subject, permission) {
 const problems = [];
 const notes = [];
 const observed = [];
-for (const row of budget) {
+// Rows of kind "prefetch" are measured in a browser below (night N07, D5); the others by a plain request
+const prefetchRows = budget.filter((row) => row.kind === "prefetch");
+for (const row of budget.filter((r) => r.kind !== "prefetch")) {
   if (row.permission) {
     const h = await holds(row.subject, row.permission);
     if (typeof h === "string") { problems.push(`${row.subject} ${row.path}: ${h}`); continue; }
     if (!h) { notes.push(`${row.subject} ${row.path}: not measured, ${row.subject} does not hold ${row.permission}`); continue; }
   }
-  const res = await fetch(BASE + row.path, { headers: { "x-cma-mock-subject": row.subject, accept: "text/html,application/json" }, redirect: "manual" });
+  // a write row (the navigation beacon, brief N07) names its method, headers and body; every other row is a GET
+  const res = await fetch(BASE + row.path, {
+    method: row.method ?? "GET",
+    headers: { "x-cma-mock-subject": row.subject, accept: "text/html,application/json", ...(row.headers ?? {}) },
+    ...(row.body !== undefined ? { body: JSON.stringify(row.body) } : {}),
+    redirect: "manual",
+  });
   const type = res.headers.get("content-type") ?? "";
   let cost = null;
   let first = null;
@@ -99,14 +107,131 @@ for (const row of budget) {
   }
 }
 
+// ---- In a browser (night N07, decisions D2 and D5) -------------------------------------------------------------------
+// The head start: a subject opens a page (row.from) and, once its blocks have settled and the browser is idle, the page
+// prefetches the role's top destinations in full. Each prefetched destination's cost is read from the cma-db meta its
+// React Server Components payload carries (the page's Shell writes it, as in the HTML) and held to the row's budget; the
+// set prefetched must be exactly the subject's rows (no report, never Log out), or none on a day that is not open (a note).
+// Each route the page marked is printed with when it was asked and answered, so a short set names its reason. Then the
+// persistent frame: a click to a rail page and Back load no new inbox from scratch (the message centre mounts once per
+// tab: no /api/v1/me/messages request without ?since= after the first, which is how a fresh mount polls).
+const browserLines = [];
+if (prefetchRows.length > 0) {
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch();
+  // the meta inside the payload's serialised element, quotes escaped or not
+  const metaCost = (text) => {
+    const all = [...text.matchAll(/cma-db\\?"\s*,\s*\\?"content\\?"\s*:\s*\\?"(tx=\d+;rt=\d+;ms=[\d.]+)/g)];
+    return all.length ? parse(all.at(-1)[1]) : null;
+  };
+  for (const group of Object.values(Object.groupBy(prefetchRows, (r) => `${r.subject} ${r.from}`))) {
+    const { subject, from } = group[0];
+    // The head start waits for an open day (a person whose time is kept): the subject's day is opened first, as Clock in
+    // does (dev data; an open day answers as it is, an ended one stays ended where Clock in again is off or over)
+    const asSubject = { "x-cma-mock-subject": subject };
+    await fetch(`${BASE}/api/v1/me/day/start`, { method: "POST", headers: { ...asSubject, "x-cma-request": "1" } }).catch(() => null);
+    const day = await fetch(`${BASE}/api/v1/me/day`, { headers: asSubject }).then((r) => (r.ok ? r.json() : null)).then((b) => b?.data ?? null).catch(() => null);
+    const dayState = day?.status ?? "none (no workday)";
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: asSubject });
+    const page = await ctx.newPage();
+    const fetched = new Map();
+    // every full prefetch asked for before the navigation: when it was asked, answered, and whether it carried the meta
+    const asked = new Map();
+    const pending = [];
+    let fresh = 0;
+    let loaded = false;
+    let navigated = false;
+    const t0 = Date.now();
+    // a full prefetch: a React Server Components request without Next-Router-Prefetch (that header marks the loading
+    // boundary's prefetch, which renders no page and carries no meta), before the navigation below
+    const isFull = (req) => { const h = req.headers(); return !navigated && h.rsc && !h["next-router-prefetch"]; };
+    // counted when asked (a request), not when answered: a client navigation never waits for the network to go idle
+    page.on("request", (req) => {
+      const url = new URL(req.url());
+      if (url.pathname === "/api/v1/me/messages" && !url.searchParams.has("since") && loaded) fresh += 1;
+      if (isFull(req) && !asked.has(url.pathname)) asked.set(url.pathname, { at: Date.now() - t0, done: null, status: null, meta: false });
+    });
+    page.on("requestfinished", (req) => { const a = asked.get(new URL(req.url()).pathname); if (a && a.done === null) a.done = Date.now() - t0; });
+    page.on("requestfailed", (req) => { const a = asked.get(new URL(req.url()).pathname); if (a && a.done === null) { a.done = Date.now() - t0; a.status = req.failure()?.errorText ?? "failed"; } });
+    page.on("response", (res) => {
+      const req = res.request();
+      const url = new URL(res.url());
+      if (!isFull(req)) return;
+      const a = asked.get(url.pathname);
+      if (a && a.status === null) a.status = res.status();
+      pending.push(res.text().then((text) => {
+        const cost = metaCost(text);
+        if (!cost) return;
+        if (a) a.meta = true;
+        const prev = fetched.get(url.pathname);
+        if (!prev || cost.tx > prev.tx || cost.rt > prev.rt) fetched.set(url.pathname, cost);
+      }).catch(() => undefined));
+    });
+    await page.goto(BASE + from, { waitUntil: "networkidle" });
+    loaded = true;
+    // The blocks settle, the browser goes idle, the page marks what it asked for (components/IdlePrefetch: <html
+    // data-head-start>, "none" for an empty head start); then every route it names must have answered. Each wait is
+    // bounded (30 s), not fixed: a slow environment takes longer, and a missing answer is named below with its reason
+    const marker = await page.waitForFunction(() => document.documentElement.dataset.headStart ?? null, null, { timeout: 30000 })
+      .then((h) => h.jsonValue()).catch(() => null);
+    const listed = marker && marker !== "none" ? marker.split(" ") : [];
+    const until = Date.now() + 30000;
+    while (Date.now() < until && listed.some((p) => asked.get(p)?.done == null)) await page.waitForTimeout(200);
+    await Promise.all(pending);
+    // a person whose time is kept gets no head start until the day is open (lib/nav headStartHrefs): on an ended day the
+    // right answer is none, and its budgets are not measured (a note, as for a missing permission)
+    const closed = day !== null && dayState !== "working";
+    const want = closed ? [] : group.map((r) => r.path).sort();
+    const got = [...fetched.keys()].sort();
+    browserLines.push(`${subject} ${from}: the day: ${dayState}; the page's head start ${marker === null ? "never marked within 30 s" : JSON.stringify(marker)}`);
+    for (const [p, a] of asked) browserLines.push(`  ${p}: asked at ${a.at} ms, ${a.done === null ? "no answer within 30 s" : `answered ${a.status} at ${a.done} ms`}${a.meta ? "" : ", no cma-db meta in the payload"}`);
+    if (closed) for (const row of group) notes.push(`${subject} prefetch ${row.path} from ${from}: not measured, the day is ${dayState} (the head start waits for an open day; Clock in again is off or over)`);
+    if (JSON.stringify(got) !== JSON.stringify(want)) {
+      const why = want.filter((p) => !got.includes(p)).map((p) => {
+        const a = asked.get(p);
+        if (!a) return `${p} never asked${marker === null ? " (no head start marker)" : ""}`;
+        if (a.done === null) return `${p} no answer within 30 s`;
+        return `${p} answered ${a.status} without a cma-db meta`;
+      });
+      problems.push(`${subject} ${from}: prefetched ${JSON.stringify(got)}, expected ${JSON.stringify(want)} (the day: ${dayState}${why.length ? "; " + why.join("; ") : ""})`);
+    }
+    for (const row of group) {
+      const cost = fetched.get(row.path);
+      if (!cost) continue;
+      observed.push({ kind: "prefetch", from, path: row.path, subject, tx: cost.tx, rt: cost.rt });
+      const maxTx = provoke ? 0 : row.tx;
+      const maxRt = provoke ? 0 : row.rt;
+      if (cost.tx > maxTx) problems.push(`${subject} prefetch ${row.path}: ${cost.tx} transactions, budget ${maxTx}`);
+      if (cost.rt > maxRt) problems.push(`${subject} prefetch ${row.path}: ${cost.rt} statements, budget ${maxRt}`);
+      browserLines.push(`${subject} prefetch ${row.path} from ${from}: ${cost.tx} tx, ${cost.rt} rt`);
+    }
+    // the frame persists: a click on a visible rail link (a prefetched one where the rail shows it) and Back
+    const visible = await page.locator("nav[data-rail-nav] a[href]").evaluateAll((as) => as.filter((a) => a.offsetParent !== null).map((a) => a.getAttribute("href")));
+    const target = want.find((h) => visible.includes(h)) ?? visible.find((h) => h !== from) ?? want[0];
+    const before = fresh;
+    navigated = true;
+    await page.locator(`nav[data-rail-nav] a[href="${target}"]`).first().click();
+    await page.waitForURL(`**${target}`);
+    await page.waitForTimeout(2000);
+    await page.goBack();
+    await page.waitForTimeout(2000);
+    const extra = fresh - before;
+    browserLines.push(`${subject} ${from} → ${target} → back: ${extra} inbox read from scratch`);
+    if (provoke ? extra === 0 : extra > 0) problems.push(`${subject}: ${extra} inbox read${extra === 1 ? "" : "s"} from scratch on a navigation (the message centre mounted again)${provoke ? " (provoked: 0 counts as a failure)" : ""}`);
+    await ctx.close();
+  }
+  await browser.close();
+}
+
 if (observedOnly) {
   console.log(JSON.stringify(observed, null, 2));
   process.exit(0);
 }
+for (const l of browserLines) console.log("  " + l);
 for (const n of notes) console.log("  note: " + n);
 if (problems.length) {
   for (const p of problems) console.log("  " + p);
   console.log(`round-trips: FAIL (${problems.length} problems)`);
   process.exit(1);
 }
-console.log(`round-trips: PASS (${budget.length - notes.length} requests within their transaction and statement budgets${notes.length ? `, ${notes.length} not measured without their permission (notes above)` : ""})`);
+console.log(`round-trips: PASS (${budget.length - notes.length} requests within their transaction and statement budgets${notes.length ? `, ${notes.length} not measured (notes above: a missing permission, or a day not open for a head start)` : ""})`);

@@ -24,7 +24,7 @@ import { FlagField, FormDialog, SaveNote, field, label, send, th, useSave } from
 export function AlertRulesConfig({ data, permissions, copy, locale, timeZone }: { data: Data; permissions: PermissionInfo[]; copy: Pick<Copy, "configAlertRules" | "configuration"> & { hints: Pick<Copy["hints"], "about"> }; locale: Locale; timeZone: string }) {
   const c = copy.configuration;
   const t = copy.configAlertRules;
-  const { state, save } = useSave(c);
+  const { state, save, flag, toggle } = useSave(c);
   // a fresh key per opening, so every dialog starts from the values as they stand
   const seq = useRef(0);
   const tick = () => ++seq.current;
@@ -82,11 +82,11 @@ export function AlertRulesConfig({ data, permissions, copy, locale, timeZone }: 
             </tr>
           </thead>
           {data.rules.map((r) => (
-            <tbody key={r.id} className={`border-t border-p4a-border ${r.enabled ? "" : "text-p4a-muted"}`} data-rule={r.name}>
+            <tbody key={r.id} className={`border-t border-p4a-border ${flag(r.id, r.enabled) ? "" : "text-p4a-muted"}`} data-rule={r.name}>
               <tr>
                 <td className="px-3 pt-3 align-top">
                   <span className="font-semibold">{r.name}</span>
-                  <span className="ml-2">{r.enabled ? <Badge tone="success">{t.enabled}</Badge> : <Badge tone="neutral">{t.disabled}</Badge>}</span>
+                  <span className="ml-2">{flag(r.id, r.enabled) ? <Badge tone="success">{t.enabled}</Badge> : <Badge tone="neutral">{t.disabled}</Badge>}</span>
                 </td>
                 <td className="px-3 pt-3 align-top text-small">{(t as Record<string, string>)[`trigger_${r.trigger}`] ?? r.trigger}<span className="block text-caption text-p4a-muted">{recordWord(r.recordType)}</span></td>
                 <td className="px-3 pt-3 align-top text-small">{r.trigger === "review_submitted" ? t.everyCountedChannel
@@ -102,9 +102,9 @@ export function AlertRulesConfig({ data, permissions, copy, locale, timeZone }: 
                 <td className="px-3 pt-3 align-top text-right" rowSpan={2}>
                   <div className="flex flex-col items-end gap-2">
                     <Button variant="outlined" size="sm" onClick={() => open(r)}>{c.edit}</Button>
-                    {r.enabled
-                      ? <Button variant="destructive" size="sm" onClick={() => save(() => send("PUT", `/api/v1/configuration/alert-rules/${r.id}/enabled`, { enabled: false }))}>{t.switchOff}</Button>
-                      : <Button variant="outlined" size="sm" onClick={() => save(() => send("PUT", `/api/v1/configuration/alert-rules/${r.id}/enabled`, { enabled: true }))}>{t.switchOn}</Button>}
+                    {flag(r.id, r.enabled)
+                      ? <Button variant="destructive" size="sm" onClick={() => toggle(r.id, false, () => send("PUT", `/api/v1/configuration/alert-rules/${r.id}/enabled`, { enabled: false }))}>{t.switchOff}</Button>
+                      : <Button variant="outlined" size="sm" onClick={() => toggle(r.id, true, () => send("PUT", `/api/v1/configuration/alert-rules/${r.id}/enabled`, { enabled: true }))}>{t.switchOn}</Button>}
                   </div>
                 </td>
               </tr>
