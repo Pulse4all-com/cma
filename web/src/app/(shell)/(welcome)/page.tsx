@@ -220,8 +220,8 @@ async function HeadStartAfter({ reads, day, me, copy }: {
   const workday = day ? await day.then(([w]) => w).catch(() => null) : null;
   const open = day ? workday?.status === "working" : null;
   const hrefs = headStartHrefs(me, copy, open);
-  if (hrefs.length === 0) return null;
-  // keyed on the day's state, so it runs once after Clock in; at most once per tab and key (IdlePrefetch)
+  // keyed on the day's state, so it runs once after Clock in; at most once per tab and key (IdlePrefetch). Rendered with
+  // an empty list too, so the page's marker says "none" rather than nothing (verify/round-trips.mjs, a check in prod)
   return <IdlePrefetch hrefs={hrefs} runKey={`${me.userId}:${open === null ? "untimed" : open ? "open" : "closed"}`} />;
 }
 

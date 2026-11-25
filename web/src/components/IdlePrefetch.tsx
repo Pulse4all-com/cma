@@ -6,7 +6,10 @@
  * (lib/nav headStartHrefs: the page with its data, router.prefetch of kind full), so the person's next click finds the
  * page there. Only routes of 131's agent class reach it; a report never does. Kept as long as staleTimes.static says
  * (next.config.ts, 30 s); when Next drops a prefetch as stale it is not fetched again until the next visit of Welcome.
- * Renders nothing.
+ * Renders nothing. It marks the document with what it did, `<html data-head-start>`: the routes it asked for, separated
+ * by spaces, once it has asked; "none" when the person's head start is empty (a day not open yet, or a role without
+ * one). Route paths only, never an id or a person's data. verify/round-trips.mjs waits for the marker, and in prod
+ * `document.documentElement.dataset.headStart` in the browser's console shows it (RUNBOOK 5)
  */
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -22,11 +25,17 @@ export function IdlePrefetch({ hrefs, runKey }: { hrefs: readonly string[]; runK
   const key = hrefs.join(" ");
   useEffect(() => {
     const list = key.split(" ").filter((h) => h !== "" && mayFullPrefetch(h));
-    if (list.length === 0 || ran.has(runKey)) return;
+    const mark = document.documentElement.dataset;
+    if (list.length === 0) {
+      mark.headStart = "none";
+      return;
+    }
+    if (ran.has(runKey)) return;
     const w = window as IdleWindow;
     const run = () => {
       ran.add(runKey);
       for (const href of list) router.prefetch(href, { kind: "full" } as Parameters<typeof router.prefetch>[1]);
+      mark.headStart = list.join(" ");
     };
     if (w.requestIdleCallback) {
       const id = w.requestIdleCallback(run, { timeout: 3000 });
