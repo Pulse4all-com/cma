@@ -145,6 +145,10 @@ export function takeDbStats(traceId: string): DbStats | undefined {
   stats.delete(traceId);
   return s;
 }
+/** The record of a request still running, left in place (the Server-Timing header, instrumentation.node.ts) */
+export function peekDbStats(traceId: string): DbStats | undefined {
+  return stats.get(traceId);
+}
 /** The record as "tx=…;rt=…;ms=…": the whole request, or with firstPaint its reads but the streamed ones */
 export function formatDbStats(s: DbStats | undefined, firstPaint = false): string {
   if (!s) return 'tx=0;rt=0;ms=0';
