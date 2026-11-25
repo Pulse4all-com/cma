@@ -27,3 +27,10 @@ no secret, no personal data.
 | `node tools/check-records.mjs` on the run's folder | records clean, 32 files |
 
 Every line exited 0.
+
+## Steps 2 and 3 (Martin, 25 November 2026, from his report)
+
+| Step | Result |
+|---|---|
+| 2. The data map's schema snapshot from dev after 0009zu | committed as `8da180a` on #318's branch; `verify:datamap` PASS |
+| 3. Main's `verify:api` against dev's web (`b489fe3`) on the 0009zu database | 366 of 368. The two failures are the known Flash definition versions (0008zu and 0008zt expected, dev returns 0009ze), not this addition. His output, `verify-api-main.txt`, is on his machine. |
