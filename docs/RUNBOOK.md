@@ -8,6 +8,20 @@ Studio only, never through the Auth Proxy in the terminal (README, Where a comma
 README.md explains *why*; this file is *how*. Commands carry `--project` themselves, so it does not
 matter which project gcloud is set to. This way of working dates from 16 October 2026 (README, Decision log).
 
+Three rules for every step (CLAUDE.md, Instructions for Martin; 25 November 2026):
+- **Visible progress.** A command or script that can take longer than about 30 seconds shows live
+  progress: the tool's own output is never hidden behind `| tail` or `| grep` while it runs (it streams,
+  and `tee` saves it); each phase prints a header with the time (`== HH:MM:SS  n/m what`); a heartbeat
+  prints `… still running, n s` every 15 seconds; each phase ends with `✓ done in n s, exit n` (`✗` when
+  the exit is not 0); every gcloud, psql and node call runs under `timeout`; the step states the
+  expected duration per phase.
+  Summaries and greps of saved output come after the run, never instead of it.
+- **No gcloud write next to the proxy.** Never run `gcloud run services update` (or another gcloud
+  write) while `gcloud run services proxy` runs in the same environment: stop the proxy first
+  (`pkill -f "run services proxy"`) and start it again after. On 25 November 2026 gcloud hung twice with
+  the proxy running.
+- **Merge from the Terminal**, with `gh pr merge <n> --squash`, not in the GitHub web UI.
+
 ## Setup (once per machine)
 
 The toolset of README (Working on the code), in place on Martin's Chromebook since 16 October 2026.
@@ -281,9 +295,10 @@ Dev runs the image prod's build made, by its short SHA:
 
 ```bash
 sha=<short sha from step 3>
-gcloud run services update cma-web --project=p4a-cma-dev --region=europe-west4 \
-  --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/web:$sha 2>&1 | tail -1
-pkill -f "run services proxy"; gcloud run services proxy cma-web --project=p4a-cma-dev \
+pkill -f "run services proxy"                                   # never a gcloud write next to the proxy
+timeout 300 gcloud run services update cma-web --project=p4a-cma-dev --region=europe-west4 \
+  --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/web:$sha; echo "exit $?"   # about 1 minute, streams
+gcloud run services proxy cma-web --project=p4a-cma-dev \
   --region=europe-west4 --port=8080 >/tmp/proxy.log 2>&1 & sleep 6
 curl -s localhost:8080/api/health; echo                         # version = $sha, auth mock, data api
 ```
