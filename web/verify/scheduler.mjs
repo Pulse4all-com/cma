@@ -74,7 +74,6 @@ async function call(subject, path, init = {}) {
 }
 const get = (s, p) => call(s, p);
 const sql = (text) => execFileSync("psql", [PGCONN, "-At", "-v", "ON_ERROR_STOP=1", "-c", "set role cma_owner", "-c", text], { encoding: "utf8" }).trim().split("\n").filter((l) => l !== "SET").pop() ?? "";
-const daysAgo = (n) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
 
 console.log(`verify/scheduler.mjs against ${BASE}${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
 const health = await get(AGENT, "/api/health");
@@ -84,12 +83,19 @@ if (health.status !== 200 || health.body?.auth !== "mock" || health.body?.data !
 }
 const meA = (await get(AGENT, "/api/v1/me")).body.data;
 
-// A forgotten day: open, started 09:00 in the agent's zone on the first free date more than 400 days back
-let freeDate = null;
-for (let k = 0; k < 10 && !freeDate; k++) {
-  const newest = 400 + k * 92;
-  const taken = new Set(((await get(SUPERVISOR, `/api/v1/team/hours?from=${daysAgo(newest + 91)}&to=${daysAgo(newest)}&userId=${meA.userId}`)).body?.data?.days ?? []).map((d) => d.date));
-  for (let i = 0; i < 92 && !freeDate; i++) if (!taken.has(daysAgo(newest + i))) freeDate = daysAgo(newest + i);
+// A forgotten day: open, started 09:00 in the agent's zone on the first free date 400 days back or more. Free means no
+// cma.workday row of the agent on that date at all, read as the owner: Team hours does not list every day (25 Nov 2026 on
+// dev, an earlier run's day on daysAgo(400) was missed and the insert hit workday_tenant_id_user_id_business_date_key)
+const freeDate = sql(`select to_char(g.d, 'YYYY-MM-DD')
+                      from generate_series(0, 919) as s(i)
+                      cross join lateral (select (now() at time zone 'UTC')::date - 400 - s.i as d) g
+                      where not exists (select 1 from cma.workday w
+                                        where w.tenant_id = '${meA.tenantId}' and w.user_id = '${meA.userId}' and w.business_date = g.d)
+                      order by s.i
+                      limit 1`) || null;
+if (!freeDate) {
+  console.log("FAIL  no free date between 400 and 1319 days back for the test agent");
+  process.exit(1);
 }
 const forgotten = sql(`
   do $$
