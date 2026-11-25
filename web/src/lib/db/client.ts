@@ -4,6 +4,7 @@ import pg from 'pg';
 import { trace } from '@opentelemetry/api';
 import { AuthTypes, Connector, IpAddressTypes } from '@google-cloud/cloud-sql-connector';
 import { CMA_SQLSTATE, CmaDbError, isCmaSqlState } from '@/lib/data/errors';
+import { sessionPoolOptions } from '../../../jobs/lib/session-options.mjs';
 
 /**
  * Database client for the CMA web app.
@@ -214,6 +215,9 @@ function poolTuning() {
     // pg sends these as startup parameters: they bind the whole session
     statement_timeout: Number.isFinite(cfg.statementTimeoutMs) && cfg.statementTimeoutMs > 0 ? cfg.statementTimeoutMs : 15_000,
     idle_in_transaction_session_timeout: 30_000,
+    // CMA_DB_SESSION_OPTIONS (night N07, decision D6): planner and memory settings sent at connect, empty by default;
+    // only the names jobs/lib/session-options.mjs allows, a bad entry fails the pool's creation
+    ...sessionPoolOptions(),
   };
 }
 

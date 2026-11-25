@@ -2120,6 +2120,26 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Used by | Sales → Follow-up, the Live board's Follow-up now, Welcome's Waiting for you, the `follow_up.*` and `live.follow_up_now.*` catalog keys (the counts' time is the snapshot's computed_at; the five row fields' time, `follow_up.leads.waiting_business_minutes`, `follow_up.leads.target_state`, `follow_up.tickets.open_business_minutes`, `follow_up.tickets.sla_state` and `follow_up.tickets.minutes_to_breach`, is the read's now()); Configuration → System health (the job's counts) |
 | As built today | Matches the definition once `178` has run: the entry checks the marker (no audit row of an input table since 2 minutes before the last check, no migration committed since, the next clock change not reached, younger than the setting), else computes. Limits: an input change committed more than 2 minutes after its write, and a change of the tenant's zone, are seen at the next computation at the latest. Before `178` every minute rewrites every item. Since `190` (addition 0009u) a list row's clock fields (a ticket's open business time, minutes to breach and `sla_state`, a lead's waiting business time and `past_target`) are derived at the read's `now()` from the stored created_at, market and response time, not stored; the item's state column, the attention filter, the order and the snapshot's counts stay as the refresh stores them, so a row's state words can lead them by up to one job run |
 
+### Job gate
+
+| Field | Value |
+|---|---|
+| Term | Job gate (no label on screen; nl: Poort van een taak); the waits it gives: Deferred, After a timeout and Nothing to read |
+| Key | `cma.job_gate_of(job)`, `cma.web_busy(job)`; the log line's `reason` `deferred`, `after_timeout`, `nothing_to_read`; the run row's counts `defer_wait`, `timeout_wait`, `nothing_to_read`; settings `jobs.defer_web_statements` (2 by default, 1 to 100) and `jobs.defer_max_in_a_row` (5 by default, 0 to 60) |
+| Definition | The question a web minute job (`refresh_follow_up`, `refresh_data_quality`, `refresh_active_customers`, `flash_snapshot`) asks for the current tenant before its heavy step: compute now, or wait. Nothing to read: the follow-up of a tenant without an active CRM connection and without stored items. After a timeout: the job's latest runs for the tenant were cancelled by the statement timeout (`57014`), so it waits 5, 10, 20, 40 and at most 60 minutes after the last one; any other outcome resets it. Deferred: the web service has `jobs.defer_web_statements` or more active statements, so the job leaves the database to the pages for this minute, at most `jobs.defer_max_in_a_row` minutes in a row. |
+| Source | `cma.job_gate_of(job)`, from the job's own rows in `cma.sync_run` and `cma.web_busy(job)` (the number of active statements of the web service, nothing else) |
+| Counts / does not count | A gated run is one run row, `succeeded`, with its wait among its counts (`defer_wait`, `timeout_wait` or `nothing_to_read`, 1); it is never `skipped`, which means another refresh of the tenant held the lock, and never `backoff`, which is the data-quality job's wait after a failed computation (Refreshed at) |
+| Unit and display | Counts and a log line per tenant; no screen label |
+| Time rule | The transaction time of the run; the waits count from the latest cancelled run |
+| Scope | Per tenant and job |
+| Equivalent in the source system | None |
+| Not to use | "Skipped" or "backoff" for a gated run |
+| Status | Decided (Martin, 24 November 2026) |
+| Decided | 24 Nov 2026, "D7 The minute jobs defer to the web" and 25 Nov 2026, "Definitions: Job gate" (PR N07a, addition 0009zr) |
+| Used by | The four minute jobs (`web/jobs/*.mjs`), docs/OPERATIONS.md 4.1, docs/architecture/api.md (the job paragraphs) |
+| As built today | Matches the definition once `236` has run; the jobs compute as before on a database without the gate. `237` proves the waits after timeouts, the deferrals in a row and nothing to read |
+
+
 ### Current take
 
 | Field | Value |
