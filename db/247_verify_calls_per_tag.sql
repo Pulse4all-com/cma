@@ -5,7 +5,7 @@
 -- subtransaction that is always rolled back, so nothing stays (synthetic data only: people v9zw-…@example.invalid, an
 -- invented line and tags, calls on Tuesday 6 October 2026 in Europe/Amsterdam, so the verdict never depends on when it
 -- runs); block E reads every active tenant of the database it runs in (the Pulse4all tenants in dev and prod) over its last
--- 14 dates, as the owner under the tenant's row-level security, and prints counts only, never a row of anyone. Run as your
+-- 14 dates, as the owner with the tenant's context set (each read filters on the tenant it is given), and prints counts only, never a row of anyone. Run as your
 -- own IAM login after 246_calls_per_tag.sql, dev first, then prod. Cloud SQL Studio shows no notices: a check that fails
 -- raises "FAIL <id>: …" and stops its block; every check that passed writes one row, and the last row is the verdict:
 -- "calls_per_tag ok | 9 PASS, 0 FAIL" (provoked: "PROVOKED, NOT A PASS | 0 PASS, 9 FAIL"). A block that stopped counts
@@ -262,7 +262,7 @@ begin
     v_today := cma.tenant_today_of(t.id);
     v_dates := 0; v_calls := 0; v_tags := 0;
     for v_day in select d::date from generate_series(v_today - 13, v_today, interval '1 day') d loop
-      -- E1, E2, E3 as the owner under the tenant's row-level security
+      -- E1, E2, E3 as the owner; each read filters on the tenant it is given (the owner is not held to row-level security)
       select format('%s/%s/%s', p.outbound, p.inbound, p.calls) into v_e1
       from cma.calls_per_tag_of(t.id, v_day, v_day, null, null) p where p.tag_key is null;
       select format('%s/%s/%s|%s/%s', f.untagged, f.outbound, f.inbound, f.outbound, f.inbound), f.calls
