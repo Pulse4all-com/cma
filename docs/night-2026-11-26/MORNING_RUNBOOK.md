@@ -111,7 +111,7 @@ trigger as an empty value. Expected: six green builds; the Workspace opens after
 
 **3a. Terminal:** the index of 1a against prod (`cma_db prod`), then the `indisvalid` check. Expected: `t`.
 
-**3b. Terminal:** `236` twice and `237` against prod as in 1b; then `238` and `239` as in 1c. Expected: `PASS 0009zr`, `PASS 0009zs`; the prod reruns of 1b and 1c (not 73, 75, 81, 95, 151, 155) PASS; 211, 213 and 217 pass their block A, and block B refuses prod (no dev seed), as on 25 November 2026.
+**3b. Terminal:** `236` twice and `237` against prod as in 1b; then `238` and `239` as in 1c. Expected: `PASS 0009zr`, `PASS 0009zs`; the prod reruns of 1b (not 73, 75, 81, 95, 151, 155) PASS, and 1c's 83, 91 and 101 run in dev only (they refuse prod); 211, 213 and 217 pass their block A, and block B refuses prod (no dev seed), as on 25 November 2026.
 
 **3c. Only after Yordi's agreement (step 10):** `240` and `241` against prod as in 1d. Expected: `PASS 0009zt`.
 
