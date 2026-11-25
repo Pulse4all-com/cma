@@ -1631,6 +1631,10 @@ const MOCK_SETTINGS: TenantSetting[] = [
   { key: "lead_to_order.max_days", value: "90", isDefault: true },
   // split shifts (addition 0008zp): on, as Pulse4all Subscriptions has it (seed 02); the catalog default is off
   { key: "workday.clock_in_again", value: "true", isDefault: false },
+  // forgotten clock-outs (addition 0009zv): closed at the Default market's office hours, as Pulse4all Subscriptions has it
+  // (seed 02); the usual closing time 17:00 (seed 02, addition 0008b) the hint names
+  { key: "workday.auto_close_office_hours", value: "true", isDefault: false },
+  { key: "workday.auto_close_at", value: "17:00", isDefault: false },
   // courtesy (addition 0009a): set up sixty days back, so the mock's page has orders in every state; the rest at the catalog defaults
   { key: "courtesy.start_date", value: dateKeyInZone(new Date(Date.now() - 60 * 86_400_000), "Europe/Amsterdam"), isDefault: false },
   { key: "courtesy.order_kinds", value: "first,repeat", isDefault: true },
@@ -2304,7 +2308,7 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "attempts.max_bucket": "5", "attempts.since_last_buckets_business_days": "1,2,5", "attempts.source": "telephony",
   "calls.conversation_min_talk_seconds": "30", "attempts.speed_buckets_business_minutes": "5,15,60,240,1440",
   "cohorts.lead_ages_days": "1,7,30,60,90", "lead_to_order.max_days": "90",
-  "workday.clock_in_again": "false",
+  "workday.clock_in_again": "false", "workday.auto_close_office_hours": "false", "workday.auto_close_at": "24:00",
   "courtesy.start_date": "", "courtesy.order_kinds": "first,repeat", "courtesy.due_days": "10", "courtesy.alert_attempts": "3", "courtesy.ages_days": "10,14,21,30",
   // the reviews settings' catalog defaults (104), so emptying the history start resets it as the database does (CMA-099)
   "reviews.negative_max_rating": "2", "reviews.history_start_date": "",

@@ -397,7 +397,7 @@
         "own day only",
         "today in the caller's zone"
       ],
-      "time": "ended_at is an instant; shown in the viewer's zone. A system end set by the sweep is the shift end, the auto-close time or the day's last event, never after the window end.",
+      "time": "ended_at is an instant; shown in the viewer's zone. A system end set by the sweep is the shift end, else (workday.auto_close_office_hours, addition 0009zv) the end of that day's office hours of the person's Default market, else the auto-close time, or the day's last event, never after the window end.",
       "comparison": null,
       "settings": [
         {
@@ -407,6 +407,10 @@
         {
           "key": "workday.auto_close_at",
           "default": "24:00"
+        },
+        {
+          "key": "workday.auto_close_office_hours",
+          "default": "false"
         }
       ],
       "permissions": {
@@ -424,7 +428,7 @@
           },
           {
             "object": "cma.close_forgotten_workdays",
-            "migration": "0008b"
+            "migration": "0009zv"
           }
         ],
         "ts": [
@@ -7244,6 +7248,10 @@
         {
           "key": "workday.auto_close_at",
           "default": "24:00"
+        },
+        {
+          "key": "workday.auto_close_office_hours",
+          "default": "false"
         }
       ],
       "permissions": {
@@ -7261,7 +7269,7 @@
           },
           {
             "object": "cma.close_forgotten_workdays",
-            "migration": "0008b"
+            "migration": "0009zv"
           }
         ],
         "ts": [
@@ -7690,6 +7698,10 @@
         {
           "key": "workday.auto_close_at",
           "default": "24:00"
+        },
+        {
+          "key": "workday.auto_close_office_hours",
+          "default": "false"
         }
       ],
       "permissions": {
