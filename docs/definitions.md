@@ -66,7 +66,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | "CRM call" or "HubSpot call" for a call fact (Retired words) |
 | Status | Decided (R2; the reconciliation of 23 October 2026). Pending, untested because that day had none: the attribution of a transferred call to its last participant, and whether internal calls are excluded |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2"; evidence: "Definitions: Aircall reconciliation 23 Oct 2026 identical on every General Performance figure" |
-| Used by | `calls.total`, `calls.chart`, `calls.inbound`, `calls.outbound`, `dashboard.intake.calls`, `intake.calls_in`, `intake.calls_out`; Reports → Calls, Calls per agent, Intake, Dashboard |
+| Used by | `calls.total`, `calls.chart`, `calls.calls_per_tag`, `calls.inbound`, `calls.outbound`, `dashboard.intake.calls`, `intake.calls_in`, `intake.calls_out`; Reports → Calls, Calls per agent, Intake, Dashboard |
 | As built today | `cma.calls_of` (`152`, addition 0009b, with `100`'s rule; first in `62`): a telephony call, not deleted, with a start, on a counted line (a line not yet in the catalog counts), either direction; archived calls are not filtered out, which matches. A person's calls are their answered inbound and outbound calls (`cma.calls_per_person_of`, `62`), so a missed inbound call without a user counts in the totals and in no person's row, which matches. Internal calls are not excluded: neither the Aircall adapter (`ingest/src/adapters/aircall/map.mjs`) nor the SQL recognises one, so every call Aircall returns with direction inbound or outbound is stored and counted. A call is attributed to Aircall's `user` of the call object, not to a last participant (Gaps). A line Aircall adds arrives counted (`cma.telephony_number.is_counted` defaults to true), and no screen shows how many lines count (Gaps) |
 
 ### Attempt
@@ -85,7 +85,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | "CRM call" or "logged call" as an attempt (R1); "Call attempt" and, in Dutch, "belpoging" next to "poging" (proposed; both appear today, see Gaps) |
 | Status | Decided |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: Attempt" |
-| Used by | `attempts.*` (among them `attempts.per_deal`, `attempts.attempted_share`, `attempts.list.attempts`, `attempts.deal.n`), `attempts_per_agent.attempts`, `attempts_per_agent.avg_attempts`, `calls.outbound`, `live.outbound.attempts`, `calls_per_agent.outbound_calls`, and the first attempt of `speed_to_lead.*`; Reports → Calls, Calls per agent; Live board (Outbound today); Sales → Attempts per deal, Attempts per agent, Speed to lead; Customers → Courtesy through `courtesy.list.attempts` and `courtesy.unreachable` (Attempt since due) |
+| Used by | `attempts.*` (among them `attempts.per_deal`, `attempts.attempted_share`, `attempts.list.attempts`, `attempts.deal.n`), `attempts_per_agent.attempts`, `attempts_per_agent.avg_attempts`, `calls.outbound`, `calls.calls_per_tag`, `live.outbound.attempts`, `calls_per_agent.outbound_calls`, and the first attempt of `speed_to_lead.*`; Reports → Calls, Calls per agent; Live board (Outbound today); Sales → Attempts per deal, Attempts per agent, Speed to lead; Customers → Courtesy through `courtesy.list.attempts` and `courtesy.unreachable` (Attempt since due) |
 | As built today | Attempts per deal (`cma.deal_attempts_of`, `94`): under `attempts.source` `telephony` (the default, and Pulse4all's) an outbound telephony call on a counted line, not deleted, with a start, linked to a CRM call associated with the deal or its contacts; under `crm` every outbound CRM call so associated (R1 gap). Attempts per agent counts the attempts on the deals a person owns in the CRM, by whoever placed them. Reports → Calls counts every outbound call as Outbound, which matches. Speed to lead ends at the first Attempt, through `cma.deal_attempts_of` under the same `attempts.source` (`cma.speed_to_lead_of`, `234`). First orders' evidence "attempt" is an outbound telephony call linked to a CRM call with the contact (`100`), which matches. Courtesy counts the same Aircall attempts per courtesy order from the start of its due date (`cma.courtesy_orders_of`; Attempt since due) |
 
 ### Connected
@@ -199,7 +199,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | "Offered" (proposed; Reports → Inbound uses it today, see Gaps) |
 | Status | Decided (R2) |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2" |
-| Used by | `calls.inbound`, `intake.calls_in`, `inbound.*`, `live.inbound.*`; Reports → Calls, Inbound, Intake; Live board |
+| Used by | `calls.inbound`, `calls.calls_per_tag`, `intake.calls_in`, `inbound.*`, `live.inbound.*`; Reports → Calls, Inbound, Intake; Live board |
 | As built today | Direction inbound, not deleted, with a start, on a counted line (`cma.calls_of`; `cma.inbound_calls_of`, `60`, `76`). Internal calls are not excluded (as Call). Reports → Inbound labels them "Offered" ("Aangeboden") |
 
 ### Answered inbound call
@@ -256,7 +256,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | "call outcome" or "disposition" for an Aircall tag; a HubSpot call outcome in its place (R1) |
 | Status | Decided; the tag-meaning mapping built in addition 0008zc, incorrect data in addition 0008zd |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R1", "Definitions: Conversation = connected call with ≥ 30 s talk and no tag meaning *not reached*" and "Definitions: tag meanings, one per tag, configuration only"; 25 October 2026 (Martin), docs/decisions.md, 25 Oct 2026, "Definitions: incorrect data as its own tag meaning"; the courtesy tags of the Subscriptions connection, docs/decisions.md, 25 Oct 2026, "The courtesy tags of the Subscriptions Aircall connection got their meanings in prod" |
-| Used by | `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.tag_split`, `intake.tagged_calls`, and through the meanings "not reached" and "incorrect data" every Conversation figure; through the courtesy completed meanings `courtesy.completed_calls`, `courtesy.outcomes`, `courtesy.completed`, `courtesy.completion_share`, `courtesy.cohorts`, `courtesy.per_person`; the `meaning` of every Legacy call outcome; Reports → Calls, Calls per agent, Intake; Configuration → Sources, Tags |
+| Used by | `calls.tag_bars`, `calls.tags_by_group`, `calls.calls_per_tag`, `calls_per_agent.tag_split`, `intake.tagged_calls`, and through the meanings "not reached" and "incorrect data" every Conversation figure; through the courtesy completed meanings `courtesy.completed_calls`, `courtesy.outcomes`, `courtesy.completed`, `courtesy.completion_share`, `courtesy.cohorts`, `courtesy.per_person`; the `meaning` of every Legacy call outcome; Reports → Calls, Calls per agent, Intake; Configuration → Sources, Tags |
 | As built today | `cma.telephony_tag` holds each tag's name with `is_counted`, and `cma.telephony_call_tag` the tagging history (`34`). Since `100` each tag has one `meaning` (null or one of the seven keys; `incorrect_data` since `102`), set in Configuration → Sources, Tags by `cma.set_telephony_tag_meaning` (`tenant.configure`, audited, the same gate as `is_counted`); ingest never writes it and a catalog refresh keeps it. Only `not_reached` and `incorrect_data` are read, by Conversation (`cma.tag_meaning_excludes_conversation`, `102`), and `is_counted` has no effect on them; no figure counts the calls tagged incorrect data apart yet (Gaps, D32); the three courtesy completed meanings are read by Courtesy through `cma.courtesy_outcome_of` (Completed courtesy call), `courtesy_attempt` has no effect beyond the meaning, and call type waits for its figure. The labels (Configuration → Sources, Tags, Meaning): None (Geen), Not reached (Niet bereikt), Incorrect data (Onjuiste gegevens), Call type (Gesprekstype), Courtesy attempt (Courtesy-poging), Courtesy completed, positive / neutral / negative (Courtesy afgerond, positief / neutraal / negatief; the Dutch proposed). Matches the definition |
 
 **Pulse4all Subscriptions mapping.** The tag meanings of the Subscriptions Aircall connection, set on Configuration → Sources, Tags (configuration, never code); a tag name with `*` stands for every tag whose name starts with it. Every other tag has the meaning None until a figure needs it. The meaning of the Data Issue Escalate tags is an Open decision (docs/open-decisions.md, the courtesy definitions).
@@ -280,15 +280,34 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Definition | A call without a current tag; a tag removed makes the call untagged (Aircall). Its share is over all calls in scope, missed inbound calls included. |
 | Source | Aircall, the call's current `tags` |
 | Counts / does not count | Counts a call without any current tag, missed inbound calls included. Does not count a call with any tag |
-| Unit and display | A count and its share of all calls in scope |
+| Unit and display | A count and its share of all calls in scope; in Calls per tag its share per direction, over that column's calls (outbound, inbound or all) |
 | Time rule | Day |
 | Scope | As Call |
 | Equivalent in the source system | Aircall Analytics' untagged calls: the first bar of the tags chart; a call whose tag is removed is untagged again (the Analytics article on the tags and missed-call reasons charts) |
 | Not to use | "Untagged conversations" as the measure (As built today) |
 | Status | Decided; built in addition 0008zc |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2"; evidence: "Definitions: Aircall reconciliation 23 Oct 2026 identical on every General Performance figure"; built with step 1, "Definitions: Untagged and the talk-time average built with step 1" |
-| Used by | `calls.untagged_share`, `calls_per_agent.untagged`; Reports → Calls, Calls per agent |
-| As built today | `untagged` of `cma.calls_figures_of` (`100`): the calls without a current tag, counted or not, missed inbound calls included; `untaggedPct` (`web/src/lib/reports.ts`) divides it by all calls in scope ("{untagged} of {calls} calls"). Calls per agent counts a person's own calls without a tag. The tag use and the tags per person have no untagged row. API `untagged`. Matches the definition |
+| Used by | `calls.untagged_share`, `calls.calls_per_tag`, `calls_per_agent.untagged`; Reports → Calls, Calls per agent |
+| As built today | `untagged` of `cma.calls_figures_of` (`100`): the calls without a current tag, counted or not, missed inbound calls included; `untaggedPct` (`web/src/lib/reports.ts`) divides it by all calls in scope ("{untagged} of {calls} calls"). Calls per agent counts a person's own calls without a tag. The tag use and the tags per person have no untagged row. API `untagged`. Calls per tag shows the same count as its Untagged row, with its share over the column's calls (`cma.calls_per_tag_of`, `246`). Matches the definition |
+
+### Calls per tag
+
+| Field | Value |
+|---|---|
+| Term | Calls per tag (nl: Gesprekken per tag); the table "Calls per tag, whole period" ("Gesprekken per tag, hele periode") on Reports → Calls |
+| Key | `calls.calls_per_tag`; API `callsPerTag` |
+| Definition | The calls in scope per current tag, split by direction. A call with two tags counts under each; a call without a current tag counts under Untagged. Any tag, counted or not (as Untagged: a tag that does not count still makes a call tagged). |
+| Source | Aircall, the call's current `tags`, the tag catalog (name, `is_counted`) and the tag-meaning mapping |
+| Counts / does not count | Counts every Call in scope, missed inbound calls included. Does not count a removed tag |
+| Unit and display | Per tag a count and its share of that column's calls (Outbound, Inbound, Total), shown "count · share"; rows by Total, most first; a tag that does not count is in Muted with "(does not count)"; then Untagged (nl: Zonder tag), then the Total row (Totaal), which is the calls in scope, not the sum of the rows |
+| Time rule | Day |
+| Scope | As Call, with the period, market and line filters; whole period only, Group by does not split it |
+| Equivalent in the source system | Aircall Analytics' tags chart (all calls, the untagged calls as the first bar); to confirm against Aircall Analytics (no reconciliation of per-tag counts is recorded) |
+| Not to use | "Tag use" for this table (the tag use counts conversations) |
+| Status | Decided; built in addition 0009zw |
+| Decided | 25 November 2026 (Martin); docs/decisions.md, 25 Nov 2026, "Definitions: Calls per tag" |
+| Used by | `calls.calls_per_tag`; Reports → Calls |
+| As built today | `cma.calls_per_tag_of` (`246`, one pass over `cma.calls_of`, the window and business-date filter of `cma.calls_tag_use_of` without its conversation filter) and the application's read `cma.calls_per_tag(from, to, market, line, totals)` (`reports.view` or `performance.team`; `row_kind` `tag`, `untagged` or `total`, the total row from `cma.calls_figures_of`). The page takes the totals from the overview and streams the table after its first paint; the API's fields are `rows` (`tagKey`, `tagName`, `meaning`, `isCounted`, `outbound`, `inbound`, `calls`), `untagged` and `totals`. Day has the same gap as Reports → Calls: the date is the line's market zone, not the tenant's. The Tags card's note says the tag use counts only conversations and Calls per tag every call. Matches the definition |
 
 ### Last participant
 
@@ -344,7 +363,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | None yet |
 | Status | Decided (R2; the reconciliation of 23 October 2026, in Europe/Amsterdam); as built, Reports → Calls uses each line's market zone, a gap to fix |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2"; evidence: "Definitions: Aircall reconciliation 23 Oct 2026 identical on every General Performance figure"; 2 November 2026, "Definitions: Flash's labels after the second review" (addition 0008zn, #214) |
-| Used by | `calls.*`, `calls_per_agent.*` (`calls_per_agent.first_last_call` by time of day), `inbound.*`, `intake.calls_in`, `intake.calls_out`, `live.outbound.*`, `live.inbound.talk`, `live.inbound.hours`; Reports → Calls, Calls per agent, Inbound, Intake, Live board (Outbound today, Inbound today's Talk time, Inbound today by hour); Reports → Flash (the Day column of its Churn, Orders, Payments and Reviews lists) |
+| Used by | `calls.*` (among them `calls.calls_per_tag`), `calls_per_agent.*` (`calls_per_agent.first_last_call` by time of day), `inbound.*`, `intake.calls_in`, `intake.calls_out`, `live.outbound.*`, `live.inbound.talk`, `live.inbound.hours`; Reports → Calls, Calls per agent, Inbound, Intake, Live board (Outbound today, Inbound today's Talk time, Inbound today by hour); Reports → Flash (the Day column of its Churn, Orders, Payments and Reviews lists) |
 | As built today | `cma.calls_of` and `cma.inbound_calls_of` date (and hour) each call in its line's market zone, else the tenant's, so a GB line's call at 23:30 in London lands a day earlier than in Amsterdam; `cma.outbound_today_of` (`166`, the Live board's Outbound today) reads `cma.telephony_call` itself and dates today's calls the same way, to equal Reports → Calls; `cma.telephony_history_start_of` (`64`) does the same. Intake (`cma.intake_per_day`) dates calls in the tenant's zone, which matches. The Calls page's like-for-like label uses the viewer's zone (audit finding MA-004) |
 
 ### Speed to lead
