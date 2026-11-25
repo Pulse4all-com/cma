@@ -8,19 +8,29 @@ Studio only, never through the Auth Proxy in the terminal (README, Where a comma
 README.md explains *why*; this file is *how*. Commands carry `--project` themselves, so it does not
 matter which project gcloud is set to. This way of working dates from 16 October 2026 (README, Decision log).
 
-Three rules for every step (CLAUDE.md, Instructions for Martin; 25 November 2026):
+Rules for every step (CLAUDE.md, Instructions for Martin; 25 November 2026). `tools/runners/lib.sh` is the
+frame that does them: a runner sources it and uses `step`, `run_finish`, `no_run_proxy`, `psql_cma` and `psql_val`.
 - **Visible progress.** A command or script that can take longer than about 30 seconds shows live
   progress: the tool's own output is never hidden behind `| tail` or `| grep` while it runs (it streams,
   and `tee` saves it); each phase prints a header with the time (`== HH:MM:SS  n/m what`); a heartbeat
-  prints `… still running, n s` every 15 seconds; each phase ends with `✓ done in n s, exit n` (`✗` when
-  the exit is not 0); every gcloud, psql and node call runs under `timeout`; the step states the
-  expected duration per phase.
-  Summaries and greps of saved output come after the run, never instead of it.
-- **No gcloud write next to the proxy.** Never run `gcloud run services update` (or another gcloud
-  write) while `gcloud run services proxy` runs in the same environment: stop the proxy first
-  (`pkill -f "run services proxy"`) and start it again after. On 25 November 2026 gcloud hung twice with
-  the proxy running.
-- **Merge from the Terminal**, with `gh pr merge <n> --squash`, not in the GitHub web UI.
+  prints `… still running, n s` every 15 seconds; each phase ends with its time and exit code
+  (`✓ done in n s, exit n`, `✗` when the exit is not 0; lib.sh's `step` prints `done in n s` and
+  `-- <label>: exit n, <verdict>`); every gcloud, psql and node call runs under `timeout`; the step states
+  the expected duration per phase. Summaries and greps of saved output come after the run, never instead
+  of it.
+- **A gcloud write runs under `timeout`, without the proxy, and is checked with a read.** A gcloud write
+  (`gcloud run services update`, `gcloud run deploy`, a job's deploy or execute) can hang for minutes on
+  this machine, often after the change has been applied, and also without a proxy (25 November 2026).
+  Stop any `gcloud run services proxy` first (`pkill -f "run services proxy"`, lib.sh's `no_run_proxy`),
+  run the write under `timeout`, then check its result with a read (`describe`) whatever its exit code
+  said, and start the proxy again after.
+- **Wait for the proxy's port.** `gcloud run services proxy` can take more than 30 s to listen: wait for
+  its port, up to 120 s, before using it (section 4).
+- **`set role cma_owner;` first.** Any query on schema cma outside the db/ scripts starts with
+  `set role cma_owner;` and ends with `reset role;`: the IAM login has no direct rights on it (lib.sh's
+  `psql_cma` and `psql_val` do this).
+- **Merge from the Terminal** with `bash tools/runners/pr-merge.sh <n> <head sha>`, not in the GitHub web
+  UI: it squash-merges only that head, checks the merge with a read and follows the prod build it starts.
 
 ## Setup (once per machine)
 
@@ -295,12 +305,25 @@ Dev runs the image prod's build made, by its short SHA:
 
 ```bash
 sha=<short sha from step 3>
-pkill -f "run services proxy"                                   # never a gcloud write next to the proxy
+pkill -f "run services proxy"; sleep 2                          # no gcloud write while a proxy runs
 timeout 300 gcloud run services update cma-web --project=p4a-cma-dev --region=europe-west4 \
-  --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/web:$sha; echo "exit $?"   # about 1 minute, streams
-gcloud run services proxy cma-web --project=p4a-cma-dev \
-  --region=europe-west4 --port=8080 >/tmp/proxy.log 2>&1 & sleep 6
-curl -s localhost:8080/api/health; echo                         # version = $sha, auth mock, data api
+  --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/web:$sha; echo "update exit $? (124: timed out; the read decides)"
+```
+
+About 1 minute, its output streams. Whatever its exit code, the read decides:
+
+```bash
+timeout 60 gcloud run services describe cma-web --project=p4a-cma-dev --region=europe-west4 \
+  --format='value(spec.template.spec.containers[0].image,status.latestCreatedRevisionName,status.latestReadyRevisionName)'
+```
+
+Expected: the image ends in `:$sha` and the two revision names are equal (the new revision is ready). Then the proxy,
+waiting for its port (up to 120 s):
+
+```bash
+gcloud run services proxy cma-web --project=p4a-cma-dev --region=europe-west4 --port=8080 >/tmp/proxy.log 2>&1 &
+for i in $(seq 1 120); do curl -s -m 5 -o /dev/null localhost:8080 && { echo "proxy listening after $i s"; break; }; [ $((i % 15)) = 0 ] && echo "… waiting for the proxy, $i s"; sleep 1; done
+timeout 20 curl -s localhost:8080/api/health; echo              # version = $sha, auth mock, data api
 ```
 
 Look at it as a test user: `curl -s -H "x-cma-mock-subject: agent-two" localhost:8080/api/v1/me`, or in
@@ -330,16 +353,24 @@ revision and keeps the image and the other variables. Dev must run an image with
 17 October 2026 or later) and be at `78` (0008r) for the System health row:
 
 ```bash
-gcloud run services update cma-web --project=p4a-cma-dev --region=europe-west4 \
-  --update-env-vars=CMA_DB_TRACE=1 2>&1 | tail -1
-pkill -f "run services proxy"; gcloud run services proxy cma-web --project=p4a-cma-dev \
-  --region=europe-west4 --port=8080 >/tmp/proxy.log 2>&1 & sleep 6
-cd ~/cma/web && BASE=http://localhost:8080 node verify/round-trips.mjs; echo "exit $?"   # round-trips: PASS (N requests, M not measured ...), exit 0
-BASE=http://localhost:8080 node verify/round-trips.mjs --provoke; echo "exit $?"         # round-trips: FAIL (n problems), exit 1
-gcloud run services update cma-web --project=p4a-cma-dev --region=europe-west4 \
-  --remove-env-vars=CMA_DB_TRACE 2>&1 | tail -1
-curl -s -D - -o /dev/null -H "x-cma-mock-subject: agent-two" localhost:8080/api/v1/me | grep -ci x-cma-db   # 0: off again
+pkill -f "run services proxy"; sleep 2                          # no gcloud write while a proxy runs
+timeout 300 gcloud run services update cma-web --project=p4a-cma-dev --region=europe-west4 \
+  --update-env-vars=CMA_DB_TRACE=1; echo "update exit $? (124: timed out; the read decides)"
+timeout 60 gcloud run services describe cma-web --project=p4a-cma-dev --region=europe-west4 \
+  --format=json | grep -A1 '"CMA_DB_TRACE"'                       # after the run: "value": "1"
+gcloud run services proxy cma-web --project=p4a-cma-dev --region=europe-west4 --port=8080 >/tmp/proxy.log 2>&1 &
+for i in $(seq 1 120); do curl -s -m 5 -o /dev/null localhost:8080 && { echo "proxy listening after $i s"; break; }; [ $((i % 15)) = 0 ] && echo "… waiting for the proxy, $i s"; sleep 1; done
+cd ~/cma/web && timeout 600 env BASE=http://localhost:8080 node verify/round-trips.mjs; echo "exit $?"   # round-trips: PASS (N requests, M not measured ...), exit 0
+timeout 600 env BASE=http://localhost:8080 node verify/round-trips.mjs --provoke; echo "exit $?"         # round-trips: FAIL (n problems), exit 1
+pkill -f "run services proxy"; sleep 2
+timeout 300 gcloud run services update cma-web --project=p4a-cma-dev --region=europe-west4 \
+  --remove-env-vars=CMA_DB_TRACE; echo "update exit $? (124: timed out; the read decides)"
+timeout 60 gcloud run services describe cma-web --project=p4a-cma-dev --region=europe-west4 \
+  --format=json | grep -c '"CMA_DB_TRACE"'                        # after the run: 0, off again
 ```
+
+Each update takes about a minute and streams its output; each run of the verifier takes a few minutes and prints its rows
+as it goes. The `describe` after each update decides whether the change is in place, whatever the update's exit code.
 
 A FAIL names the page, the test user and the count over its budget. Dev's data differs from the seed in volume, not in the
 number of reads per page; the documents route answers 404 while the image carries no documents, which the budget accepts.

@@ -7,7 +7,8 @@
 -- (after 0008v) its journeys of Campaign monitoring, (after 0008ze) its negative-review alert rule, (after
 -- 0008zi) its asset register catalogs, (after 0008zn) its Flash settings, (after 0008zp) whether its people may clock in
 -- again on the same day, (after 0008zt) its customer segments and the contact property they come from, the statuses
--- whose subscriptions hold devices and what each status means and (after 0008zv) which organisation is a contact center.
+-- whose subscriptions hold devices and what each status means, (after 0008zv) which organisation is a contact center and
+-- (after 0009zv) whether its forgotten days close at the office hours of the person's Default market.
 -- Another customer gets its own seed file with its own values; the migration stays untouched.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -693,6 +694,30 @@ begin
   end if;
   insert into cma.tenant_setting (tenant_id, key, value) values
     (v_subs, 'subscriptions.rates_start_month', '2026-06')
+  on conflict (tenant_id, key) do nothing;
+end
+$$;
+
+-- Forgotten clock-outs at the office hours (after addition 0009zv; Martin, 24 November 2026): a forgotten day of Pulse4all
+-- Subscriptions without a published shift is closed at the end of the office hours of the person's Default market that
+-- day, before falling back to workday.auto_close_at (17:00). Pulse4all Invest keeps the default, off. A rerun keeps a
+-- value set since (on conflict do nothing): false restores the earlier close without a deploy. A database without the
+-- setting yet says so; rerun this seed after 244_auto_close_office_hours.sql.
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  -- two steps: the catalog itself only exists from 0003b on
+  if to_regclass('cma.setting') is null then
+    raise notice 'the settings catalog does not exist yet (migration 0003b): rerun this seed after 13_tenant_settings.sql';
+    return;
+  end if;
+  if not exists (select 1 from cma.setting where key = 'workday.auto_close_office_hours') then
+    raise notice 'Closing at the office hours does not exist yet (addition 0009zv): rerun this seed after 244_auto_close_office_hours.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value) values
+    (v_subs, 'workday.auto_close_office_hours', 'true')
   on conflict (tenant_id, key) do nothing;
 end
 $$;

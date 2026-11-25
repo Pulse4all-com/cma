@@ -102,6 +102,10 @@ export const EXPORT_SETTING_VALUES: Record<ExportSettingKey, readonly string[]> 
   "export.csv.utf8_bom": ["true", "false"],
 };
 
+/** Whether a forgotten day without a published shift closes at the end of the office hours of the person's Default market
+ * (addition 0009zv): a boolean the Exports page shows next to the forgotten clock-out's grace */
+export const OFFICE_HOURS_CLOSE_SETTING = "workday.auto_close_office_hours";
+
 /** The minute settings the Exports page also shows (integers, no fixed list) */
 export const MINUTE_SETTING_KEYS = ["roster.adherence_tolerance_minutes", "workday.auto_close_grace_minutes"] as const;
 export type MinuteSettingKey = (typeof MINUTE_SETTING_KEYS)[number];

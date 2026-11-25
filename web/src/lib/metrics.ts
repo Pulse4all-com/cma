@@ -185,8 +185,16 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "speed_to_lead.open_not_called",
     "speed_to_lead.closed_before_first_call",
     "speed_to_lead.total_row",
-    "speed_to_lead.open_list.waiting_business_minutes",
-    "speed_to_lead.open_list.no_business_hours",
+    // the cockpit (addition 0009zu): the figures beyond the summary's, the market card, the trend and the deals list
+    "speed_to_lead.oldest_waiting",
+    "speed_to_lead.attempts_per_deal",
+    "speed_to_lead.conversation_share",
+    "speed_to_lead.goal_status",
+    "speed_to_lead.market_bars",
+    "speed_to_lead.trend",
+    "speed_to_lead.deals_list.speed_or_waiting",
+    "speed_to_lead.deals_list.attempts",
+    "speed_to_lead.deals_list.stale",
   ],
   "/reports/calls": [
     "calls.total",

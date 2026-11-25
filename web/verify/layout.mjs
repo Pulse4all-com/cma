@@ -3836,6 +3836,49 @@ function fleetMarkerProblems(m, where, start) {
 // opens a deep link lands on Welcome; from then on a deep link opens as asked; the API is never redirected. The mock
 // identity travels as the cma-mock-subject cookie here, as a browser after ?as= or IAP's sign-in, not the verifiers' header.
 // --provoke gives the browser a session cookie before its first page, as a remembered last page would
+/**
+ * Speed to lead's goals (addition 0009zu; Martin, 24 November 2026): the tiles stay white whatever the goal (Pulse4all-Style
+ * 7.7: never a filled red tile), and under each share with a goal a status line in words: below the goal in Error #B8433C,
+ * at or above it in Success text #1D7A4F. The admin sets the within-target goal to 0 % (always met) and the before-cutoff
+ * goal to 100 %, the manager reads the page, and both goals are put back (empty, no goal). --provoke expects a filled tile
+ */
+async function expectSpeedGoals() {
+  const put = (key, value) => fetch(`${BASE}/api/v1/configuration/settings`, {
+    method: "PUT", headers: { "content-type": "application/json", "x-cma-mock-subject": "admin", "x-cma-request": "1" },
+    body: JSON.stringify({ key, value }),
+  });
+  const set = await Promise.all([put("speed_to_lead.goal_within_target_pct", "0"), put("speed_to_lead.goal_before_cutoff_pct", "100")]);
+  if (set.some((r) => !r.ok)) problems.push(`speed goals: setting the goals answered ${set.map((r) => r.status).join(", ")}`);
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+  const p = await ctx.newPage();
+  try {
+    await p.goto(BASE + "/reports/speed-to-lead?range=month");
+    await settle(p);
+    const tiles = await p.evaluate(() => [...document.querySelectorAll('[data-testid="speed-tiles"] [data-tile]')].map((t) => {
+      const line = t.querySelector('[data-testid="goal-status"]');
+      return { id: t.getAttribute("data-testid"), goal: t.getAttribute("data-goal"), bg: getComputedStyle(t).backgroundColor,
+               border: getComputedStyle(t).borderTopColor, line: line?.textContent ?? null, colour: line ? getComputedStyle(line).color : null };
+    }));
+    const white = "rgb(255, 255, 255)";
+    const want = provoke ? "rgb(248, 228, 225)" : white;
+    for (const t of tiles) if (t.bg !== want) problems.push(`speed goals: tile ${t.id} is ${t.bg}, expected ${want} (never a filled tile)`);
+    const within = tiles.find((t) => t.id === "speed-within");
+    const before = tiles.find((t) => t.id === "speed-before");
+    if (!within?.line || within.goal !== "met" || !/0\s?%/.test(within.line) || within.colour !== "rgb(29, 122, 79)") {
+      problems.push(`speed goals: within target at a 0 % goal shows ${JSON.stringify(within)}, expected "At or above goal (0%)" in #1D7A4F`);
+    }
+    const beforeWant = before?.goal === "below" ? "rgb(184, 67, 60)" : "rgb(29, 122, 79)";
+    if (!before?.line || !/100\s?%/.test(before.line) || before.colour !== beforeWant) {
+      problems.push(`speed goals: before the cutoff at a 100 % goal shows ${JSON.stringify(before)}, expected its status line in ${beforeWant}`);
+    }
+    if (tiles.filter((t) => t.line !== null).length !== 2) problems.push(`speed goals: ${tiles.filter((t) => t.line !== null).length} status lines, expected 2 (the two shares)`);
+    await p.screenshot({ path: `${outDir}/manager-speed-to-lead-goals.png` });
+  } finally {
+    await ctx.close();
+    await Promise.all([put("speed_to_lead.goal_within_target_pct", null), put("speed_to_lead.goal_before_cutoff_pct", null)]);
+  }
+}
+
 async function expectWelcomeOnOpen() {
   for (const subject of ["manager", "agent-one"]) {
     const host = new URL(BASE).hostname;
@@ -3880,6 +3923,7 @@ await expectAsOfTyping();
 await expectHistoryStartTyping();
 await expectTeamHoursDutch();
 await expectFleetManagement();
+await expectSpeedGoals();
 await expectNoPlanB();
 await expectWelcomeOnOpen();
 await expectFiltersPending();
