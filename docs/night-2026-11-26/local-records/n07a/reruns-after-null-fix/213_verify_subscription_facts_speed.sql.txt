@@ -1,0 +1,54 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ true
+(1 row)
+
+psql:213_verify_subscription_facts_speed.sql:45: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+DO
+psql:213_verify_subscription_facts_speed.sql:1162: NOTICE:  relation "subscription_facts_units" already exists, skipping
+psql:213_verify_subscription_facts_speed.sql:1162: NOTICE:  relation "subscription_facts_outcomes" already exists, skipping
+psql:213_verify_subscription_facts_speed.sql:1162: NOTICE:  relation "subscription_facts_take" already exists, skipping
+psql:213_verify_subscription_facts_speed.sql:1162: NOTICE:  relation "subscription_facts_units" already exists, skipping
+DO
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+                                                                                                                     check_name                                                                                                                      | result |                                                                                                                                    detail                                                                                                                                     
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0009zf recorded, after 0009ze; the index subscription_event_synced_idx valid, on the tenant and the write time                                                                                                                          | PASS   | 0009ze,0009zf | subscription_event_synced_idx:true:USING btree (tenant_id, synced_at)
+ A2 no parallel workers on the markers and no parallel costs left, jit off on the payment state and the refresh; the application's and no one else's, the caller's rights                                                                            | PASS   | inputs_markers_of(2):max_parallel_workers_per_gather=0:true/false/false:false subscription_facts_refresh_of(3):jit=off:true/false/false:false subscription_payment_state_of(1):jit=off:true/false/false:false subscription_payment_state_of(2):jit=off:true/false/false:false
+ A3 the inputs' markers: each of the seventeen parts 210's text, Customers → Active's digest and the facts' digest 210's (with 224's floor part when a tenant sets one), every tenant                                                                | PASS   | equal: pulse4all-invest:17 parts, 2 digests pulse4all-subscriptions:17 parts, 2 digests
+ A4 the payment state equals 210's row for row, every tenant: every subscription, the first 500 by id and every seventh (differing/differing/differing)                                                                                              | PASS   | pulse4all-invest:0/0/0/none pulse4all-subscriptions:0/0/0/subscriptions
+ A5 an unknown input is refused (CMA04)                                                                                                                                                                                                              | PASS   | CMA04
+ I1 the plan of the events' marker, as the application (subscription_event_synced_idx, index only, where the table is large enough)                                                                                                                  | info   | Index Only Scan using subscription_event_synced_idx on subscription_event x, heap fetches under 1 % of the rows read
+ I2 the plan of the payment state's latest renewal per subscription, as the application (subscription_event_renewal_order_idx, index only, where that index exists)                                                                                  | info   | the index exists, valid true: Index Only Scan using subscription_event_renewal_order_idx on subscription_event e, heap fetches under 1 % of the rows read
+ B1 the markers of 6,000 rows of one write time and of a tenant without a row: every part 210's text (parts differing: the tenant, the empty tenant)                                                                                                 | PASS   | 0 0 | events 6006, one write time holds 6000, write times 4 | the empty tenant's events 0, changes 0
+ B2 the payment state with a renewal that names its subscription, one resolved through the customer's one subscription, one of a customer with two, a paid and an overdue one: 210's row for row in both forms (differing/differing), and the states | PASS   | 0/0 | s1:paid s2:paid s3:in_retry s4:charged_back s5:awaiting_payment(overdue) s6:paid s7:paid s8:paid s9:paid
+ B3 after a change of each kind the five takes and the take's own row are what 210's refresh writes from the same rows (outcomes, subscriptions, months, survival cells, store starts; the moment, the business date, the inputs' digest)            | PASS   | equal: 6008 outcomes, 9 subscriptions, 18 month rows, 48 cells, 1 store
+ B4 the refresh writes the differences only: an unchanged outcome and an unchanged subscription stay where they sat; a new, a changed and a gone one of each are written                                                                             | PASS   | outcomes: 6005 untouched, 0 written though unchanged, 2 new, 1 changed, 1 gone | subscriptions: 3 untouched, 0 written though unchanged, 1 new, 5 changed, 1 gone
+ B5 the answer: rows the takes' rows, rows_written every row at the first run and the differences plus the month and survival takes at the second; the six steps' milliseconds                                                                       | PASS   | first: rows 6056 = 6056, written true | second: rows 6083 = 6083, written 77 = 77
+ verdict                                                                                                                                                                                                                                             | PASS   | 213_verify_subscription_facts_speed: 10 PASS, 0 FAIL, 2 info
+(13 rows)
+
+RESET
