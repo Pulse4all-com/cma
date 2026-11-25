@@ -1,5 +1,5 @@
 -- =============================================================================================
--- 247_verify_payments_page.sql: verifies addition 0009zw, Customers → Payments (246_payments_page.sql)
+-- 251_verify_payments_page.sql: verifies addition 0009zy, Customers → Payments (250_payments_page.sql)
 -- =============================================================================================
 -- Block A only reads and runs in every database (prod included). Block B runs in dev and local databases only, as 217:
 -- it refuses a database without the dev seed (no active agent.two@example.com), its checks then read FAIL and the
@@ -8,7 +8,7 @@
 -- gives some of the take's rows each payment state with a since, an overdue flag, a return code and an amount at risk
 -- as the owner (the seed's subscriptions are all paid or ended), and reads the page as the seed's manager (cma_app,
 -- row-level security on). Every check writes one row, PASS or FAIL, and the last row is the verdict, because Cloud SQL
--- Studio shows no notices. Run as your own IAM login after 246_payments_page.sql: in dev normal (13 PASS, verdict PASS),
+-- Studio shows no notices. Run as your own IAM login after 250_payments_page.sql: in dev normal (13 PASS, verdict PASS),
 -- then provoked (every row FAIL, verdict PROVOKED, NOT A PASS); in prod the whole script, where block B refuses prod's
 -- data (its row reads REFUSED) and the verdict says PASS, A ONLY when block A passes. No row carries a name, an address,
 -- an email or a phone number.
@@ -38,11 +38,11 @@ select set_config('verify.provoke', 'false', false);   -- 'true' to make every c
 -- dev or a local database only for block B: the dev seed's agent.two@example.com active, as 217
 select set_config('verify.dev', (select exists (select 1 from cma.app_user u where u.email = 'agent.two@example.com' and u.status = 'active'))::text, false);
 
-drop table if exists pg_temp.verify_0009zw;
-create temp table verify_0009zw (ord int, check_name text, result text, detail text);
+drop table if exists pg_temp.verify_0009zy;
+create temp table verify_0009zy (ord int, check_name text, result text, detail text);
 
 -- The error a statement raises as its SQLSTATE, or 'ok'
-create or replace function pg_temp.v0009zw_code(p_sql text)
+create or replace function pg_temp.v0009zy_code(p_sql text)
 returns text
 language plpgsql
 as $$
@@ -68,8 +68,8 @@ begin
             where n.nspname = 'cma' and p.proname in ('assert_payment_list', 'payment_rows_of', 'payments_page_of', 'payments_page',
                                                       'payment_rows', 'payment_file_record'))
            || ' | ' || coalesce((select (m.applied_at >= p.applied_at)::text from cma.schema_migration m, cma.schema_migration p
-                                 where m.version = '0009zw' and p.version = '0009zv'), 'missing');
-  insert into verify_0009zw values (1, 'A1 0009zw recorded after 0009zv; the six functions executable by cma_app and not by public, with the caller''s rights and JIT off',
+                                 where m.version = '0009zy' and p.version = '0009zv'), 'missing');
+  insert into verify_0009zy values (1, 'A1 0009zy recorded after 0009zv; the six functions executable by cma_app and not by public, with the caller''s rights and JIT off',
     case when v_txt = 'assert_payment_list:true:false:false:true payment_file_record:true:false:false:true payment_rows:true:false:false:true '
                       || 'payment_rows_of:true:false:false:true payments_page:true:false:false:true payments_page_of:true:false:false:true | true'
               and not v_provoke then 'PASS' else 'FAIL' end, v_txt);
@@ -91,7 +91,7 @@ declare
   v_m1 text; v_s1 uuid; v_audit bigint; v_st text; v_sort text;
 begin
   if not v_dev then
-    insert into verify_0009zw values (59, 'B a dev or local database (the dev seed''s agent.two@example.com active)', 'REFUSED',
+    insert into verify_0009zy values (59, 'B a dev or local database (the dev seed''s agent.two@example.com active)', 'REFUSED',
       'no dev seed, so this is no dev or local database; block B did not run');
     return;
   end if;
@@ -142,17 +142,17 @@ begin
     select min(t.market collate "C") into v_m1 from cma.subscription_take t where t.tenant_id = v_t;
     select y.connection_id into v_s1 from cma.flash_subscription_stores_of(v_t) y order by y.handle collate "C" limit 1;
 
-    create temp table if not exists v0009zw_filters (n integer, market text, store uuid, proposition text, interval_group text) on commit drop;
-    delete from v0009zw_filters;
-    insert into v0009zw_filters values (1, null, null, null, null);
-    insert into v0009zw_filters select 10 + row_number() over (order by m collate "C"), m, null, null, null
+    create temp table if not exists v0009zy_filters (n integer, market text, store uuid, proposition text, interval_group text) on commit drop;
+    delete from v0009zy_filters;
+    insert into v0009zy_filters values (1, null, null, null, null);
+    insert into v0009zy_filters select 10 + row_number() over (order by m collate "C"), m, null, null, null
       from (select distinct t.market as m from cma.subscription_take t where t.tenant_id = v_t) d;
-    insert into v0009zw_filters select 20 + row_number() over (order by y.handle collate "C"), null, y.connection_id, null, null
+    insert into v0009zy_filters select 20 + row_number() over (order by y.handle collate "C"), null, y.connection_id, null, null
       from cma.flash_subscription_stores_of(v_t) y;
-    insert into v0009zw_filters values (31, null, null, 'vp1', null), (33, null, null, 'none', null),
+    insert into v0009zy_filters values (31, null, null, 'vp1', null), (33, null, null, 'none', null),
       (41, null, null, null, 'monthly'), (42, null, null, null, 'yearly'), (51, v_m1, null, null, 'monthly');
 
-    for v_f in select * from v0009zw_filters order by n loop
+    for v_f in select * from v0009zy_filters order by n loop
       perform set_config('app.user_id', v_mgr::text, true);
       perform set_config('role', 'cma_app', true);
       v_j := cma.payments_page(v_f.market, v_f.store, v_f.proposition, v_f.interval_group, v_from, v_month);
@@ -245,11 +245,11 @@ begin
     v_rows := v_rows || array['4', 'B3 the Failed rate''s parts (the tile''s last complete month, the rates per market and month, the months, the stores'' starts and the floor) equal Customers → Subscriptions'' for the same market and store',
       case when v_bad3 = '' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(nullif(v_bad3, ''), 'every filter equal')];
     -- B3b the same comparison with a floor of the rates inside the range (subscriptions.rates_start_month, as prod holds
-    --     one; rolled back with the block): 246's floor branches against 224's, for no filter and each market
+    --     one; rolled back with the block): 250's floor branches against 224's, for no filter and each market
     insert into cma.tenant_setting (tenant_id, key, value) values (v_t, 'subscriptions.rates_start_month', to_char(v_from + interval '6 months', 'YYYY-MM'))
       on conflict (tenant_id, key) do update set value = excluded.value;
     v_bad5 := '';
-    for v_f in select * from v0009zw_filters where n < 20 order by n loop
+    for v_f in select * from v0009zy_filters where n < 20 order by n loop
       perform set_config('app.user_id', v_mgr::text, true);
       perform set_config('role', 'cma_app', true);
       v_j := cma.payments_page(v_f.market, v_f.store, null, null, v_from, v_month);
@@ -334,11 +334,11 @@ begin
     -- B8 the refusals: an agent CMA06; every bad filter, state, sort, page and file record CMA04
     perform set_config('app.user_id', v_agent::text, true);
     perform set_config('role', 'cma_app', true);
-    v_txt := pg_temp.v0009zw_code(format('select cma.payments_page(null, null, null, null, %L, %L)', v_from, v_month))
-             || ' ' || pg_temp.v0009zw_code('select cma.payment_rows(null, null, null, null, ''at_risk'', ''amount_at_risk'', true, 1, 50, false)')
-             || ' ' || pg_temp.v0009zw_code('select cma.payment_file_record(''records'', null, null, null, null, ''at_risk'', 3)');
+    v_txt := pg_temp.v0009zy_code(format('select cma.payments_page(null, null, null, null, %L, %L)', v_from, v_month))
+             || ' ' || pg_temp.v0009zy_code('select cma.payment_rows(null, null, null, null, ''at_risk'', ''amount_at_risk'', true, 1, 50, false)')
+             || ' ' || pg_temp.v0009zy_code('select cma.payment_file_record(''records'', null, null, null, null, ''at_risk'', 3)');
     perform set_config('app.user_id', v_mgr::text, true);
-    v_txt := v_txt || ' | ' || (select string_agg(pg_temp.v0009zw_code(q), ' ' order by o) from unnest(array[
+    v_txt := v_txt || ' | ' || (select string_agg(pg_temp.v0009zy_code(q), ' ' order by o) from unnest(array[
            format('select cma.payments_page(''gb'', null, null, null, %L, %L)', v_from, v_month),
            format('select cma.payments_page(null, %L, null, null, %L, %L)', gen_random_uuid(), v_from, v_month),
            format('select cma.payments_page(null, null, ''vp9'', null, %L, %L)', v_from, v_month),
@@ -400,31 +400,31 @@ begin
     when others then
       v_rows := v_rows || array['59', 'B the block ran to the end', 'FAIL', sqlstate || ': ' || sqlerrm];
   end;
-  insert into verify_0009zw (ord, check_name, result, detail)
+  insert into verify_0009zy (ord, check_name, result, detail)
   select v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3]
   from generate_series(1, coalesce(array_length(v_rows, 1), 0), 4) as i;
   if cardinality(v_rows) = 0 then
-    insert into verify_0009zw values (59, 'B the block ran to the end', 'FAIL', 'no check ran');
+    insert into verify_0009zy values (59, 'B the block ran to the end', 'FAIL', 'no check ran');
   end if;
 end
 $$;
 
 -- The helper is dropped first, so the verdict is the last thing the script prints
-drop function if exists pg_temp.v0009zw_code(text);
+drop function if exists pg_temp.v0009zy_code(text);
 
 -- Verdict: one row per check, then the verdict
 select check_name, result, detail
-from (select ord, check_name, result, detail from verify_0009zw
+from (select ord, check_name, result, detail from verify_0009zy
       union all
       select 99, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
                   when not current_setting('verify.dev')::boolean then
-                    case when (select count(*) from verify_0009zw where result = 'PASS' and ord < 2) = 1
-                              and not exists (select 1 from verify_0009zw where result not in ('PASS', 'REFUSED')) then 'PASS, A ONLY' else 'FAIL' end
-                  when (select count(*) from verify_0009zw where result = 'PASS') = 13
-                       and not exists (select 1 from verify_0009zw where result <> 'PASS') then 'PASS'
+                    case when (select count(*) from verify_0009zy where result = 'PASS' and ord < 2) = 1
+                              and not exists (select 1 from verify_0009zy where result not in ('PASS', 'REFUSED')) then 'PASS, A ONLY' else 'FAIL' end
+                  when (select count(*) from verify_0009zy where result = 'PASS') = 13
+                       and not exists (select 1 from verify_0009zy where result <> 'PASS') then 'PASS'
                   else 'FAIL' end,
-             format('247_verify_payments_page: %s PASS, %s FAIL', (select count(*) from verify_0009zw where result = 'PASS'),
-                                                                 (select count(*) from verify_0009zw where result not in ('PASS', 'REFUSED')))) x
+             format('251_verify_payments_page: %s PASS, %s FAIL', (select count(*) from verify_0009zy where result = 'PASS'),
+                                                                 (select count(*) from verify_0009zy where result not in ('PASS', 'REFUSED')))) x
 order by ord;
 reset role;

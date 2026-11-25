@@ -1,5 +1,5 @@
 /**
- * Customers → Payments (addition 0009zw; docs/definitions.md, Payment state, Amount at risk, Payments (rail page)): the
+ * Customers → Payments (addition 0009zy; docs/definitions.md, Payment state, Amount at risk, Payments (rail page)): the
  * pure logic of the page. The database computes every figure from the subscription facts' stored takes
  * (cma.payments_page, cma.payment_rows); this module holds what the screen, the API's parameter checks, the file, the
  * mock and verify:payments share: the list's states and sort keys, the file's columns and name and the database's

@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 const KINDS: Partial<Record<string, FlashFileColumn["kind"]>> = { amount_at_risk: "number", monthly_amount: "number", state_since: "instant", overdue: "flag" };
 
 /**
- * Customers → Payments as a file (addition 0009zw; the Subscriptions file's precedent), in the tenant's export format:
+ * Customers → Payments as a file (addition 0009zy; the Subscriptions file's precedent), in the tenant's export format:
  * &part=records (the default: the list under the filters and &state, in the order of &sort and &dir, up to the tenant's
  * flash.file_max_rows) or &part=months (per month of &from to &to the complete stores' Failed rate parts). The name
  * payments-<part>-<market|all>-<YYYY-MM-DDTHHmm>.csv; the first column as_of (the take's Refreshed at), the second the

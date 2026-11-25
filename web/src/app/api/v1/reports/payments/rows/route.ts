@@ -6,7 +6,7 @@ import { REPORT_PERMISSIONS } from "@/lib/reports";
 export const dynamic = "force-dynamic";
 
 /**
- * The list of Customers → Payments (cma.payment_rows, addition 0009zw): the subscriptions of the stored take in one of
+ * The list of Customers → Payments (cma.payment_rows, addition 0009zy): the subscriptions of the stored take in one of
  * the five payment states under the filters and &state (at_risk: an Amount at risk, the default; in_retry, charged_back,
  * awaiting_payment, failed, paid; or all), sorted by &sort (amount_at_risk within its currency, state_since, subscription,
  * market or payment_state; amount_at_risk when left out) and &dir (desc when left out), &page from 1, 50 a page. `total`,

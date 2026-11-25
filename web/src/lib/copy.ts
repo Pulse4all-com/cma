@@ -4609,7 +4609,7 @@ const en = {
     h_list: "One row per subscription of the take: the subscription app's id and number, codes, the monthly amount in its currency, its age since the subscription app created it, and a link to the contact. Never a name or an email.",
     h_placeholder: "This part needs a take the subscription facts do not hold yet: it is not computed from the subscription app's events on the page.",
   },
-  // Customers → Payments (addition 0009zw): read by its page alone (paymentsCopy), beside Customers → Subscriptions'
+  // Customers → Payments (addition 0009zy): read by its page alone (paymentsCopy), beside Customers → Subscriptions'
   // words for what the two pages share (the filters, the states, the list's columns, the notices)
   payments: {
     title: "Payments",
@@ -4719,7 +4719,7 @@ export type Copy = Omit<AllCopy, "active" | "subscriptions" | "payments">;
 export type ActiveCopy = AllCopy["active"];
 /** The words of Customers → Subscriptions (addition 0009zh), read by its page alone, as Active's */
 export type SubscriptionsCopy = AllCopy["subscriptions"];
-/** The words of Customers → Payments (addition 0009zw), read by its page alone, as Subscriptions' */
+/** The words of Customers → Payments (addition 0009zy), read by its page alone, as Subscriptions' */
 export type PaymentsCopy = AllCopy["payments"];
 
 const nl = {
@@ -9291,7 +9291,7 @@ const nl = {
     h_list: "Eén rij per abonnement van de take: de id en het nummer uit de abonnementen-app, codes, het maandbedrag in zijn valuta, de leeftijd sinds de abonnementen-app het aanmaakte, en een link naar het contact. Nooit een naam of e-mailadres.",
     h_placeholder: "Dit deel heeft een take nodig die de abonnementsfeiten nog niet hebben: het wordt op de pagina niet uit de gebeurtenissen van de abonnementen-app berekend.",
   },
-  // Customers → Payments (addition 0009zw): read by its page alone (paymentsCopy), beside Customers → Subscriptions'
+  // Customers → Payments (addition 0009zy): read by its page alone (paymentsCopy), beside Customers → Subscriptions'
   // words for what the two pages share
   payments: {
     title: "Betalingen",

@@ -1,5 +1,5 @@
 /**
- * Verifier: Customers → Payments (addition 0009zw), without a browser, a server or a database: the page's copy keys, the
+ * Verifier: Customers → Payments (addition 0009zy), without a browser, a server or a database: the page's copy keys, the
  * list's states and sort keys, its file's headers and name, the database's document in the API's words, and the mock's
  * answers on any month.
  *

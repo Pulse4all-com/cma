@@ -4061,7 +4061,7 @@ export const postgresData: CmaData = {
 
   async getPaymentsPage(me, query): Promise<PaymentsPage> {
     return withTenant(ctx(me), async (q) => {
-      // the page in one read from the subscription facts' stored takes (addition 0009zw): the function checks the
+      // the page in one read from the subscription facts' stored takes (addition 0009zy): the function checks the
       // permission and the filters first. One statement, one transaction
       const j = one((await q.query<{ j: Record<string, unknown> }>(
         `select cma.payments_page($1, $2::uuid, $3, $4, $5::date, $6::date, $7, $8, $9, $10) as j`,

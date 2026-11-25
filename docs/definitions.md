@@ -3161,7 +3161,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 |---|---|
 | Term | Customers (nl: Klanten), a rail group label |
 | Key | Copy key `nav.customers`; group id `customers` |
-| Definition | The rail group of the pages about customers: Active, Subscriptions, Payments, Courtesy, Compliance, Reviews and Cancellations, in that order. Compliance is a placeholder; Subscriptions is built (addition 0009zh) and Payments (addition 0009zw). The word is a label for a group of pages; it does not define "customer", which is still pending (Domains still to define, Customers and orders). |
+| Definition | The rail group of the pages about customers: Active, Subscriptions, Payments, Courtesy, Compliance, Reviews and Cancellations, in that order. Compliance is a placeholder; Subscriptions is built (addition 0009zh) and Payments (addition 0009zy). The word is a label for a group of pages; it does not define "customer", which is still pending (Domains still to define, Customers and orders). |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
 | Counts / does not count | Every page keeps its href, its permission and its per-person key; a group with no page the person may see is absent |
 | Unit and display | A group with a person icon, after Sales and before Assets |
@@ -3227,9 +3227,9 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Equivalent in the source system | None |
 | Not to use | "Failed payment" (Failed renewal); "dunning"; "payment status" (Payment state; an order's is Financial status); Flash's Payments overview as this page (it is the flow per market and day); NetSuite's payments (out of scope, Decision log, 1 Nov 2026) |
 | Status | Proposed (for Kira to confirm); the monthly renewals, chargebacks and refunds are Pending (docs/open-decisions.md, The facts refresh) |
-| Decided | 13 November 2026 (Martin); docs/decisions.md, 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (this PR); 25 November 2026 (Martin), docs/decisions.md, 25 Nov 2026, "Customers → Payments (`/reports/payments`) is the payment state of the subscription base over months …", the three choices "Laten staan", "Alleen abonnementen" and "Eerst Pending part", the build choices to confirm and "Definitions: Payments (rail page) moves from Pending to Proposed …" (addition 0009zw, this PR) |
+| Decided | 13 November 2026 (Martin); docs/decisions.md, 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (this PR); 25 November 2026 (Martin), docs/decisions.md, 25 Nov 2026, "Customers → Payments (`/reports/payments`) is the payment state of the subscription base over months …", the three choices "Laten staan", "Alleen abonnementen" and "Eerst Pending part", the build choices to confirm and "Definitions: Payments (rail page) moves from Pending to Proposed …" (addition 0009zy, this PR) |
 | Used by | `nav.payments`, `payments.*` (copy section, en and nl), `placeholders.*` (while no subscriptions connection is set up); `GET /api/v1/reports/payments`, `/rows` and `/file`; `cma.payments_page`, `cma.payment_rows`, `cma.payment_file_record`; Customers → Payments (the rail and its breadcrumb) |
-| As built today | `246` (`cma.payments_page`, `cma.payment_rows`, `cma.payment_file_record`, with `cma.assert_payment_list`, `cma.payment_rows_of` and `cma.payments_page_of`); `247` checks the page against the takes and the Failed rate against Subscriptions' (B3, B3b). Matches the definition |
+| As built today | `250` (`cma.payments_page`, `cma.payment_rows`, `cma.payment_file_record`, with `cma.assert_payment_list`, `cma.payment_rows_of` and `cma.payments_page_of`); `251` checks the page against the takes and the Failed rate against Subscriptions' (B3, B3b). Matches the definition |
 
 ### Compliance (rail page)
 

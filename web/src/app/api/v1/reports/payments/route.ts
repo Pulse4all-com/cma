@@ -6,7 +6,7 @@ import { REPORT_PERMISSIONS } from "@/lib/reports";
 export const dynamic = "force-dynamic";
 
 /**
- * Customers → Payments (cma.payments_page, addition 0009zw) for Customers → Subscriptions' filters, the optional &market
+ * Customers → Payments (cma.payments_page, addition 0009zy) for Customers → Subscriptions' filters, the optional &market
  * (a market code or unknown), &store (a subscriptions connection's id), &proposition (a proposition's code or none),
  * &interval (monthly, quarterly, yearly, other or unknown), &from and &to (months as YYYY-MM; the last twelve complete
  * months and the current one when left out), and the list's &state (at_risk, in_retry, charged_back, awaiting_payment,

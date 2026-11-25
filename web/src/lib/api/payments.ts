@@ -5,7 +5,7 @@ import { listStateOf, PAYMENTS_LIST_STATES, PAYMENTS_SORTS, paymentsSortOf } fro
 import { currentMonthIn, parseSubscriptionsFilter } from "@/lib/subscriptions";
 
 /**
- * The filters of the Payments routes (addition 0009zw): Customers → Subscriptions' own, &market (a market code or
+ * The filters of the Payments routes (addition 0009zy): Customers → Subscriptions' own, &market (a market code or
  * unknown), &store (a subscriptions connection's id), &proposition (a proposition's code or none), &interval (monthly,
  * quarterly, yearly, other or unknown), &from and &to. Anything out of form is a 400 here first; a well-formed value the
  * tenant does not hold is the database's 400 (CMA04)

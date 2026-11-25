@@ -17,7 +17,7 @@
  *      "@/lib/sources", "@/lib/email" (addition 0008t), "@/lib/first-orders" (0008u), "@/lib/attempts" (0008y), "@/lib/funnel"
  *      (0008zb), "@/lib/maintenance" (0008zi), "@/lib/cohorts" (0008zm), "@/lib/flash" (0008zn), "@/lib/courtesy" (0009a),
  *      "@/lib/active" (0009l), "@/lib/fleet-management" (0009t), "@/lib/subscriptions" (0009zh), "@/lib/configuration"
- *      (0009zn, the work area's rule), "@/lib/payments" (0009zw) and types: they
+ *      (0009zn, the work area's rule), "@/lib/payments" (0009zy) and types: they
  *      validate, they do not read.
  *   R5 src/lib/data/mock.ts imports nothing from @/lib/db/*: the mock must not load the database driver.
  *   R6 no "use server" anywhere: every write goes through a route with the one CSRF guard (respond.ts).

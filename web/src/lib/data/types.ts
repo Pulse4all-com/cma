@@ -2819,7 +2819,7 @@ export interface SubscriptionsPage {
 export type SubscriptionsChurnCard = (SubscriptionsRateParts & { month: DateKey }) | null;
 
 /**
- * Customers → Payments (addition 0009zw; docs/definitions.md, Payment state, Amount at risk): the payment state of the
+ * Customers → Payments (addition 0009zy; docs/definitions.md, Payment state, Amount at risk): the payment state of the
  * subscription base over months, read from the subscription facts' stored takes (cma.payments_page, cma.payment_rows), with
  * Customers → Subscriptions' filters. The page's base is every present subscription in one of the five payment states of
  * PAYMENT_STATES (Paused and Canceled are not on it). Ids, codes, counts, months, amounts and links only
@@ -4919,7 +4919,7 @@ export interface CmaData {
   /** A file or an API read of the list in the audit log (cma.subscription_file_record): who, which part, filters, range and measure, how many rows */
   recordSubscriptionFile(me: Principal, part: "records" | "months" | "rows", filter: SubscriptionsFilter, measure: SubscriptionsMeasure, rows: number,
     range?: { from: DateKey; to: DateKey }): Promise<void>;
-  // ---- Customers → Payments (addition 0009zw): the database checks the permission on every call (CMA06)
+  // ---- Customers → Payments (addition 0009zy): the database checks the permission on every call (CMA06)
   /** The page in one read from the stored takes (cma.payments_page): tiles, months, rates, stores' starts, the cross table, the list's first page */
   getPaymentsPage(me: Principal, query: PaymentsPageQuery): Promise<PaymentsPage>;
   /** A page of the list, or the file's rows (cma.payment_rows) */

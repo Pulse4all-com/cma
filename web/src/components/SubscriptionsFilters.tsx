@@ -29,7 +29,7 @@ export function SubscriptionsFilters({ filter, from, to, markets, stores, propos
   /** What the filters keep in the address (the movements' view, the list's measure and sort) */
   keep: Record<string, string>;
   t: SubscriptionsFilterWords;
-  /** The page the filters lead to: Customers → Subscriptions, or Customers → Payments, which shares its filters (addition 0009zw) */
+  /** The page the filters lead to: Customers → Subscriptions, or Customers → Payments, which shares its filters (addition 0009zy) */
   path?: string;
 }) {
   const router = useRouter();

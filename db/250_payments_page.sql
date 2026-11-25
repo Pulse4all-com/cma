@@ -1,13 +1,15 @@
 -- =============================================================================================
--- 246_payments_page.sql: addition 0009zw, Customers → Payments: the placeholder becomes the page for the payment state
+-- 250_payments_page.sql: addition 0009zy, Customers → Payments: the placeholder becomes the page for the payment state
 -- of the subscription base over months, read from the subscription facts' stored takes as Customers → Subscriptions
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after
 -- 244_auto_close_office_hours.sql (0009zv) and so after 216_subscriptions_page.sql (0009zh) and
--- 224_subscription_rates_start.sql (0009zl), whose functions it calls and never re-creates. Rerunnable, forward-only, in
--- one transaction with a lock timeout. Run as your own IAM login: dev first, then 247_verify_payments_page.sql there
+-- 224_subscription_rates_start.sql (0009zl), whose functions it calls and never re-creates. Numbered after the open pull requests
+-- #331 (246/247, 0009zw) and #332 (248/249, 0009zx), whose additions it neither needs nor touches: it runs before or
+-- after them alike. Rerunnable, forward-only, in
+-- one transaction with a lock timeout. Run as your own IAM login: dev first, then 251_verify_payments_page.sql there
 -- (normal, then provoked). No other verify reads what this script adds; no verify is edited. 131_time_all.sql is edited
--- by this change (the page's rows). Prod: this script and 247 before the merge of its pull request (block B refuses
+-- by this change (the page's rows). Prod: this script and 251 before the merge of its pull request (block B refuses
 -- prod's data; the verdict reads PASS, A ONLY), and 131 part a after it (the web that calls these functions comes with
 -- the merge; main's web calls none of them).
 --
@@ -206,7 +208,7 @@ $$;
 --                 expand it) the subscriptions
 --   list          the list's page p_page (the first by default; cma.payment_rows_of), so a further page is the same one read
 -- The rates' parts are 224's cma.subscriptions_page_of's, read the same way (so Payments' Failed rate equals
--- Subscriptions' for the same filters); 247 compares them.
+-- Subscriptions' for the same filters); 251 compares them.
 create or replace function cma.payments_page_of(p_tenant_id uuid, p_market text, p_store uuid, p_proposition text, p_interval text,
                                                 p_from date, p_to date, p_state text, p_sort text, p_descending boolean,
                                                 p_now timestamptz, p_page integer default 1)
@@ -463,7 +465,7 @@ $$;
 -- 6. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009zw', 'Customers → Payments: cma.payments_page (reports.view or performance.team; the take''s state, the filters'' choices, the tiles per payment state with the amount at risk and the last complete month''s Failed rate, the Failed rate by month, the stores'' starts, the cross table by payment state and payment instrument and the list''s first page, from the subscription facts'' takes), cma.payment_rows (a page of the list or the file''s rows) and cma.payment_file_record (the audit row of every read that hands out rows: records, months or rows), over cma.assert_payment_list, cma.payment_rows_of and cma.payments_page_of. No function re-created, no table, view or column changed; nothing in cma_read')
+values ('0009zy', 'Customers → Payments: cma.payments_page (reports.view or performance.team; the take''s state, the filters'' choices, the tiles per payment state with the amount at risk and the last complete month''s Failed rate, the Failed rate by month, the stores'' starts, the cross table by payment state and payment instrument and the list''s first page, from the subscription facts'' takes), cma.payment_rows (a page of the list or the file''s rows) and cma.payment_file_record (the audit row of every read that hands out rows: records, months or rows), over cma.assert_payment_list, cma.payment_rows_of and cma.payments_page_of. No function re-created, no table, view or column changed; nothing in cma_read')
 on conflict (version) do nothing;
 
 commit;

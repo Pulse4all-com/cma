@@ -1,10 +1,10 @@
 /**
- * Customers → Payments in mock mode (addition 0009zw): the database's rules (246_payments_page.sql over the takes of 210,
+ * Customers → Payments in mock mode (addition 0009zy): the database's rules (250_payments_page.sql over the takes of 210,
  * 212 and 224) on the Subscriptions mock's fictional base, so the page and the API answer as they will on Postgres. The
  * subscriptions, their payment states, instruments, amounts and contacts are the Subscriptions mock's own
  * (mockSubscriptionRows); the since, the overdue flag, the return code and the amount at risk are drawn from the
  * subscription's id; the Failed rate's parts, the stores' starts and the floor are the Subscriptions mock's page's, as
- * 246 reads the same month take. Ids, codes, counts, months and amounts only.
+ * 250 reads the same month take. Ids, codes, counts, months and amounts only.
  */
 import type { Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/data/errors";
@@ -84,7 +84,7 @@ function rowsOf(rows: PaymentRow[], q: Pick<PaymentsRowsQuery, "state" | "sort" 
 
 export function mockPaymentsPage(me: Principal, q: PaymentsPageQuery): PaymentsPage {
   assertList(q.state, q.sort, q.descending);
-  // the filters, the permission and the set-up are the Subscriptions mock's (246 calls 216's checks)
+  // the filters, the permission and the set-up are the Subscriptions mock's (250 calls 216's checks)
   const s = mockSubscriptionsPage(me, { ...q, measure: "total", sort: "monthly_amount", descending: true, page: 1 });
   const filter: SubscriptionsFilter = { market: q.market, store: q.store, proposition: q.proposition, interval: q.interval };
   if (!s.setUp) {

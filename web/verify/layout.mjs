@@ -1176,7 +1176,7 @@ async function expectCampaigns() {
   // to their Flash overview. The agent sees none of them, the supervisor not Quality monitoring (quality.manage). --provoke
   // writes a zero into the first page's content
   {
-    // Subscriptions left this list with addition 0009zh (21 November 2026), Payments with addition 0009zw (25 November
+    // Subscriptions left this list with addition 0009zh (21 November 2026), Payments with addition 0009zy (25 November
     // 2026): pages of their own (below)
     const PLACEHOLDERS = [
       ["/reports/compliance", null], ["/team/quality-monitoring", null], ["/reports/purchase-orders", null],
@@ -1268,7 +1268,7 @@ async function expectCampaigns() {
       await ctx.close();
     }
   }
-  // Customers → Payments (addition 0009zw): the manager sees the seven tiles (the five payment states, the Amount at risk,
+  // Customers → Payments (addition 0009zy): the manager sees the seven tiles (the five payment states, the Amount at risk,
   // the Failed rate), the Failed rate by month, the table by payment instrument, the flows as Pending ("Not connected
   // yet", dashed, no figure), the list and the link to Flash's Payments overview; nothing scrolls sideways at 1280 or
   // 1920; the agent gets the reports' refusal. --provoke expects an eighth tile

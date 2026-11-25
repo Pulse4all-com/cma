@@ -20,7 +20,7 @@ import type { Route } from "next";
 import { resolve } from "@/app/access";
 
 /**
- * Customers → Payments (addition 0009zw; Martin, 25 November 2026): the payment state of the subscription base over
+ * Customers → Payments (addition 0009zy; Martin, 25 November 2026): the payment state of the subscription base over
  * months and what is at risk, built on Customers → Subscriptions' payment parts and filters, while Flash's Payments
  * overview keeps the financial status of orders and the renewals per market and day. reports.view or performance.team,
  * the wide layout, team figures only, ids and links only. One read from the subscription facts' stored takes

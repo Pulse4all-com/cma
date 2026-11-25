@@ -1,5 +1,5 @@
 /**
- * Customers → Payments (addition 0009zw; Martin, 25 November 2026): the payment state of the subscription base over months
+ * Customers → Payments (addition 0009zy; Martin, 25 November 2026): the payment state of the subscription base over months
  * and what is at risk, built on Customers → Subscriptions' payment parts (its Failed rate, its mix by payment state and
  * payment instrument, its list's Payment state column) and its components (SubscriptionsReport: SectionTitle, Switch,
  * Tile, Scroll, Note, the chart's LineChart and Legend). One read from the subscription facts' stored takes
