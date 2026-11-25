@@ -3604,7 +3604,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Time rule | Read in the zone as found: the market's own `time_zone`, and the `*` row too is read in the market's zone. Speed to lead's business time reads them for the deal's market; the auto-close sweep reads the Default market's hours when the sweep runs, and closes a forgotten day without a published shift at the end of the last range of that weekday (closed weekdays, holidays, a person without a Default market and a Default market that is no longer an active hours market fall to the default time) |
 | Scope | Per market and tenant |
 | Equivalent in the source system | None |
-| Not to use | "Opening hours" or "shift" for it: a shift is a person's published planned time (the roster), office hours belong to a market |
+| Not to use | "Opening hours" or "shift" for it: a shift is a person's published planned time (the roster), office hours belong to a market. A telephony line's opening hours (the missed-call reason "Outside opening hours") are another thing and keep their word |
 | Status | Decided |
 | Decided | 25 November 2026 (Martin); docs/decisions.md, 25 Nov 2026, "Definitions: Office hours is a new term …" and the rows of this PR's auto-close order (this PR, addition 0009zv) |
 | Used by | No catalog key of its own. Speed to lead (the keys that read business time in docs/metrics/catalog.json), the hourly auto-close sweep (the forgotten-day close keys citing `cma.close_forgotten_workdays`), Configuration → Markets, Configuration → Exports (the setting `workday.auto_close_office_hours`) |
@@ -3777,7 +3777,7 @@ Ticket, complaint, vulnerable case, owner, without owner, overdue, response time
 Email sent, mailbox, inbox, first reply.
 
 ### Time and people
-Hours worked, status, working status, business minutes, office hours, market. Workday, Session and Clocked in are defined under Time terms (addition 0008zp); On the roster too (addition 0009y), and Paid and Paid today (addition 0009z; paid time, not Payment state's Paid).
+Hours worked, status, working status, business minutes, market. Workday, Session and Clocked in are defined under Time terms (addition 0008zp); On the roster too (addition 0009y), Paid and Paid today (addition 0009z; paid time, not Payment state's Paid), and Office hours (addition 0009zv).
 
 ### Periods
 Yesterday, Today, This week (ISO, Monday), This month, Custom range, previous period, like for like. All (nl: Alles) is a period of Reviews alone (addition 0008zw, Martin): from the tenant's first counted review to today, grouped by month, with no previous period (the history-start case) and exempt from the 92-day cap every other report keeps; its end is the tenant's today at the latest, or the day after it for a reader whose zone is ahead.

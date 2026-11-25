@@ -7344,7 +7344,7 @@ const nl = {
     time: "Je tijd",
     timeKept: "Je werktijd wordt in de Workspace bijgehouden, in je eigen tijdzone.",
     timeNotKept: "Je werktijd wordt niet in de Workspace bijgehouden.",
-    forgottenRule: "Vergeet je uit te klokken, dan sluit het systeem je werkdag aan het einde van je geplande dienst. Zonder geplande dienst gebruikt het het einde van de kantooruren van je standaardmarkt op die dag als je bedrijfsonderdeel daarvoor gekozen heeft, anders de vaste sluitingstijd. Een manager kijkt hem na.",
+    forgottenRule: "Vergeet je uit te klokken, dan sluit het systeem je werkdag aan het einde van je geplande dienst. Zonder geplande dienst gebruikt het het einde van de kantooruren van je standaardmarkt op die dag als je bedrijfslijn daarvoor gekozen heeft, anders de vaste sluitingstijd. Een manager kijkt hem na.",
     openMyDay: "Open Mijn dag",
     openMyHours: "Open Mijn uren",
     allows: "Wat je rol toestaat",
