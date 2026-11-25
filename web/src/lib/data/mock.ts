@@ -4278,10 +4278,10 @@ export const mockData: CmaData = {
       if (min(b.end) <= min(b.start) || min(b.start) % slot !== 0 || min(b.end) % slot !== 0) throw new CmaDbError("CMA04", "a block starts and ends on the grid");
       if (shift && (b.start < shift.start!.slice(0, 5) || b.end > shift.end!.slice(0, 5))) throw new CmaDbError("CMA04", "the block lies outside the shift");
       if (i > 0 && min(sorted[i - 1]!.end) > min(b.start)) throw new CmaDbError("CMA04", "the blocks overlap");
-      if (b.market) assertMockHoursMarket(me, b.market);
+      if (b.hoursMarket) assertMockHoursMarket(me, b.hoursMarket);
     }
     const before = w.blocks.get(k) ?? [];
-    const same = (a: AssignmentBlockInput, b: AssignmentBlock) => a.code === b.code && a.start === b.start && a.end === b.end && (a.market ?? null) === b.hoursMarket && (a.note ?? null) === b.note;
+    const same = (a: AssignmentBlockInput, b: AssignmentBlock) => a.code === b.code && a.start === b.start && a.end === b.end && (a.hoursMarket ?? null) === b.hoursMarket && (a.note ?? null) === b.note;
     const kept = before.filter((b) => sorted.some((a) => same(a, b)));
     const added = sorted.filter((a) => !before.some((b) => same(a, b)));
     const ended = before.length - kept.length;
@@ -4292,7 +4292,7 @@ export const mockData: CmaData = {
       if (others > 0 && !publishOthers) return { status: "confirm", otherChanges: others };
       published = true;
     }
-    const next = [...kept, ...added.map((a) => ({ assignmentId: crypto.randomUUID(), code: a.code, start: a.start, end: a.end, hoursMarket: a.market ?? null, note: a.note ?? null }))]
+    const next = [...kept, ...added.map((a) => ({ assignmentId: crypto.randomUUID(), code: a.code, start: a.start, end: a.end, hoursMarket: a.hoursMarket ?? null, note: a.note ?? null }))]
       .sort((a, b) => min(a.start) - min(b.start));
     w.blocks.set(k, next);
     if (changes) w.changed.add(k);

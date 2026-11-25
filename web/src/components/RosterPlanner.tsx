@@ -31,8 +31,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
 import type { AbsenceType, AssignmentBlock, RosterEntry, RosterReportRow, RosterWeekSummary, TeamInfo } from "@/lib/data";
-import { planCheck, toMinutes, toneOf, TONE_CLASS, type Block, type PlannerWeek } from "@/lib/assignments";
-import { RosterDay } from "./RosterDay";
+import dynamic from "next/dynamic";
+import { pct, planCheck, toMinutes, toneOf, TONE_CLASS, type Block, type PlannerWeek } from "@/lib/assignments";
+// The Day view's code comes with the Day view only: the Week view's page carries none of it (web/verify/perf.json)
+const RosterDay = dynamic(() => import("./RosterDay").then((m) => m.RosterDay));
 import {
   absenceKeywordList, cellLabel, coverageGrid, EVERYONE, headcountByDate, isoWeek, parseCell, plannedMinutesByUser, plannerSearch, plannerTeamOfHeader, rosterTeamArg, weekDays,
   type Cell, type CellProblem, type CoverageState,
@@ -273,8 +275,8 @@ export function RosterPlanner({
   }
 
   // The plan check before Publish (brief A): two warnings that never block, over the week's shifts that hold blocks
-  const kinds = new Map(week.planner.types.map((x) => [x.code, x.kind]));
-  const typeOf = new Map(week.planner.types.map((x) => [x.code, x]));
+  const kinds = useMemo(() => new Map(week.planner.types.map((x) => [x.code, x.kind])), [week.planner.types]);
+  const typeOf = useMemo(() => new Map(week.planner.types.map((x) => [x.code, x])), [week.planner.types]);
   const warnings = confirm === "publish" ? [...entries.values()].flatMap((e) => {
     if (e.kind !== "shift" || !e.start || !e.end) return [];
     const blocks: Block[] = (cellBlocks.get(`${e.userId}:${e.date}`) ?? []).map((b) => ({ code: b.code, start: toMinutes(b.start), end: toMinutes(b.end), market: b.hoursMarket, note: b.note }));
@@ -556,11 +558,11 @@ function CellBar({ entry, blocks, typeOf }: {
   return (
     <div className="relative mt-1 h-1.5 overflow-hidden rounded-button bg-p4a-neutral-surface" data-testid="roster-cell-bar"
       // the blocks in words on hover, built then: a week of cells would otherwise carry them all in the page (perf.json)
-      onPointerEnter={(e) => { e.currentTarget.title = blocks.map((b) => `${b.start}–${b.end} ${b.code}${b.hoursMarket ? `-${b.hoursMarket}` : ""}`).join(", "); }}>
+      onPointerEnter={(e) => { e.currentTarget.title = blocks.map((b) => `${b.start}–${b.end} ${b.code}${b.hoursMarket ? `-${b.hoursMarket}` : ""} ${typeOf.get(b.code)?.name ?? ""}`.trim()).join("\n"); }}>
       {blocks.map((b) => {
         const type = typeOf.get(b.code);
         return <span key={`${b.start}-${b.code}`} className={`absolute inset-y-0 ${TONE_CLASS[type ? toneOf(type) : "productive"]}`}
-          style={{ left: `${((toMinutes(b.start) - s) / span) * 100}%`, width: `${((toMinutes(b.end) - toMinutes(b.start)) / span) * 100}%` }} />;
+          style={{ left: `${pct(toMinutes(b.start) - s, span)}%`, width: `${pct(toMinutes(b.end) - toMinutes(b.start), span)}%` }} />;
       })}
     </div>
   );

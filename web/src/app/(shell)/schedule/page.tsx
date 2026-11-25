@@ -7,7 +7,7 @@ import { firstPage } from "@/lib/nav";
 import { cellLabel, shiftMinutes, weekDays } from "@/lib/roster";
 import { dateKeyInZone, fmtDate, fmtMinutes, isDateKey, startOfWeek } from "@/lib/time";
 import { resolve } from "@/app/access";
-import { instantOf, toMinutes, toneOf, TONE_CLASS } from "@/lib/assignments";
+import { instantOf, pct, toMinutes, toneOf, TONE_CLASS } from "@/lib/assignments";
 import { localParts } from "@/lib/corrections";
 import type { PublishedAssignment } from "@/lib/data";
 
@@ -128,7 +128,7 @@ function DayBlocks({ date, start, end, blocks, zone, label }: { date: string; st
       <div className="relative h-2 w-full max-w-md overflow-hidden rounded-button bg-p4a-neutral-surface" aria-hidden="true">
         {blocks.map((b) => (
           <span key={`${b.start}-${b.code}`} className={`absolute inset-y-0 ${TONE_CLASS[toneOf({ ...b, statusIsProductive: null })]}`}
-            style={{ left: `${((toMinutes(b.start) - s) / span) * 100}%`, width: `${((toMinutes(b.end) - toMinutes(b.start)) / span) * 100}%` }} />
+            style={{ left: `${pct(toMinutes(b.start) - s, span)}%`, width: `${pct(toMinutes(b.end) - toMinutes(b.start), span)}%` }} />
         ))}
       </div>
       <ul aria-label={label} className="flex flex-col text-small">
@@ -136,7 +136,7 @@ function DayBlocks({ date, start, end, blocks, zone, label }: { date: string; st
           const a = there(b, b.start);
           const z = there(b, b.end);
           return (
-            <li key={`${b.start}-${b.code}`} className="tabular" title={b.name}>
+            <li key={`${b.start}-${b.code}`} className="tabular">
               {b.start}–{b.end}
               {a && z ? <span className="text-p4a-muted"> ({a}–{z} {b.hoursMarket})</span> : null}
               <span className="ml-2 font-semibold">{b.code}</span> {b.name}

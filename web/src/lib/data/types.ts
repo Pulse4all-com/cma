@@ -778,7 +778,8 @@ export interface AssignmentBlockInput {
   code: string;
   start: string;
   end: string;
-  market: string | null;
+  /** An hours market code; null is own market */
+  hoursMarket: string | null;
   note: string | null;
 }
 

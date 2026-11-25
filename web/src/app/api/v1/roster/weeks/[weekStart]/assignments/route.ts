@@ -19,7 +19,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 }
 
 /**
- * Replaces a person-date's blocks: body { team?, userId, date, blocks: [{ code, start, end, market?, note? }], publishOthers? }
+ * Replaces a person-date's blocks: body { team?, userId, date, blocks: [{ code, start, end, hoursMarket?, note? }], publishOthers? }
  * (cma.roster_set_assignments, D1, D6, D7). Refuses overlap, the grid, outside the shift, a market that is no hours market,
  * the past and a person not on the roster (400), an unknown type or market (404), another roster's shift (409), a caller
  * without roster.manage (403). Answers { status: "saved", kept, ended, added, published, version, blocks }; for today in a

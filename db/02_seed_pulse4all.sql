@@ -729,7 +729,7 @@ $$;
 -- break books lunch (pauses); X Extra hours books no status (it counts under the status the agent is on, D4). The hours
 -- market is part of the block, not of the code (D5), so Arno's twelve Excel codes are these nine work codes and the
 -- block's Hours market. The absences that carry over (D10): Day off, and the new Paternity leave (paid); the new Holiday
--- (unpaid) does not, nor do Leave, Sick, Public holiday and Other. The planner's grid is 15 minutes and its plan check
+-- (paid) does not, nor do Leave, Sick, Public holiday and Other. The planner's grid is 15 minutes and its plan check
 -- expects a lunch block (LB) from 360 minutes of shift (the grid and the minutes are the catalog defaults, set here so the
 -- tenant's values are its own), in Europe/Madrid as Arno's sheet. A rerun adds what is missing and keeps what was changed since on the
 -- configuration screen (on conflict do nothing); a type whose status the tenant lacks is left out with a notice. A
@@ -775,7 +775,7 @@ begin
   -- audit trail holds that change), so a later choice on the configuration screen survives a rerun
   insert into cma.absence_type (tenant_id, key, name, is_paid, sort_order, carries_over) values
     (v_subs, 'paternity_leave', 'Paternity leave', true,  25, true),
-    (v_subs, 'holiday',         'Holiday',         false, 27, false)
+    (v_subs, 'holiday',         'Holiday',         true,  27, false)
   on conflict (tenant_id, key) do nothing;
   update cma.absence_type set carries_over = true
    where tenant_id = v_subs and key = 'off' and not carries_over

@@ -124,6 +124,11 @@ export function fromMinutes(min: number): string {
   return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
 }
 
+/** A share in percent with two decimals, for a bar's left and width (fewer digits in the page than a float's) */
+export function pct(part: number, whole: number): number {
+  return Math.round((part / whole) * 10000) / 100;
+}
+
 /** The slot a minute lies in, as its start */
 export function slotFloor(min: number, slotMinutes: number): number {
   return Math.floor(min / slotMinutes) * slotMinutes;

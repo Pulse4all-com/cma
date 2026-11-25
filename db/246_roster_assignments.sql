@@ -22,8 +22,9 @@
 -- business date, and an optional Hours market (empty: the person's Default market at booking, "own market"). Brief B (the
 -- assignment on the time events, Clock in on the plan, Back to plan, replanning from the Live board) and brief C (Plan at
 -- day start against actual) follow; the model here needs no schema change for them: every version of every block is kept
--- with its instants (D7), a block carries its type and the status that type books, and the published plan is readable as
--- of every publication.
+-- with its instants (D7), a block carries its type, whose kind, status and extra flag freeze once a plan holds it (so a
+-- block's meaning never changes after the fact), and the published plan is readable as of every publication. An own-market
+-- block (null) resolves to the person's Default market when read; brief B fixes it at booking (D1).
 --
 -- What it adds
 --   btree_gist                  extension, schema public (section 0)
@@ -33,7 +34,7 @@
 --                               check takes as lunch, so no code names a tenant's type),
 --                               roster.planner_timezone (text, default empty: the tenant's zone; the zone of the planner's
 --                               Day view and of cma.roster_slot_coverage). A trigger on cma.tenant_setting refuses a
---                               planner zone that is no IANA zone (CMA04)
+--                               planner zone that is no IANA zone (CMA04; trigger check_roster_setting)
 --   cma.assignment_type         D2: code (1 to 6 of A-Z and 0-9, unique per tenant, never changed), name, sort order,
 --                               status, kind work or pause, the work status it books (a tenant-scoped foreign key; null
 --                               only for an extra type, D4) and is_extra; its colour and Work area follow from the status
@@ -92,16 +93,18 @@
 -- earlier column keeps its name, type, order and value, and their rows are unchanged.
 --
 -- Verifies that read what this changes, run again after this script (grep -lw 'cma\.<function>' db/*verify*.sql):
---   25_verify_roster.sql            every roster function; A4 lists my_roster's columns: edited by this change to expect
---                                   assignments last; B10 copies alpha's week (two shifts, copied as before)
+--   25_verify_roster.sql            every roster function; edited by this change: A4 lists my_roster's columns (assignments
+--                                   last), and B10 copies alpha's week of a shift and a sick day: since D10 the sick day
+--                                   stays behind (no default absence type carries over), so 1 cell copied, not 2
 --   199_verify_roster_planned.sql   R1 and R3 compare roster_people and roster_today with 0005's definitions over select *:
 --                                   edited by this change to compare the earlier columns by name
 --   27_verify_configuration.sql     cma.absence_types() by named columns, retire_absence_type; unchanged
 --   47_verify_workday_window.sql, 127_verify_workday_sessions.sql, 245_verify_auto_close_office_hours.sql
 --                                   cma.roster_week and roster_entry as tables, the published entries; unchanged
--- 131_time_all.sql: rows added for the planner's new reads ('roster assignments', 'roster cell', 'roster slot coverage',
--- 'roster planned hours', 'assignment types', 'standard week') and for My schedule's read with its new column; 'shifts
--- today' reads cma.roster_today as before (one lateral read of the person's published blocks per row).
+-- 131_time_all.sql: seven rows added for the new reads ('roster assignments', 'planner context', 'roster cell', 'roster
+-- slot coverage', 'roster planned hours', 'standard week', 'assignment types'); 'my roster week', 'my roster today' and
+-- 'shifts today' read my_roster and roster_today with their new column as before (one read of the published blocks per
+-- person with a shift). The volume fixture holds no blocks yet: these rows are to be measured on a planned week too.
 --
 -- SQLSTATEs as 0005's: CMA02 not found, CMA03 conflict (another roster's day; D8's confirmation), CMA04 invalid, CMA06 not
 -- permitted.
@@ -153,7 +156,7 @@ insert into cma.setting (key, value_type, allowed_values, default_value, descrip
   ('roster.slot_minutes', 'integer', array['5', '10', '15', '20', '30', '60'], '15',
      'Minutes per slot of the roster planner''s grid: an assignment starts and ends on it'),
   ('roster.lunch_after_minutes', 'integer', null, '360',
-     'Minutes of shift from which the planner''s plan check expects a lunch block (an assignment of a pause type booking lunch)'),
+     'Minutes of shift from which the planner''s plan check expects a lunch block (the type roster.lunch_type_code names, else any pause block)'),
   ('roster.lunch_type_code', 'text', null, '',
      'The assignment type code the planner''s plan check takes as the lunch block; empty: any block of a pause type'),
   ('roster.planner_timezone', 'text', null, '',
@@ -163,21 +166,21 @@ on conflict (key) do update
       default_value = excluded.default_value, description = excluded.description;
 
 -- The planner zone is an IANA zone or empty (the catalog's generic check knows no zones)
-create or replace function cma.tenant_setting_zone_ok()
+create or replace function cma.check_roster_setting()
 returns trigger
 language plpgsql
 as $$
 begin
   if new.key = 'roster.planner_timezone' and new.value <> '' and not cma.is_timezone(new.value) then
-    raise exception 'roster.planner_timezone takes an IANA zone such as Europe/Madrid, or empty for the tenant''s zone; got %', new.value
+    raise exception 'roster.planner_timezone takes an IANA zone (Area/City), or empty for the tenant''s zone; got %', new.value
       using errcode = 'CMA04';
   end if;
   return new;
 end
 $$;
-revoke execute on function cma.tenant_setting_zone_ok() from public;
-create or replace trigger zone_ok before insert or update on cma.tenant_setting
-  for each row execute function cma.tenant_setting_zone_ok();
+revoke execute on function cma.check_roster_setting() from public;
+create or replace trigger check_roster_setting before insert or update on cma.tenant_setting
+  for each row execute function cma.check_roster_setting();
 
 -- The planner zone of the current tenant: its setting when that is a zone, else the tenant's zone
 create or replace function cma.roster_planner_zone()
@@ -310,7 +313,7 @@ create table if not exists cma.standard_week_assignment (
     int4range((extract(epoch from start_time) / 60)::integer, (extract(epoch from end_time) / 60)::integer) with &&
   ) where (valid_to is null)
 );
-comment on table cma.standard_week_assignment is 'The blocks of the Standard week''s shifts, per person and ISO weekday, versioned with their entry';
+comment on table cma.standard_week_assignment is 'The blocks of the Standard week''s shifts, per person and ISO weekday, versioned with their entry: a save ends them (valid_to; superseded_by stays null, the new entry''s blocks replace them as a set)';
 create index if not exists standard_week_assignment_entry_idx on cma.standard_week_assignment (tenant_id, standard_week_entry_id);
 
 select cma.setup_tenant_table('cma.assignment_type');
@@ -352,6 +355,15 @@ begin
   end if;
   if tg_op = 'UPDATE' and new.code <> old.code then
     raise exception 'an assignment type''s code never changes (% to %)', old.code, new.code using errcode = 'CMA04';
+  end if;
+  -- What a type books is frozen once a block or a standard week holds it, as a work status's flags are once time is
+  -- booked on it: a plan keeps the meaning it was made with (brief C reports plan against actual as planned at the time).
+  -- Its name, order and status stay free
+  if tg_op = 'UPDATE' and (new.kind, new.work_status_id, new.is_extra) is distinct from (old.kind, old.work_status_id, old.is_extra)
+     and (exists (select 1 from cma.roster_assignment a where a.tenant_id = new.tenant_id and a.assignment_type_id = new.id)
+          or exists (select 1 from cma.standard_week_assignment a where a.tenant_id = new.tenant_id and a.assignment_type_id = new.id)) then
+    raise exception 'assignment type % is in the plan: its kind, status and extra flag stay as they are (add a new type instead)', new.code
+      using errcode = 'CMA03';
   end if;
   return new;
 end
@@ -416,7 +428,7 @@ drop function if exists cma.absence_types();
 -- based on: 23_roster.sql
 create function cma.absence_types()
 returns table (key text, name text, is_paid boolean, sort_order integer, status text, carries_over boolean)
-language plpgsql stable
+language plpgsql stable rows 20
 as $$
 #variable_conflict use_column
 declare
@@ -564,7 +576,7 @@ as $$
 $$;
 
 -- The one writer of blocks (roster.manage): replaces a person-date's current blocks with p_blocks in its roster week.
--- p_blocks: a JSON array of {"code", "start" (hh:mm), "end" (hh:mm, 24:00 allowed), "market" (an hours market code or
+-- p_blocks: a JSON array of {"code", "start" (hh:mm), "end" (hh:mm, 24:00 allowed), "hoursMarket" (an hours market code or
 -- null: own market), "note"}. The person's current entry that day must be a shift of this roster week (CMA04), every
 -- block inside it, on the grid (D6), of an active type, under an active hours market, and the blocks must not overlap.
 -- Strict (the planner): a block that breaks a rule refuses the call. Not strict (Copy week, Apply standard week): such a
@@ -585,11 +597,13 @@ declare
   v_market text;
   v_note   text;
   v_bad    text;
+  -- the wanted blocks, validated, as a JSON array of {type_id, start_time, end_time, market, note} (no temporary table:
+  -- a catalog write per call on the application's write path)
+  v_want   jsonb := '[]'::jsonb;
   v_kept   integer := 0;
   v_ended  integer := 0;
   v_added  integer := 0;
   v_drop   integer := 0;
-  r        record;
 begin
   perform cma.assert_permission('roster.manage');
   if p_blocks is null or jsonb_typeof(p_blocks) <> 'array' then
@@ -598,7 +612,6 @@ begin
   if jsonb_array_length(p_blocks) > 96 then
     raise exception 'at most 96 blocks per person and date' using errcode = 'CMA04';
   end if;
-
   -- Its own guards, whoever calls it (defence in depth: its callers check the same first): the past stays locked, and no
   -- current block of the person-date may belong to another roster week, an empty list included
   if p_date < cma.business_date(now(), cma.user_timezone(p_user_id)) then
@@ -620,10 +633,6 @@ begin
     end if;
   end if;
 
-  create temporary table if not exists pg_temp.roster_put_block (
-    ord integer, type_id uuid, start_time time, end_time time, market text, note text) on commit drop;
-  delete from pg_temp.roster_put_block;
-
   for b in select value from jsonb_array_elements(p_blocks) loop
     v_bad := null;
     if jsonb_typeof(b) <> 'object' then
@@ -643,7 +652,7 @@ begin
     end if;
     v_start := (b->>'start')::time;
     v_end := (b->>'end')::time;
-    v_market := nullif(btrim(coalesce(b->>'market', '')), '');
+    v_market := nullif(btrim(coalesce(b->>'hoursMarket', '')), '');
     v_note := nullif(btrim(coalesce(b->>'note', '')), '');
     if v_end <= v_start then
       v_bad := format('the block %s ends after it starts', v_type.code);
@@ -678,60 +687,59 @@ begin
       v_drop := v_drop + 1;
       continue;
     end if;
-    if exists (select 1 from pg_temp.roster_put_block x where x.start_time < v_end and v_start < x.end_time) then
+    if exists (select 1 from jsonb_to_recordset(v_want) as x(start_time time, end_time time)
+               where x.start_time < v_end and v_start < x.end_time) then
       if p_strict then
         raise exception 'the blocks overlap at % to %', b->>'start', b->>'end' using errcode = 'CMA04';
       end if;
       v_drop := v_drop + 1;
       continue;
     end if;
-    insert into pg_temp.roster_put_block values (v_added + v_drop, v_type.id, v_start, v_end, v_market, v_note);
+    v_want := v_want || jsonb_build_array(jsonb_build_object('type_id', v_type.id, 'start_time', v_start, 'end_time', v_end,
+                                                             'market', v_market, 'note', v_note));
   end loop;
 
   -- End the current blocks that are not wanted any more (before the new ones: the exclusion constraint is per statement)
-  for r in
-    select a.id from cma.roster_assignment a
-    where a.tenant_id = cma.current_tenant_id() and a.user_id = p_user_id and a.business_date = p_date and a.valid_to is null
-      and not exists (select 1 from pg_temp.roster_put_block x
-                      where x.type_id = a.assignment_type_id and x.start_time = a.start_time and x.end_time = a.end_time
-                        and x.market is not distinct from a.hours_market_code and x.note is not distinct from a.note)
-    for update
-  loop
-    update cma.roster_assignment set valid_to = clock_timestamp() where tenant_id = cma.current_tenant_id() and id = r.id;
-    v_ended := v_ended + 1;
-  end loop;
+  with ended as (
+    update cma.roster_assignment a set valid_to = clock_timestamp()
+     where a.tenant_id = cma.current_tenant_id() and a.user_id = p_user_id and a.business_date = p_date and a.valid_to is null
+       and not exists (select 1 from jsonb_to_recordset(v_want) as x(type_id uuid, start_time time, end_time time, market text, note text)
+                       where x.type_id = a.assignment_type_id and x.start_time = a.start_time and x.end_time = a.end_time
+                         and x.market is not distinct from a.hours_market_code and x.note is not distinct from a.note)
+    returning 1)
+  select count(*) into v_ended from ended;
 
   -- Insert the new ones; the kept ones stay as they are
-  for r in
-    select x.* from pg_temp.roster_put_block x
+  with added as (
+    insert into cma.roster_assignment (tenant_id, roster_week_id, user_id, business_date, assignment_type_id, start_time, end_time,
+                                       hours_market_code, note)
+    select cma.current_tenant_id(), p_week_id, p_user_id, p_date, x.type_id, x.start_time, x.end_time, x.market, x.note
+    from jsonb_to_recordset(v_want) as x(type_id uuid, start_time time, end_time time, market text, note text)
     where not exists (select 1 from cma.roster_assignment a
                       where a.tenant_id = cma.current_tenant_id() and a.user_id = p_user_id and a.business_date = p_date
                         and a.valid_to is null and x.type_id = a.assignment_type_id and x.start_time = a.start_time
                         and x.end_time = a.end_time and x.market is not distinct from a.hours_market_code
                         and x.note is not distinct from a.note)
     order by x.start_time
-  loop
-    insert into cma.roster_assignment (tenant_id, roster_week_id, user_id, business_date, assignment_type_id, start_time, end_time,
-                                       hours_market_code, note)
-    values (cma.current_tenant_id(), p_week_id, p_user_id, p_date, r.type_id, r.start_time, r.end_time, r.market, r.note);
-    v_added := v_added + 1;
-  end loop;
-  v_kept := (select count(*) from pg_temp.roster_put_block) - v_added;
+    returning 1)
+  select count(*) into v_added from added;
+  v_kept := jsonb_array_length(v_want) - v_added;
 
   -- Link each block this call ended to its successor: the new block with the same start, else the first new one it overlaps
-  update cma.roster_assignment o
-     set superseded_by = coalesce(
-           (select n.id from cma.roster_assignment n
-            where n.tenant_id = o.tenant_id and n.user_id = o.user_id and n.business_date = o.business_date and n.valid_to is null
-              and n.recorded_at >= now() and n.start_time = o.start_time limit 1),
-           (select n.id from cma.roster_assignment n
-            where n.tenant_id = o.tenant_id and n.user_id = o.user_id and n.business_date = o.business_date and n.valid_to is null
-              and n.recorded_at >= now() and n.start_time < o.end_time and o.start_time < n.end_time
-            order by n.start_time limit 1))
-   where o.tenant_id = cma.current_tenant_id() and o.user_id = p_user_id and o.business_date = p_date
-     and o.valid_to >= now() and o.superseded_by is null and v_added > 0;
+  if v_added > 0 then
+    update cma.roster_assignment o
+       set superseded_by = coalesce(
+             (select n.id from cma.roster_assignment n
+              where n.tenant_id = o.tenant_id and n.user_id = o.user_id and n.business_date = o.business_date and n.valid_to is null
+                and n.recorded_at >= now() and n.start_time = o.start_time limit 1),
+             (select n.id from cma.roster_assignment n
+              where n.tenant_id = o.tenant_id and n.user_id = o.user_id and n.business_date = o.business_date and n.valid_to is null
+                and n.recorded_at >= now() and n.start_time < o.end_time and o.start_time < n.end_time
+              order by n.start_time limit 1))
+     where o.tenant_id = cma.current_tenant_id() and o.user_id = p_user_id and o.business_date = p_date
+       and o.valid_to >= now() and o.superseded_by is null;
+  end if;
 
-  delete from pg_temp.roster_put_block;
   return jsonb_build_object('kept', v_kept, 'ended', v_ended, 'added', v_added, 'dropped', v_drop);
 end
 $$;
@@ -757,7 +765,7 @@ returns table (
   note               text,
   recorded_at        timestamptz
 )
-language plpgsql stable
+language plpgsql stable rows 500
 as $$
 #variable_conflict use_column
 declare
@@ -767,16 +775,23 @@ begin
   perform cma.assert_week_start(p_week_start);
   v_team := cma.roster_team_id(p_team_key);
   return query
+    with blocks as materialized (
+      select a.* from cma.roster_assignment a
+      join cma.roster_week w on w.tenant_id = a.tenant_id and w.id = a.roster_week_id
+      where a.tenant_id = cma.current_tenant_id()
+        and w.week_start = p_week_start and w.team_id is not distinct from v_team
+        and a.valid_to is null
+    ),
+    -- on the roster, asked once per person, not once per block (the N06 lesson on per-row calls)
+    people as materialized (
+      select x.user_id from (select distinct b.user_id from blocks b) x where cma.on_roster(x.user_id)
+    )
     select a.id, a.user_id, a.business_date, t.code::text, t.name::text, t.kind::text, s.work_area::text, t.is_extra,
            a.start_time, a.end_time, a.hours_market_code::text, a.note::text, a.recorded_at
-    from cma.roster_assignment a
-    join cma.roster_week w on w.tenant_id = a.tenant_id and w.id = a.roster_week_id
+    from blocks a
+    join people p on p.user_id = a.user_id
     join cma.assignment_type t on t.tenant_id = a.tenant_id and t.id = a.assignment_type_id
     left join cma.work_status s on s.tenant_id = t.tenant_id and s.id = t.work_status_id
-    where a.tenant_id = cma.current_tenant_id()
-      and w.week_start = p_week_start and w.team_id is not distinct from v_team
-      and a.valid_to is null
-      and cma.on_roster(a.user_id)
     order by a.business_date, a.user_id, a.start_time;
 end
 $$;
@@ -798,7 +813,7 @@ returns table (
   assignments        jsonb,
   ended_assignments  integer
 )
-language plpgsql stable
+language plpgsql stable rows 1
 as $$
 #variable_conflict use_column
 declare
@@ -898,7 +913,7 @@ returns table (
   hours_market_code  text,
   people             integer
 )
-language plpgsql stable
+language plpgsql stable rows 300
 as $$
 #variable_conflict use_column
 declare
@@ -914,19 +929,30 @@ begin
   v_zone := cma.roster_planner_zone();
   v_slot := cma.setting_of(cma.current_tenant_id(), 'roster.slot_minutes')::integer;
   return query
-    with blocks as (
-      select a.user_id, t.code, t.kind, t.sort_order,
-             coalesce(a.hours_market_code, u.default_hours_market_code) as market,
-             (a.business_date + a.start_time) at time zone cma.user_timezone(a.user_id) as starts,
-             (a.business_date + a.end_time) at time zone cma.user_timezone(a.user_id) as ends
-      from cma.roster_assignment a
-      join cma.roster_week w on w.tenant_id = a.tenant_id and w.id = a.roster_week_id
-      join cma.assignment_type t on t.tenant_id = a.tenant_id and t.id = a.assignment_type_id
-      join cma.app_user u on u.tenant_id = a.tenant_id and u.id = a.user_id
-      where a.tenant_id = cma.current_tenant_id() and a.valid_to is null
-        and a.business_date between p_date - 1 and p_date + 1
+    with raw as materialized (
+      -- the weeks that hold the business dates around the day, through roster_week_week_idx (no read of older weeks)
+      select a.user_id, a.business_date, a.start_time, a.end_time, a.hours_market_code, a.assignment_type_id
+      from cma.roster_week w
+      join cma.roster_assignment a on a.tenant_id = w.tenant_id and a.roster_week_id = w.id
+      where w.tenant_id = cma.current_tenant_id()
+        and w.week_start between cma.week_start(p_date - 1) and cma.week_start(p_date + 1)
         and w.team_id is not distinct from v_team
-        and cma.on_roster(a.user_id)
+        and a.valid_to is null and a.business_date between p_date - 1 and p_date + 1
+    ),
+    -- once per person: on the roster, the zone and the Default market (not once per block)
+    people as materialized (
+      select u.id as user_id, cma.user_timezone(u.id) as zone, u.default_hours_market_code
+      from (select distinct r.user_id from raw r) x
+      join cma.app_user u on u.tenant_id = cma.current_tenant_id() and u.id = x.user_id
+      where cma.on_roster(x.user_id)
+    ),
+    blocks as materialized (
+      select r.user_id, t.code, t.kind, t.sort_order, coalesce(r.hours_market_code, p.default_hours_market_code) as market,
+             (r.business_date + r.start_time) at time zone p.zone as starts,
+             (r.business_date + r.end_time) at time zone p.zone as ends
+      from raw r
+      join people p on p.user_id = r.user_id
+      join cma.assignment_type t on t.tenant_id = cma.current_tenant_id() and t.id = r.assignment_type_id
     ),
     slots as (
       select s as slot_start
@@ -934,15 +960,19 @@ begin
                            (p_date + 1)::timestamp at time zone v_zone - make_interval(mins => v_slot),
                            make_interval(mins => v_slot)) s
     ),
-    hits as (
+    hits as materialized (
       select sl.slot_start, b.user_id, b.code, b.kind, b.sort_order, b.market
       from slots sl join blocks b on b.starts <= sl.slot_start and sl.slot_start < b.ends
+    ),
+    -- the people working per slot, counted once per slot
+    working as (
+      select h.slot_start, count(distinct h.user_id)::integer as n from hits h where h.kind = 'work' group by h.slot_start
     )
-    select h.slot_start, (h.slot_start at time zone v_zone)::time,
-           (select count(distinct h2.user_id)::integer from hits h2 where h2.slot_start = h.slot_start and h2.kind = 'work'),
+    select h.slot_start, (h.slot_start at time zone v_zone)::time, coalesce(wk.n, 0),
            h.code::text, h.market::text, count(distinct h.user_id)::integer
     from hits h
-    group by h.slot_start, h.code, h.sort_order, h.market
+    left join working wk on wk.slot_start = h.slot_start
+    group by h.slot_start, wk.n, h.code, h.sort_order, h.market
     order by h.slot_start, h.sort_order, h.code collate "C", h.market collate "C" nulls last;
 end
 $$;
@@ -958,7 +988,7 @@ returns table (
   hours_market_code  text,
   planned_minutes    integer
 )
-language plpgsql stable
+language plpgsql stable rows 500
 as $$
 #variable_conflict use_column
 declare
@@ -968,20 +998,30 @@ begin
   perform cma.assert_week_start(p_week_start);
   v_team := cma.roster_team_id(p_team_key);
   return query
-    select a.user_id, a.business_date, t.code::text, t.kind::text, coalesce(a.hours_market_code, u.default_hours_market_code)::text,
-           sum((extract(epoch from ((a.business_date + a.end_time) at time zone cma.user_timezone(a.user_id))
-                                 - ((a.business_date + a.start_time) at time zone cma.user_timezone(a.user_id))) / 60))::integer
-    from cma.roster_assignment a
-    join cma.roster_week w on w.tenant_id = a.tenant_id and w.id = a.roster_week_id
-    join cma.assignment_type t on t.tenant_id = a.tenant_id and t.id = a.assignment_type_id
-    join cma.app_user u on u.tenant_id = a.tenant_id and u.id = a.user_id
-    where a.tenant_id = cma.current_tenant_id()
-      and w.week_start = p_week_start and w.team_id is not distinct from v_team
-      and a.valid_to is null
-      and cma.on_roster(a.user_id)
-    group by a.user_id, a.business_date, t.code, t.kind, t.sort_order, coalesce(a.hours_market_code, u.default_hours_market_code)
-    order by a.user_id, a.business_date, t.sort_order, t.code collate "C",
-             coalesce(a.hours_market_code, u.default_hours_market_code) collate "C" nulls last;
+    with raw as materialized (
+      select a.user_id, a.business_date, a.start_time, a.end_time, a.hours_market_code, a.assignment_type_id
+      from cma.roster_assignment a
+      join cma.roster_week w on w.tenant_id = a.tenant_id and w.id = a.roster_week_id
+      where a.tenant_id = cma.current_tenant_id()
+        and w.week_start = p_week_start and w.team_id is not distinct from v_team
+        and a.valid_to is null
+    ),
+    -- once per person: on the roster, the zone and the Default market (not once per block)
+    people as materialized (
+      select u.id as user_id, cma.user_timezone(u.id) as zone, u.default_hours_market_code
+      from (select distinct r.user_id from raw r) x
+      join cma.app_user u on u.tenant_id = cma.current_tenant_id() and u.id = x.user_id
+      where cma.on_roster(x.user_id)
+    )
+    select r.user_id, r.business_date, t.code::text, t.kind::text, coalesce(r.hours_market_code, p.default_hours_market_code)::text,
+           sum((extract(epoch from ((r.business_date + r.end_time) at time zone p.zone)
+                                 - ((r.business_date + r.start_time) at time zone p.zone)) / 60))::integer
+    from raw r
+    join people p on p.user_id = r.user_id
+    join cma.assignment_type t on t.tenant_id = cma.current_tenant_id() and t.id = r.assignment_type_id
+    group by r.user_id, r.business_date, t.code, t.kind, t.sort_order, coalesce(r.hours_market_code, p.default_hours_market_code)
+    order by r.user_id, r.business_date, t.sort_order, t.code collate "C",
+             coalesce(r.hours_market_code, p.default_hours_market_code) collate "C" nulls last;
 end
 $$;
 
@@ -1033,7 +1073,7 @@ begin
 end
 $$;
 
--- The people on the week's grid, 0009y's, with their Default market last (the Day view shows it, and a block without a
+-- The people on the week's grid, 0005's (0009y changed the scope it calls, not this function), with their Default market last (the Day view shows it, and a block without a
 -- market is planned under it)
 drop function if exists cma.roster_people(date, text);
 -- based on: 23_roster.sql
@@ -1047,7 +1087,7 @@ returns table (
   work_type_keys             text[],
   default_hours_market_code  text
 )
-language plpgsql stable
+language plpgsql stable rows 100
 as $$
 #variable_conflict use_column
 declare
@@ -1198,7 +1238,7 @@ $$;
 -- does not carry over (absence_not_carried). One row per source cell
 create or replace function cma.roster_copy_week_report(p_from_week_start date, p_to_week_start date, p_team_key text default null)
 returns table (user_id uuid, business_date date, outcome text, reason text, blocks integer, blocks_dropped integer)
-language plpgsql
+language plpgsql rows 300
 as $$
 #variable_conflict use_column
 declare
@@ -1219,7 +1259,7 @@ begin
     select e.user_id, e.business_date, e.kind, e.start_time, e.end_time, a.key as absence_key, a.carries_over, e.note,
            coalesce((select jsonb_agg(jsonb_build_object('code', t.code, 'start', to_char(x.start_time, 'HH24:MI'),
                                                          'end', case when x.end_time = '24:00'::time then '24:00' else to_char(x.end_time, 'HH24:MI') end,
-                                                         'market', x.hours_market_code, 'note', x.note) order by x.start_time)
+                                                         'hoursMarket', x.hours_market_code, 'note', x.note) order by x.start_time)
                      from cma.roster_assignment x
                      join cma.assignment_type t on t.tenant_id = x.tenant_id and t.id = x.assignment_type_id
                      where x.tenant_id = e.tenant_id and x.user_id = e.user_id and x.business_date = e.business_date
@@ -1288,7 +1328,7 @@ returns table (
   assignments   jsonb,
   recorded_at   timestamptz
 )
-language plpgsql stable
+language plpgsql stable rows 300
 as $$
 #variable_conflict use_column
 begin
@@ -1316,7 +1356,7 @@ $$;
 -- empty. The replaced rows end (valid_to; superseded_by: the new row of the same weekday), so they stay readable
 create or replace function cma.save_standard_week(p_week_start date, p_team_key text default null)
 returns table (user_id uuid, business_date date, outcome text, reason text, blocks integer, blocks_dropped integer)
-language plpgsql
+language plpgsql rows 300
 as $$
 #variable_conflict use_column
 declare
@@ -1329,6 +1369,8 @@ begin
   perform cma.assert_permission('roster.manage');
   perform cma.assert_week_start(p_week_start);
   v_team := cma.roster_team_id(p_team_key);
+  -- one save of the tenant's Standard week at a time (two at once would meet on the current rows' unique index)
+  perform pg_advisory_xact_lock(hashtext('cma.standard_week:' || cma.current_tenant_id()::text));
   for p in
     select u.id from cma.app_user u
     where u.tenant_id = cma.current_tenant_id() and cma.roster_in_scope(u.id, v_team, p_week_start)
@@ -1383,7 +1425,7 @@ $$;
 -- (absence_not_carried). A block that breaks a rule now (a retired type or market, the grid) is dropped and counted
 create or replace function cma.apply_standard_week(p_week_start date, p_team_key text default null)
 returns table (user_id uuid, business_date date, outcome text, reason text, blocks integer, blocks_dropped integer)
-language plpgsql
+language plpgsql rows 300
 as $$
 #variable_conflict use_column
 declare
@@ -1401,7 +1443,7 @@ begin
            a.carries_over, e.note,
            coalesce((select jsonb_agg(jsonb_build_object('code', t.code, 'start', to_char(x.start_time, 'HH24:MI'),
                                                          'end', case when x.end_time = '24:00'::time then '24:00' else to_char(x.end_time, 'HH24:MI') end,
-                                                         'market', x.hours_market_code, 'note', x.note) order by x.start_time)
+                                                         'hoursMarket', x.hours_market_code, 'note', x.note) order by x.start_time)
                      from cma.standard_week_assignment x
                      join cma.assignment_type t on t.tenant_id = x.tenant_id and t.id = x.assignment_type_id
                      where x.tenant_id = e.tenant_id and x.standard_week_entry_id = e.id and x.valid_to is null), '[]'::jsonb) as blocks
@@ -1500,7 +1542,7 @@ returns table (
   published_at   timestamptz,
   assignments    jsonb
 )
-language plpgsql stable
+language plpgsql stable rows 31
 as $$
 #variable_conflict use_column
 declare
@@ -1550,7 +1592,7 @@ returns table (
   absence_name   text,
   assignments    jsonb
 )
-language plpgsql stable
+language plpgsql stable rows 100
 as $$
 #variable_conflict use_column
 begin

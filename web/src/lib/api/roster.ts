@@ -45,8 +45,8 @@ const BLOCK_START_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const BLOCK_END_RE = /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/;
 
 /**
- * A person-date's blocks as the planner sends them (addition 0009zw): [{ code, start, end, market?, note? }], at most 96;
- * times hh:mm in the person's zone (an end of 24:00 allowed), the market an hours market's code or null (own market). The
+ * A person-date's blocks as the planner sends them (addition 0009zw): [{ code, start, end, hoursMarket?, note? }], at most 96;
+ * times hh:mm in the person's zone (an end of 24:00 allowed), the hours market's code or null (own market). The
  * grid, the shift, overlap and the market's kind are the database's answers (400 or 404)
  */
 export function blocksParam(raw: unknown): AssignmentBlockInput[] {
@@ -58,10 +58,10 @@ export function blocksParam(raw: unknown): AssignmentBlockInput[] {
     if (typeof b.start !== "string" || typeof b.end !== "string" || !BLOCK_START_RE.test(b.start) || !BLOCK_END_RE.test(b.end) || b.end <= b.start) {
       throw new ApiError(400, "invalid_blocks", "start and end must be hh:mm, the end after the start");
     }
-    const market = b.market === undefined || b.market === null || b.market === "" ? null : b.market;
-    if (market !== null && (typeof market !== "string" || !/^[A-Z]{2}$/.test(market))) throw new ApiError(400, "invalid_blocks", "market must be a market code");
+    const market = b.hoursMarket === undefined || b.hoursMarket === null || b.hoursMarket === "" ? null : b.hoursMarket;
+    if (market !== null && (typeof market !== "string" || !/^[A-Z]{2}$/.test(market))) throw new ApiError(400, "invalid_blocks", "hoursMarket must be a market code");
     const note = b.note === undefined || b.note === null || b.note === "" ? null : b.note;
     if (note !== null && (typeof note !== "string" || note.trim().length > 120)) throw new ApiError(400, "invalid_blocks", "note must be at most 120 characters");
-    return { code: b.code, start: b.start, end: b.end, market: market as string | null, note: note === null ? null : (note as string).trim() || null };
+    return { code: b.code, start: b.start, end: b.end, hoursMarket: market as string | null, note: note === null ? null : (note as string).trim() || null };
   });
 }

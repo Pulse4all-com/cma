@@ -124,7 +124,7 @@ export function AssignmentTypesConfig({ types, statuses, settings, copy }: {
           </label>
           <label className={label}>
             {t.plannerZone}
-            <input className={field} value={zone ?? valueOf("roster.planner_timezone")} placeholder="Europe/Madrid"
+            <input className={field} value={zone ?? valueOf("roster.planner_timezone")}
               onChange={(e) => setZone(e.target.value)}
               onBlur={async () => { if (zone !== undefined) { await setting("roster.planner_timezone", zone.trim() || null); setZone(undefined); } }} />
             <span className="font-normal text-caption text-p4a-muted">{t.plannerZoneHint}</span>

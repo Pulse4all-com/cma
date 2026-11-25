@@ -39,10 +39,12 @@
 --   B10 D12 on a fixture week: coverage per slot of the planner zone's day (UTC + 1: a1's 09:00 is the planner's 10:00) and the
 --       planned minutes per person, type and hours market
 --   B11 an agent reads none of the planner's functions (CMA06)
+--   B12 a type in the plan keeps what it books: its kind, status and extra flag are refused (CMA03), its name changes
 --   R1  per active tenant: roster_week = 0005's definition for this week and the next on every roster, but where a block
 --       changed after the publication (changed_since_publish may then be true where 0005's says false)
---   R2  per active tenant: my_roster's earlier columns = 0005's for the first person holding roster.view, this week and next
---   R3  per active tenant: absence_types' earlier columns = 0005's
+--   R2  per active tenant: my_roster's earlier columns = 0005's for the first person holding roster.view, this week and next,
+--       both ways; R1 to R3 provoked: 0005's side loses a row, so the comparison itself must find the difference
+--   R3  per active tenant: absence_types' earlier columns = the tenant's absence_type rows (0005's read), both ways
 -- Provoke: verify.provoke below. 'true': every check reads FAIL and the verdict says PROVOKED, NOT A PASS. A check's id:
 -- that check alone compares with a deliberate difference.
 -- Collation: every ordering that feeds a compared text says collate "C".
@@ -263,7 +265,7 @@ begin
   perform pg_temp.v0009zw_row(4, 'S4', 'the settings and the zone trigger on cma.tenant_setting',
     (select string_agg(s.key || '=' || s.default_value || coalesce(' [' || array_to_string(s.allowed_values, ',') || ']', ''), '; ' order by s.key collate "C")
      from cma.setting s where s.key in ('roster.slot_minutes', 'roster.lunch_after_minutes', 'roster.lunch_type_code', 'roster.planner_timezone'))
-    || '; zone trigger ' || exists (select 1 from pg_trigger g where g.tgrelid = 'cma.tenant_setting'::regclass and g.tgname = 'zone_ok'),
+    || '; zone trigger ' || exists (select 1 from pg_trigger g where g.tgrelid = 'cma.tenant_setting'::regclass and g.tgname = 'check_roster_setting'),
     'roster.lunch_after_minutes=360; roster.lunch_type_code=; roster.planner_timezone=; roster.slot_minutes=15 [5,10,15,20,30,60]; zone trigger true');
 end
 $$;
@@ -280,12 +282,12 @@ declare
   v_adm uuid; v_mgr uuid; v_ana uuid; v_a1 uuid; v_a2 uuid;
   v_text  text;
   v_j     jsonb;
-  v_b1 text; v_b2 text; v_b3 text; v_b4 text; v_b5 text; v_b6 text; v_b7 text; v_b8 text; v_b9 text; v_b10 text; v_b11 text;
+  v_b1 text; v_b2 text; v_b3 text; v_b4 text; v_b5 text; v_b6 text; v_b7 text; v_b8 text; v_b9 text; v_b10 text; v_b11 text; v_b12 text;
   v_err   text;
   e       cma.roster_entry;
   w       cma.roster_week;
   -- the blocks a1 holds on v_wk at the start
-  v_blocks jsonb := '[{"code":"SL","start":"09:00","end":"11:00","market":"GB"},{"code":"LB","start":"12:00","end":"12:30"},{"code":"GO","start":"13:00","end":"17:00"}]';
+  v_blocks jsonb := '[{"code":"SL","start":"09:00","end":"11:00","hoursMarket":"GB"},{"code":"LB","start":"12:00","end":"12:30"},{"code":"GO","start":"13:00","end":"17:00"}]';
 begin
   begin
     v_t := cma.create_tenant('verify-0009zw', 'Verify 0009zw', 'UTC');
@@ -342,8 +344,8 @@ begin
       pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:05","end":"10:00"}]')$q$, v_wk, v_a1, v_wk)),
       pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"08:00","end":"10:00"}]')$q$, v_wk, v_a1, v_wk)),
       pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:00","end":"10:00"}]')$q$, v_wk, v_a1, v_wk + 1)),
-      pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:00","end":"10:00","market":"BE"}]')$q$, v_wk, v_a1, v_wk)),
-      pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:00","end":"10:00","market":"UK"}]')$q$, v_wk, v_a1, v_wk)),
+      pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:00","end":"10:00","hoursMarket":"BE"}]')$q$, v_wk, v_a1, v_wk)),
+      pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:00","end":"10:00","hoursMarket":"UK"}]')$q$, v_wk, v_a1, v_wk)),
       pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"ZZ","start":"09:00","end":"10:00"}]')$q$, v_wk, v_a1, v_wk)),
       pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"OLD","start":"09:00","end":"10:00"}]')$q$, v_wk, v_a1, v_wk)),
       pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[]')$q$, v_this - 7, v_a1, v_this - 7)),
@@ -376,7 +378,7 @@ begin
 
     -- B3: versioning: GO 13:00-17:00 becomes 13:00-16:00; SL and LB are kept
     v_j := cma.roster_set_assignments(v_wk, 'alpha', v_a1, v_wk,
-      '[{"code":"SL","start":"09:00","end":"11:00","market":"GB"},{"code":"LB","start":"12:00","end":"12:30"},{"code":"GO","start":"13:00","end":"16:00"}]');
+      '[{"code":"SL","start":"09:00","end":"11:00","hoursMarket":"GB"},{"code":"LB","start":"12:00","end":"12:30"},{"code":"GO","start":"13:00","end":"16:00"}]');
     perform set_config('role', 'cma_owner', true);
     select format('kept %s ended %s added %s; rows %s, current %s; the ended GO 13:00-17:00 superseded by GO %s; current %s',
                   v_j->>'kept', v_j->>'ended', v_j->>'added',
@@ -396,7 +398,7 @@ begin
     perform set_config('app.user_id', v_mgr::text, true);
     w := cma.roster_publish(v_wk, 'alpha');
     v_j := cma.roster_set_assignments(v_wk, 'alpha', v_a1, v_wk,
-      '[{"code":"SL","start":"09:00","end":"11:00","market":"GB"},{"code":"LB","start":"12:00","end":"12:30"},{"code":"GO","start":"13:00","end":"15:00"}]');
+      '[{"code":"SL","start":"09:00","end":"11:00","hoursMarket":"GB"},{"code":"LB","start":"12:00","end":"12:30"},{"code":"GO","start":"13:00","end":"15:00"}]');
     select v_b4 || format('; future change published %s; changed since publish %s', v_j->>'published', r.changed_since_publish)
     into v_b4 from cma.roster_week(v_wk, 'alpha') r;
     select v_b4 || '; planner ' || string_agg(a.code || ' ' || to_char(a.start_time, 'HH24:MI') || '-' || to_char(a.end_time, 'HH24:MI'), ', ' order by a.start_time)
@@ -457,7 +459,7 @@ begin
     e := cma.roster_set_entry(v_wk, 'alpha', v_a1, v_wk + 1, 'absence', null, null, 'off', null);
     e := cma.roster_set_entry(v_wk, 'alpha', v_a1, v_wk + 2, 'absence', null, null, 'sick', null);
     v_j := cma.roster_set_assignments(v_wk, 'alpha', v_a2, v_wk,
-      '[{"code":"GO","start":"08:00","end":"12:00"},{"code":"LB","start":"12:00","end":"13:00"},{"code":"SL","start":"13:00","end":"16:00","market":"GB"}]');
+      '[{"code":"GO","start":"08:00","end":"12:00"},{"code":"LB","start":"12:00","end":"13:00"},{"code":"SL","start":"13:00","end":"16:00","hoursMarket":"GB"}]');
     select string_agg(u.display_name || ' ' || (r.business_date - v_wk - 7) || ' ' || r.outcome || coalesce(' ' || r.reason, '') || ' ' || r.blocks, '; '
                       order by u.display_name collate "C", r.business_date)
     into v_b7 from cma.roster_copy_week_report(v_wk, v_wk + 7, 'alpha') r join cma.app_user u on u.tenant_id = v_t and u.id = r.user_id;
@@ -511,7 +513,7 @@ begin
     perform set_config('app.user_id', v_mgr::text, true);
     e := cma.roster_set_entry(v_wk + 7, 'alpha', v_a1, v_wk + 7, 'shift', '09:00', '17:00', null, null);
     v_j := cma.roster_set_assignments(v_wk + 7, 'alpha', v_a1, v_wk + 7,
-      '[{"code":"SL","start":"09:00","end":"13:00"},{"code":"X","start":"13:00","end":"14:00"},{"code":"SL","start":"14:00","end":"17:00","market":"GB"}]');
+      '[{"code":"SL","start":"09:00","end":"13:00"},{"code":"X","start":"13:00","end":"14:00"},{"code":"SL","start":"14:00","end":"17:00","hoursMarket":"GB"}]');
     select string_agg(to_char(c.slot_time, 'HH24:MI') || ' w' || c.working || ' ' || c.code || '/' || coalesce(c.hours_market_code, '-') || '=' || c.people, ', '
                       order by c.slot_start, c.code collate "C", c.hours_market_code collate "C")
     into v_b10 from cma.roster_slot_coverage(v_wk + 7, 'alpha') c
@@ -521,6 +523,12 @@ begin
     select v_b10 || ' | planned ' || string_agg(u.display_name || ' ' || p.code || '/' || coalesce(p.hours_market_code, '-') || '=' || p.planned_minutes, ', '
                                                  order by u.display_name collate "C", p.code collate "C", p.hours_market_code collate "C")
     into v_b10 from cma.roster_planned_hours(v_wk + 7, 'alpha') p join cma.app_user u on u.tenant_id = v_t and u.id = p.user_id;
+
+    -- B12: a type in the plan keeps what it books; its name changes freely
+    perform set_config('app.user_id', v_adm::text, true);
+    v_b12 := format('GO books sales %s; GO renamed %s',
+      pg_temp.v0009zw_try($q$select cma.upsert_assignment_type('GO', 'General Ops', 'work', 'v_sales', false, 20)$q$),
+      pg_temp.v0009zw_try($q$select cma.upsert_assignment_type('GO', 'Operations, general', 'work', 'v_ops', false, 20)$q$));
 
     -- B11: an agent reads none of the planner's functions
     perform set_config('app.user_id', v_a1::text, true);
@@ -565,6 +573,8 @@ begin
     v_b9, 'zone Mars/Base CMA04; slot 7 CMA04; 08:15 on a 30-minute grid CMA04; planner zone Africa/Lagos');
   perform pg_temp.v0009zw_row(20, 'B10', 'D12: coverage per slot of the planner zone''s day and the planned minutes per type and market',
     v_b10, '09:00 w1 GO/-=1, 10:00 w2 GO/-=1, 10:00 w2 SL/NL=1, 13:00 w1 LB/-=1, 13:00 w1 SL/NL=1, 14:00 w2 SL/GB=1, 14:00 w2 X/NL=1, 17:45 w1 SL/GB=1 | slots 36, first 09:00, last 17:45 | planned a1 SL/GB=180, a1 SL/NL=240, a1 X/NL=60, a2 GO/-=240, a2 LB/-=60, a2 SL/GB=180');
+  perform pg_temp.v0009zw_row(22, 'B12', 'a type in the plan keeps its kind, status and extra flag; its name is free',
+    v_b12, 'GO books sales CMA03; GO renamed accepted');
   perform pg_temp.v0009zw_row(21, 'B11', 'an agent reads none of the planner''s functions',
     v_b11, 'assignments CMA06; coverage CMA06; planned CMA06; cell CMA06; standard CMA06; save CMA06; apply CMA06; copy CMA06');
 end
@@ -631,6 +641,10 @@ begin
                                   except all
                                   (select a.key::text, a.name::text, a.is_paid, a.sort_order, a.status::text from cma.absence_type a
                                    where a.tenant_id = t.id order by a.sort_order, a.key offset v_o3))
+                       or exists ((select a.key::text, a.name::text, a.is_paid, a.sort_order, a.status::text from cma.absence_type a
+                                   where a.tenant_id = t.id order by a.sort_order, a.key offset v_o3)
+                                  except all
+                                  (select a.key, a.name, a.is_paid, a.sort_order, a.status from cma.absence_types() a))
                        then 'differs' else 'equal' end;
       end if;
       if v_viewer is not null then
@@ -641,6 +655,10 @@ begin
                                    from cma.my_roster(v_this, v_this + 13) m)
                                   except all
                                   (select * from pg_temp.v0009zw_my_roster_0005(v_this, v_this + 13) offset v_o2))
+                       or exists ((select * from pg_temp.v0009zw_my_roster_0005(v_this, v_this + 13) offset v_o2)
+                                  except all
+                                  (select m.business_date, m.is_published, m.kind, m.start_time, m.end_time, m.absence_key, m.absence_name, m.note, m.team_name, m.published_at
+                                   from cma.my_roster(v_this, v_this + 13) m))
                        then 'differs' else 'equal' end;
       end if;
     exception when others then
@@ -658,7 +676,7 @@ begin
         case when pg_temp.v0009zw_p('R1') or pg_temp.v0009zw_p('R3') then 'FAIL' else 'skip' end, 'no active person holds roster.manage');
     else
       insert into pg_temp.verify_0009zw values (31, 'R1 ' || t.slug || ': roster_week = 0005''s, but where a block changed after the publication',
-        case when btrim(v_r1) <> '' or v_o1 = 1 then 'FAIL' else 'PASS' end,
+        case when btrim(v_r1) <> '' or (v_o1 = 1 and v_n1 = 0) then 'FAIL' else 'PASS' end,
         format('weeks compared %s; differing %s', v_n1, coalesce(nullif(btrim(v_r1), ''), 'none')));
       insert into pg_temp.verify_0009zw values (33, 'R3 ' || t.slug || ': absence_types'' earlier columns = the table''s',
         case when v_r3 <> 'equal' or (v_o3 = 1 and v_n3 = 0) then 'FAIL' else 'PASS' end, format('rows %s; %s', v_n3, v_r3));

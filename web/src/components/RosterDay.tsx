@@ -53,10 +53,19 @@ export function RosterDay({
   const t = copy.assignmentsDay;
   const router = useRouter();
   const [busy, startTransition] = useTransition();
+  // the week read again after a pause runs in its own transition: it is no save, so it neither says Saving nor blocks Apply
+  const [, startRefresh] = useTransition();
+  /** A read of the week is under way, and the planner changed a row while it was */
+  const [refreshing, setRefreshing] = useState(false);
+  const [changedDuringRefresh, setChangedDuringRefresh] = useState(false);
   const ctx = week.planner;
   const slot = ctx.slotMinutes;
   const zone = ctx.plannerZone;
   const kinds = useMemo(() => new Map(ctx.types.map((x) => [x.code, x.kind])), [ctx.types]);
+  // The examples in the words come from the tenant's own catalog: its first active type and hours market (never a code in copy)
+  const exampleCode = ctx.types.find((x) => x.isActive)?.code ?? "";
+  const exampleMarket = ctx.hoursMarkets.find((m) => m.isActive)?.code ?? "";
+  const example = (text: string) => text.replaceAll("{code}", exampleCode).replaceAll("{market}", exampleMarket);
   const typeOf = useMemo(() => new Map(ctx.types.map((x) => [x.code, x])), [ctx.types]);
 
   // The people of the day with their shift and blocks in minutes of the planner zone's day
@@ -75,9 +84,12 @@ export function RosterDay({
   const [blocksOf, setBlocksOf] = useState(() => new Map(rows.map((r) => [r.person.userId, r.blocks])));
   const [answer, setAnswer] = useState(week);
   if (answer !== week) {
-    // a new answer of the same week (a refresh after a write): the blocks follow the database
+    // a new answer of the same week (a refresh after a write): the blocks follow the database, unless the planner changed
+    // a row after that read started (the answer would show the plan from before that change until the next read)
     setAnswer(week);
-    setBlocksOf(new Map(rows.map((r) => [r.person.userId, r.blocks])));
+    if (!changedDuringRefresh) setBlocksOf(new Map(rows.map((r) => [r.person.userId, r.blocks])));
+    setChangedDuringRefresh(false);
+    setRefreshing(false);
   }
   const [problems, setProblems] = useState<Map<string, RowProblem>>(new Map());
   const [saving, setSaving] = useState<Set<string>>(new Set());
@@ -116,7 +128,8 @@ export function RosterDay({
     if (!drag.current) return;
     const s = slotAt(e);
     if (s !== drag.current.s || r !== drag.current.r) drag.current.moved = true;
-    setSel((x) => (x ? { ...x, r1: r, s1: s } : x));
+    // the same object while the pointer stays in its slot: no render per pointer move
+    setSel((x) => (x && (x.r1 !== r || x.s1 !== s) ? { ...x, r1: r, s1: s } : x));
   }
   function up(e: ReactPointerEvent<HTMLDivElement>, r: number) {
     const d = drag.current;
@@ -138,7 +151,7 @@ export function RosterDay({
       const start = fromPlannerMinutes(b.start, date, p.timeZone, zone);
       const end = fromPlannerMinutes(b.end, date, p.timeZone, zone);
       if (!start || !end || end <= start) return null;
-      out.push({ code: b.code, start, end, market: b.market, note: b.note });
+      out.push({ code: b.code, start, end, hoursMarket: b.market, note: b.note });
     }
     return out;
   }
@@ -147,6 +160,7 @@ export function RosterDay({
     const real = changes.filter((c) => !sameBlocks(blocksOf.get(c.userId) ?? [], c.next));
     if (real.length === 0) return;
     const prevOf = new Map(real.map((c) => [c.userId, blocksOf.get(c.userId) ?? []]));
+    if (refreshing) setChangedDuringRefresh(true);
     // the result shows at once; a refusal puts the row back
     setBlocksOf((m) => { const n = new Map(m); for (const c of real) n.set(c.userId, c.next); return n; });
     setSaving((x) => new Set([...x, ...real.map((c) => c.userId)]));
@@ -169,12 +183,28 @@ export function RosterDay({
           continue;
         }
         const r = ((await res.json()) as { data: RosterAssignmentsResult }).data;
-        if (r.status === "confirm") { confirm.push({ userId: c.userId, prev: prevOf.get(c.userId)!, next: c.next, others: r.otherChanges }); continue; }
+        if (r.status === "confirm") {
+          // nothing was written: the row shows the database's blocks again until the planner confirms (D8)
+          confirm.push({ userId: c.userId, prev: prevOf.get(c.userId)!, next: c.next, others: r.otherChanges });
+          setBlocksOf((m) => new Map(m).set(c.userId, prevOf.get(c.userId)!));
+          continue;
+        }
         setProblems((m) => { const n = new Map(m); n.delete(c.userId); return n; });
+        // the row as the database answered it (its own blocks, in the planner zone's minutes)
+        const p = week.people.find((x) => x.userId === c.userId)!;
+        setBlocksOf((m) => new Map(m).set(c.userId, r.blocks.map((b) => ({
+          code: b.code, market: b.hoursMarket, note: b.note,
+          start: toPlannerMinutes(date, b.start, p.timeZone, zone) ?? 0, end: toPlannerMinutes(date, b.end, p.timeZone, zone) ?? 0,
+        }))));
         published ||= r.published;
       }
       setSaving(new Set());
-      if (confirm.length > 0) setPending(confirm);
+      if (confirm.length > 0) {
+        // no read of the week while the planner decides: it would show the rows as the database holds them mid-question
+        if (refreshTimer.current) { clearTimeout(refreshTimer.current); refreshTimer.current = null; }
+        setPending(confirm);
+        return;
+      }
       if (published) { setNotice(t.publishedNow); onPublishedNow(); } else refreshSoon();
     });
   }
@@ -185,16 +215,15 @@ export function RosterDay({
     write(p.map((x) => ({ userId: x.userId, next: x.next })), true);
   }
   function cancelPublish() {
-    const p = pending ?? [];
+    // the rows already show the database's blocks again (write put them back when it was asked)
     setPending(null);
-    setBlocksOf((m) => { const n = new Map(m); for (const x of p) n.set(x.userId, x.prev); return n; });
   }
 
   // The week read again once the planner pauses (night N07, D4), never one read per write
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   function refreshSoon() {
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
-    refreshTimer.current = setTimeout(() => { refreshTimer.current = null; startTransition(() => router.refresh()); }, 1500);
+    refreshTimer.current = setTimeout(() => { refreshTimer.current = null; setRefreshing(true); startRefresh(() => router.refresh()); }, 1500);
   }
 
   /** Paints the selection with the typed code, or empties it (null) */
@@ -292,12 +321,17 @@ export function RosterDay({
   const keyLabel = (k: string) => { const [c, m] = k.split("/"); return m ? `${c} ${m}` : `${c} · ${t.ownMarket}`; };
   const splitText = (m: Map<string, number>) => [...m].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => `${keyLabel(k)} ${fmtMinutes(v)}`).join("\n");
   const problemText: Record<RowProblem, string> = {
-    empty: t.problemEmpty, unknown: t.problemUnknown, retired: t.problemRetired, market: t.problemMarket, format: t.problemFormat,
+    empty: t.problemEmpty, unknown: t.problemUnknown, retired: t.problemRetired, market: example(t.problemMarket), format: example(t.problemFormat),
     outside: t.problemOutside, times: t.problemTimes, past: t.problemPast, failed: t.problemFailed,
   };
   const hours: number[] = [];
   for (let h = Math.ceil(axisStart / 60) * 60; h < axisEnd; h += 60) hours.push(h);
   const nameCols = "w-56 shrink-0";
+  const firstHour = (Math.ceil(axisStart / 60) * 60 - axisStart) / slot * SLOT_PX;
+  const hourLines = {
+    backgroundImage: "linear-gradient(to right, var(--color-p4a-border) 1px, transparent 1px)",
+    backgroundSize: `${(60 / slot) * SLOT_PX}px 100%`, backgroundPosition: `${firstHour}px 0`,
+  };
   const othersPending = Math.max(0, ...(pending ?? []).map((p) => p.others));
   const selRange = sel ? range(sel) : null;
   const barText = (type: AssignmentType | undefined, b: Block, defaultMarket: string | null) =>
@@ -305,7 +339,7 @@ export function RosterDay({
 
   return (
     <div className="flex flex-col gap-4" data-testid="roster-day">
-      <p className="max-w-4xl text-small text-p4a-muted">{t.dayIntro}</p>
+      <p className="max-w-4xl text-small text-p4a-muted">{example(t.dayIntro)}</p>
       <div className="flex items-end gap-3">
         <label className="flex flex-col gap-2 text-small font-semibold">
           {t.codeLabel}
@@ -313,7 +347,7 @@ export function RosterDay({
             ref={codeField}
             value={code}
             maxLength={9}
-            placeholder={t.codeHint}
+            placeholder={example(t.codeHint)}
             disabled={!sel}
             data-testid="assignment-code"
             onChange={(e) => { setCode(e.target.value.toUpperCase()); setCodeProblem(null); }}
@@ -378,8 +412,9 @@ export function RosterDay({
                 >
                   {/* outside the shift: the neutral surface; inside: the page's own background (an empty slot, D13) */}
                   <div className="absolute inset-0 bg-p4a-neutral-surface" />
+                  {/* the hour lines, one background per row (not a line element per hour and row) */}
+                  <div className="pointer-events-none absolute inset-0" style={hourLines} />
                   {row.shift ? <div className="absolute inset-y-0 bg-white" style={{ left: px(row.shift.start), width: px(row.shift.end) - px(row.shift.start) }} /> : null}
-                  {hours.map((h) => <div key={h} className="absolute inset-y-0 w-px bg-p4a-border" style={{ left: px(h) }} />)}
                   {row.entry?.kind === "absence" ? (
                     <div className={`absolute inset-y-1 flex items-center rounded-button px-2 font-semibold ${TONE_CLASS.absence}`} style={{ left: 0, right: 0 }}>{row.entry.absenceName}</div>
                   ) : null}
@@ -389,8 +424,9 @@ export function RosterDay({
                     return (
                       <div
                         key={`${b.start}-${b.code}`}
-                        title={barText(type, b, row.person.defaultHoursMarket)}
-                        data-block={`${assignmentText(b)} ${fromMinutes(b.start)}-${fromMinutes(b.end)}`}
+                        // the type's name in words on hover (D13), built then: the page stays within its budget
+                        onPointerEnter={(e) => { e.currentTarget.title = barText(type, b, row.person.defaultHoursMarket); }}
+                        aria-label={`${assignmentText(b)} ${fromMinutes(b.start)}–${fromMinutes(b.end)}`}
                         className={`absolute inset-y-1 flex items-center gap-1 overflow-hidden whitespace-nowrap rounded-button px-1 text-caption font-semibold ${TONE_CLASS[tone]}`}
                         style={{ left: px(b.start), width: Math.max(4, px(b.end) - px(b.start)) }}
                       >
@@ -404,7 +440,7 @@ export function RosterDay({
                       style={{ left: selRange.sA * SLOT_PX, width: (selRange.sZ - selRange.sA + 1) * SLOT_PX }} />
                   ) : null}
                 </div>
-                <div className="tabular w-20 shrink-0 px-2 text-right" title={splitText(planned)}>{total > 0 ? fmtMinutes(total) : ""}</div>
+                <div className="tabular w-20 shrink-0 px-2 text-right" onPointerEnter={(e) => { e.currentTarget.title = splitText(planned); }}>{total > 0 ? fmtMinutes(total) : ""}</div>
               </div>
             );
           })}
@@ -415,7 +451,7 @@ export function RosterDay({
             <div className="relative flex h-10 shrink-0" style={{ width: slots * SLOT_PX }}>
               {figures.map((f) => (
                 <div key={f.start} className="tabular flex h-10 shrink-0 items-center justify-center text-caption" style={{ width: SLOT_PX }}
-                  title={`${fromMinutes(f.start)}\n${[...f.byKey].sort((a, b) => a[0].localeCompare(b[0])).map(([k, n]) => `${keyLabel(k)}: ${n}`).join("\n")}`}>
+                  onPointerEnter={(e) => { e.currentTarget.title = `${fromMinutes(f.start)}\n${[...f.byKey].sort((a, b) => a[0].localeCompare(b[0])).map(([k, n]) => `${keyLabel(k)}: ${n}`).join("\n")}`; }}>
                   {f.working > 0 ? f.working : ""}
                 </div>
               ))}
