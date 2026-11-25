@@ -12,7 +12,7 @@ import type {
   CrmRecordsDay, DashboardIntake, DashboardReads, DataQualityCheck, Intake, SourceConnections, SpeedToLeadDeal, SpeedToLeadFigures, SpeedToLeadGroup, SpeedToLeadPeriodFigures, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceRead, SourceKind, SourcePipeline, SourceSettings,
   InboundFigures, InboundNow, OutboundNow, InboundService, MissedReason, LiveBoardData, DataQualityReport,
-  CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
+  CallsByDirection, CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsPerTag, CallsTagUse,
   FormAnswerRow, FormCategory, FormsAnswers, FormsReport, FormsRow, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
   DueState, FollowUpCallbacks, FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummary, FollowUpSummaryAt, MyFollowUp, MyFollowUpCounts, OpenLead, OpenTask, OpenTicket, SlaState,
@@ -3691,6 +3691,28 @@ export const postgresData: CmaData = {
         ...range, group, filter, telephony: connections.telephony,
         rows: connections.telephony ? r.rows.map((x) => ({ groupKey: x.group_key, groupLabel: x.group_label, tagKey: x.tag_key, tagName: x.tag_name,
           isCounted: x.is_counted, conversations: x.conversations })) : [],
+      };
+    });
+  },
+
+  async getCallsPerTag(me, range, filter, withTotals = true): Promise<CallsPerTag> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission, the range and the filters first; its total row is cma.calls_figures_of's
+      const r = await q.query<{ row_kind: "tag" | "untagged" | "total"; tag_key: string | null; tag_name: string | null; meaning: TagMeaning | null;
+        is_counted: boolean | null; outbound: number; inbound: number; calls: number }>(
+        `select * from cma.calls_per_tag($1::date, $2::date, $3, $4, $5)`, [range.from, range.to, filter.market, filter.line, withTotals]);
+      const connections = await readConnections(q);
+      const counts = (x: { outbound: number; inbound: number; calls: number } | undefined): CallsByDirection =>
+        ({ outbound: x?.outbound ?? 0, inbound: x?.inbound ?? 0, calls: x?.calls ?? 0 });
+      const total = r.rows.find((x) => x.row_kind === "total");
+      return {
+        ...range, filter, telephony: connections.telephony,
+        rows: connections.telephony ? r.rows.filter((x) => x.row_kind === "tag").map((x) => ({
+          tagKey: x.tag_key!, tagName: x.tag_name!, meaning: x.meaning, isCounted: x.is_counted ?? true, ...counts(x),
+        })) : [],
+        untagged: counts(r.rows.find((x) => x.row_kind === "untagged")),
+        totals: withTotals ? counts(total) : null,
       };
     });
   },

@@ -17,7 +17,7 @@ import type {
   AlertRule, LinkedAccount, MarketConfig, MarketHoliday, OfficeHours, SourceCallOutcome, SourceConnection, SourceDetail, SourceRead, SourceForm, SourceKind,
   SourceLine, SourcePipeline, SourceStore, SourceTag,
   InboundFigures, InboundGroup, InboundNow, OutboundNow, InboundService, MissedReason, SourceMissedReason,
-  CallsFilter, CallsGroup, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsTagUse, HoursRange,
+  CallsFilter, CallsGroup, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerTag, CallsTagUse, HoursRange,
   FormCategory, FormsAnswers, FormsFilter, FormsGroup, FormsReport, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
   FollowUpCallbacks, FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummaryAt, MyFollowUp, MyFollowUpCounts, OpenLead, OpenTask, OpenTicket, SourceTaskStatus, SourceTaskType,
@@ -55,7 +55,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { INVITE_TOKEN_RE } from "@/lib/invitations";
 import { recordUrlPreview, settingsProblem } from "@/lib/sources";
 import {
-  applyConnections, callRecords, callRules, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead, speedFigures,
+  applyConnections, callRecords, callRules, callsFigures, callsPerPerson, callsPerPersonTags, callsPerTag, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead, speedFigures,
   SPEED_DEALS_PAGE, speedDealsPage, speedPeriodFigures, speedTrendGroup,
   historyStartOf, inboundCalls, inboundFigures, missedReasonOf, parseCallsFilter, PER_AGENT_PERMISSION, previousCalls, previousPeriod, rangeProblem,
   FORMS_GROUPS, formsAnswersOf, formsFigures, formsHistoryStart, parseAnswerFilter, parseFormsFilter, previousForms, type FormSubmissionRecord,
@@ -4814,6 +4814,13 @@ export const mockData: CmaData = {
     assertCalls(me, range, filter, group, ["reports.view", "performance.team"]);
     const telephony = connectionsOf(me).telephony;
     return { ...range, group, filter, telephony, rows: callsTagUse(mockCallRecords(me, range, filter), range.from, range.to, group, mockCallTags(me)) };
+  },
+
+  async getCallsPerTag(me, range, filter, withTotals = true): Promise<CallsPerTag> {
+    assertCalls(me, range, filter, null, ["reports.view", "performance.team"]);
+    const telephony = connectionsOf(me).telephony;
+    const { rows, untagged, totals } = callsPerTag(mockCallRecords(me, range, filter), range.from, range.to, mockCallTags(me));
+    return { ...range, filter, telephony, rows: telephony ? rows : [], untagged, totals: withTotals ? totals : null };
   },
 
   async getCallsPerAgent(me, range, filter): Promise<CallsPerAgent> {

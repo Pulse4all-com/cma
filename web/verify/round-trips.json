@@ -130,8 +130,8 @@
   {
     "path": "/reports/calls",
     "subject": "manager",
-    "tx": 3,
-    "rt": 19
+    "tx": 4,
+    "rt": 24
   },
   {
     "path": "/reports/calls-per-agent",

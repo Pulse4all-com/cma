@@ -14,9 +14,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
-import type { CallsFigures, CallsGroup, CallsRow, TagUseRow } from "@/lib/data";
+import type { CallsByDirection, CallsFigures, CallsGroup, CallsPerTagRow, CallsRow, TagUseRow } from "@/lib/data";
 import {
-  CALLS_GROUPS, callsBars, callsChange, countAxis, fillHint, fmtCount, fmtShare, INBOUND_CLASS, nextCallsGroup, OTHER_TAGS_CLASS, OUTBOUND_CLASS,
+  CALLS_GROUPS, callsBars, callsChange, columnShare, countAxis, fillHint, fmtCount, fmtShare, INBOUND_CLASS, nextCallsGroup, OTHER_TAGS_CLASS, OUTBOUND_CLASS,
   TAG_CLASS, TAG_NOT_COUNTED_CLASS, tagTable, topTags, weekNumber,
 } from "@/lib/reports";
 import { fmtDate } from "@/lib/time";
@@ -295,6 +295,69 @@ export function TagTable({ rows, groups, total, group, copy, locale, conversatio
             {table.columns.map((c) => cell(totalOf(c.key), c.key, true))}
             {table.hasOther ? cell(totalOther, "other", true) : null}
             {cell({ count: total.untagged, share: total.calls === 0 ? null : total.untagged / total.calls }, "untagged", true)}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Calls per tag (addition 0009zw; docs/definitions.md, Calls per tag): the whole period's calls per current tag in
+ * three columns, Outbound, Inbound and Total, each cell a count and its share of that column's calls in scope; tags by
+ * Total, most first, a tag that does not count in Muted (as elsewhere for a tag that does not count); then Untagged and
+ * the Total row: the calls in scope, not the sum of the rows, since a call with two tags counts under each. The table
+ * style of the tags table above (Style 7.x: Background Blue header, banded rows, figures right-aligned and tabular)
+ */
+export function CallsPerTagTable({ rows, untagged, totals, copy, locale }: {
+  rows: CallsPerTagRow[]; untagged: CallsByDirection; totals: CallsByDirection; copy: Copy; locale: Locale;
+}) {
+  const t = copy.calls;
+  const h = copy.hints;
+  const hint = (label: string, text: string) => <HeaderHint label={h.about.replace("{label}", label)} text={text} />;
+  const n = (x: number) => fmtCount(x, locale);
+  const th = "h-10 whitespace-nowrap px-2 py-1 font-semibold";
+  const td = "h-10 whitespace-nowrap px-2 tabular text-right";
+  const cells = (c: CallsByDirection, bold = false) => ([
+    ["outbound", c.outbound, totals.outbound], ["inbound", c.inbound, totals.inbound], ["calls", c.calls, totals.calls],
+  ] as const).map(([key, count, of]) => (
+    <td key={key} className={`${td} ${bold ? "font-semibold" : ""}`} data-column={key}>
+      {n(count)} <span className="font-normal text-p4a-muted">· {fmtShare(columnShare(count, of), locale)}</span>
+    </td>
+  ));
+  const band = "border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50";
+  return (
+    <div className="overflow-x-auto" data-testid="calls-per-tag-scroll" role="region" aria-label={t.perTagTitle} tabIndex={0}>
+      <table className="w-full border-collapse text-body leading-table" data-testid="calls-per-tag">
+        <thead>
+          <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
+            <th className={th}><HintLabel label={t.perTagTag}>{hint(t.perTagTag, h.callsPerTagTag)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.outbound}>{hint(t.outbound, h.callsPerTagOutbound)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.inbound}>{hint(t.inbound, h.callsPerTagInbound)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.perTagTotal}>{hint(t.perTagTotal, h.callsPerTagTotal)}</HintLabel></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.tagKey} className={band} data-tag={r.tagKey} data-counted={r.isCounted ? "true" : "false"}>
+              <td className={`h-10 whitespace-nowrap px-2 font-semibold ${r.isCounted ? "" : "text-p4a-muted"}`}>
+                {r.tagName}
+                {r.isCounted ? null : <span className="ml-2 text-caption font-normal">({t.notCounted})</span>}
+              </td>
+              {cells(r)}
+            </tr>
+          ))}
+          <tr className={band} data-testid="calls-per-tag-untagged">
+            <td className="h-10 whitespace-nowrap px-2 font-semibold">
+              <HintLabel label={t.untagged}>{hint(t.untagged, h.callsPerTagUntagged)}</HintLabel>
+            </td>
+            {cells(untagged)}
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr className="text-p4a-body" data-testid="calls-per-tag-total">
+            <td className="h-10 whitespace-nowrap px-2 font-semibold">{t.perTagTotal}</td>
+            {cells(totals, true)}
           </tr>
         </tfoot>
       </table>

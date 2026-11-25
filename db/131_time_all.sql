@@ -470,6 +470,11 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'calls {P}', 'overview by line', $q$select * from cma.calls_overview('{f}', '{t}', null, null, 'line') where period = 'current' and group_key is not null$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'history start', $q$select cma.telephony_history_start()$q$, 'agent', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'tag use', $q$select * from cma.calls_tag_use('{f}', '{t}', null, null, 'day')$q$, 'overview', array['reports.view', 'performance.team']),
+-- Calls per tag (addition 0009zw): the page's read takes its totals from the overview (totals false); the API's adds
+-- cma.calls_figures_of's total row (local, three times prod's volume, one CPU, 25 November 2026: the page's read 650-800
+-- ms for a month, as the tag use's 650-790; the API's 1,500-2,600)
+('b', 'calls {P}', 'calls per tag', $q$select * from cma.calls_per_tag('{f}', '{t}', null, null, false)$q$, 'overview', array['reports.view', 'performance.team']),
+('b', 'calls api {P}', 'calls per tag with totals', $q$select * from cma.calls_per_tag('{f}', '{t}', null, null, true)$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'calls per agent {P}', 'per person', $q$select * from cma.calls_per_person('{f}', '{t}', null, null)$q$, 'overview', array['performance.team']),
 ('b', 'calls per agent {P}', 'tags per person', $q$select * from cma.calls_per_person_tags('{f}', '{t}', null, null)$q$, 'overview', array['performance.team']),
 ('b', 'inbound {P}', 'inbound service', $q$select * from cma.inbound_service('{f}', '{t}', 'day')$q$, 'overview', array['reports.view', 'performance.team']),
