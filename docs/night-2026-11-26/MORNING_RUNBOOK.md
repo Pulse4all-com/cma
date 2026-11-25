@@ -80,7 +80,7 @@ cd ~/cma && git fetch origin && git checkout claude/clever-goodall-7wnx9z && cma
 Expected: `INSERT 0 1 COMMIT`, then `INSERT 0 0 COMMIT`; 237: S1, G1 to G4, F1 to F4, L1, L2 OK and `PASS 0009zr`.
 Provoked (set `verify.provoke` to `true` at the top of a copy): every row FAIL, F1, L1 and L2 saying "1 rows differ".
 Then each of 41, 73, 75, 81, 95, 151, 155, 179, 191, 211, 213, 217, 219, 221, 223, 225, 235 (191 and 235 edited by
-N07a): its PASS line, as before. 73, 75, 81 and 95 run in dev only.
+N07a): its PASS line, as before. 73, 75, 81, 95, 151 and 155 run in dev only (151 and 155 refuse prod).
 
 **1c. Terminal** (N07c: `238`, `239`, the reruns 83, 91, 101)
 ```bash
@@ -111,7 +111,7 @@ trigger as an empty value. Expected: six green builds; the Workspace opens after
 
 **3a. Terminal:** the index of 1a against prod (`cma_db prod`), then the `indisvalid` check. Expected: `t`.
 
-**3b. Terminal:** `236` twice and `237` against prod as in 1b; then `238` and `239` as in 1c. Expected: `PASS 0009zr`, `PASS 0009zs`; the prod reruns of 1b and 1c (not 73, 75, 81, 95) PASS.
+**3b. Terminal:** `236` twice and `237` against prod as in 1b; then `238` and `239` as in 1c. Expected: `PASS 0009zr`, `PASS 0009zs`; the prod reruns of 1b (not 73, 75, 81, 95, 151, 155) PASS, and 1c's 83, 91 and 101 run in dev only (they refuse prod); 211, 213 and 217 pass their block A, and block B refuses prod (no dev seed), as on 25 November 2026.
 
 **3c. After `244` (0009zv) in prod:** `240` and `241` against prod as in 1d. Expected: `PASS 0009zt`.
 
@@ -119,9 +119,10 @@ trigger as an empty value. Expected: six green builds; the Workspace opens after
 
 **Terminal** (every minute again, with the waits in place)
 ```bash
-cd ~/cma && SHA=$(git rev-parse --short origin/main) && bash docs/scheduler/deploy-active-customers.sh prod $SHA && bash docs/scheduler/deploy-follow-up.sh prod $SHA && bash docs/scheduler/deploy-data-quality.sh prod $SHA && bash docs/scheduler/deploy-flash.sh prod $SHA && gcloud scheduler jobs describe cma-refresh-active-customers-minutely --location=europe-west4 --project=p4a-cma-prod --format='value(schedule)'
+cd ~/cma && git fetch -q origin main && SHA=$(git rev-parse --short=7 origin/main) && bash docs/scheduler/deploy-active-customers.sh prod $SHA && bash docs/scheduler/deploy-follow-up.sh prod $SHA && bash docs/scheduler/deploy-data-quality.sh prod $SHA && bash docs/scheduler/deploy-flash.sh prod $SHA && gcloud scheduler jobs describe cma-refresh-active-customers-minutely --location=europe-west4 --project=p4a-cma-prod --format='value(schedule)'
 ```
-Expected: four deploys, then `* * * * *`. After ten minutes, **Studio (cma-prod-pg)**, OPERATIONS 4.1's query: rows with
+The image tag is Cloud Build's `SHORT_SHA`, 7 characters: `--short=7` (a plain `--short` may give 8, and the deploy then
+fails with "image not found", as on 25 November 2026). Expected: four deploys, then `* * * * *`. After ten minutes, **Studio (cma-prod-pg)**, OPERATIONS 4.1's query: rows with
 `defer_wait` only in busy minutes, no `timeout_wait` unless a timeout happened.
 
 ## 5. Analyze the small configuration tables

@@ -307,7 +307,8 @@ closes Agent Two's open past days itself (as the supervisor); no fixture runs fi
 Keep outputs as evidence:
 `node verify/api.mjs | tee ../records/<what>-dev-<date>/verify-api.txt`.
 
-`verify:round-trips` against dev (**Terminal**): the database cost of every page and polled route per test user, 53 requests,
+`verify:round-trips` against dev (**Terminal**): the database cost of every page and polled route per test user, one row per
+request (the count grows with the budgets file),
 against the budgets in `web/verify/round-trips.json`. The app reports that cost only with `CMA_DB_TRACE=1` and mock sign-in
 (never in iap mode), so the variable is set on dev's `cma-web` for the run and removed right after it; each update makes a new
 revision and keeps the image and the other variables. Dev must run an image with the trace (the speed fixes of the IT audit of
@@ -318,8 +319,8 @@ gcloud run services update cma-web --project=p4a-cma-dev --region=europe-west4 \
   --update-env-vars=CMA_DB_TRACE=1 2>&1 | tail -1
 pkill -f "run services proxy"; gcloud run services proxy cma-web --project=p4a-cma-dev \
   --region=europe-west4 --port=8080 >/tmp/proxy.log 2>&1 & sleep 6
-cd ~/cma/web && BASE=http://localhost:8080 node verify/round-trips.mjs; echo "exit $?"   # round-trips: PASS (53 requests ...), exit 0
-BASE=http://localhost:8080 node verify/round-trips.mjs --provoke; echo "exit $?"         # round-trips: FAIL (106 problems), exit 1
+cd ~/cma/web && BASE=http://localhost:8080 node verify/round-trips.mjs; echo "exit $?"   # round-trips: PASS (N requests, M not measured ...), exit 0
+BASE=http://localhost:8080 node verify/round-trips.mjs --provoke; echo "exit $?"         # round-trips: FAIL (n problems), exit 1
 gcloud run services update cma-web --project=p4a-cma-dev --region=europe-west4 \
   --remove-env-vars=CMA_DB_TRACE 2>&1 | tail -1
 curl -s -D - -o /dev/null -H "x-cma-mock-subject: agent-two" localhost:8080/api/v1/me | grep -ci x-cma-db   # 0: off again
@@ -327,6 +328,28 @@ curl -s -D - -o /dev/null -H "x-cma-mock-subject: agent-two" localhost:8080/api/
 
 A FAIL names the page, the test user and the count over its budget. Dev's data differs from the seed in volume, not in the
 number of reads per page; the documents route answers 404 while the image carries no documents, which the budget accepts.
+
+The PASS summary reads "N not measured (notes above: a missing permission, or a day not open for a head start)", so the
+count of measured requests varies with the run. A note is not a FAIL: a row that names a permission the subject lacks, or a
+Welcome row whose head start is not measured because the subject's day is not open, gets one. The head start (the routes
+Welcome asks Next to prefetch when idle) is given only for a time-keeping person's open day; on an ended day, where
+`workday.clock_in_again` is off, Clock in leaves it ended and the head start is empty. The verifier reads the subject's day
+first and, on a day that is not open, expects no head start. For a measured run of the head start's budgets, run it inside the
+workday window (07:00-22:00 Amsterdam) on a day when the days of `agent-two` and `manager` are open or not yet started; where
+Clock in again is off, an ended day stays ended. It waits for the marker and for each listed answer (at most 30 s), prints
+when each route was asked and answered, and names the reason a route is missing (never asked, no answer, no `cma-db` meta).
+
+The head start in a browser (**Browser**, prod): open Welcome (if you keep time, Clock in first), wait about 5 s, open
+DevTools, and in the Console run:
+
+```js
+document.documentElement.dataset.headStart
+```
+
+Expected: for an agent with an open day `"/day /messages /schedule"`; for a supervisor or manager with an open day, or one who
+keeps no time, `"/live/<contact center key> /team/hours"`; for a day that is not open `"none"`; `undefined` while Welcome's
+blocks have not settled. The marker on `<html>` keeps the last head start of the tab across client navigations. Optionally,
+the Network panel filtered on `_rsc` shows the matching requests.
 
 `verify:scheduler` against dev (inside 07:00-22:00 Amsterdam): it writes a test day through `PGCONN` and runs the
 job's code locally, which reads `CMA_DB_*`; both must point at dev:
@@ -344,7 +367,7 @@ It refuses a database without the dev seed (exit 2). Without `CMA_DB_*` the job 
 (`gcloud scheduler jobs pause|resume cma-refresh-follow-up-minutely --project=p4a-cma-dev --location=europe-west4`),
 so a scheduled refresh does not take the lock the verifier's second session holds (section 7a, step 3).
 
-The other verifiers (`copy`, `corrections`, `csv`, `dashboard`, `live`, `team`, `roster`, `configuration`, `messages`, `import`, `datamap`, `reports`, `period`, `signed-out`, `invitations`, `preview`, `follow-up`, `health`, `boundaries`, `jobs`, `theme`, `layout`, `hints`, `iap-token`) run locally, `theme`, `layout` and `hints` against a local mock server on port 8080 and `iap-token` against a local server in iap mode that reads the script's test key set; see the header
+The other verifiers (`copy`, `corrections`, `csv`, `dashboard`, `live`, `team`, `roster`, `configuration`, `messages`, `import`, `datamap`, `reports`, `period`, `signed-out`, `invitations`, `preview`, `follow-up`, `health`, `boundaries`, `jobs`, `shell`, `theme`, `layout`, `hints`, `optimistic`, `iap-token`) run locally, `theme`, `layout`, `hints` and `optimistic` against a local mock server on port 8080 and `iap-token` against a local server in iap mode that reads the script's test key set; see the header
 of each script in `web/verify/` for its start command. Since B9a.1 `layout` clocks agent-two in, so it runs inside the mock's
 workday window (07:00-22:00), as `verify:api` and `verify:scheduler` do. `layout` writes its screenshots to a new
 temporary folder outside the repository and prints it; for evidence, `OUT_DIR=../records/<increment>-<env>-<date>` names

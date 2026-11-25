@@ -40,13 +40,15 @@ export function Legend({ items, label }: { items: { key: string; label: string; 
  * Lines over an even x axis (months, ages, cohort ages): each series a polyline with a point per value, the last point
  * hollow where it is the running month ("so far"). step: a step line (a survival curve holds its value until the next
  * age). markers: vertical lines with a title (a store's subscription history start). refY: a horizontal reference with
- * its label (the 50 % line)
+ * its label (the 50 % line); refLines: more of them, each dashed in its series' colour (Speed to lead's goals, 0009zu).
+ * bands: x ranges shaded Neutral surface behind the lines, each with a title (Speed to lead's weekends, 0009zu)
  */
-export function LineChart({ series, xLabels, yFormat, yTop, yLabel, xLabel, label, testId, step = false, markers = [], refY, height = 280, width = 960 }: {
+export function LineChart({ series, xLabels, yFormat, yTop, yLabel, xLabel, label, testId, step = false, markers = [], refY, refLines = [], bands = [], height = 280, width = 960 }: {
   series: LineSeries[]; xLabels: { x: number; text: string }[]; yFormat: (v: number) => string;
   /** The axis's top when it is fixed (a share: 1); a round number above the highest point otherwise */
   yTop?: number; yLabel: string; xLabel?: string; label: string; testId: string; step?: boolean;
   markers?: { x: number; title: string }[]; refY?: { y: number; text: string }; height?: number;
+  refLines?: { y: number; text: string; colour: number }[]; bands?: { from: number; to: number; title: string }[];
   /** The drawing's width in its own units: 960 for a full-width card, 600 for a half-width one, so the 12 px labels keep their size */
   width?: number;
 }) {
@@ -56,7 +58,7 @@ export function LineChart({ series, xLabels, yFormat, yTop, yLabel, xLabel, labe
   const plotW = W - m.l - m.r;
   const plotH = H - m.t - m.b;
   const xs = series.flatMap((s) => s.points.map((p) => p.x));
-  const xMax = Math.max(1, ...xs, ...xLabels.map((l) => l.x));
+  const xMax = Math.max(1, ...xs, ...xLabels.map((l) => l.x), ...bands.map((b) => b.to));
   const highest = Math.max(0, ...series.flatMap((s) => s.points.map((p) => p.y)));
   const axis = yTop !== undefined ? { top: yTop, bottom: 0, step: yTop / 4 } : niceAxis(0, highest);
   // coordinates to a tenth of a unit: the drawing is the same, the markup a third shorter
@@ -72,6 +74,10 @@ export function LineChart({ series, xLabels, yFormat, yTop, yLabel, xLabel, labe
   }).join(" ");
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label={label} data-testid={testId}>
+      {bands.map((b) => (
+        <rect key={`${b.from}-${b.to}`} x={x(Math.max(0, b.from))} y={m.t} width={Math.max(0, x(Math.min(xMax, b.to)) - x(Math.max(0, b.from)))} height={plotH}
+          className="fill-p4a-neutral-surface" data-testid="chart-band"><title>{b.title}</title></rect>
+      ))}
       {ticks.map((v) => (
         <g key={v}>
           <line x1={m.l} x2={W - m.r} y1={y(v)} y2={y(v)} fill="none" className="stroke-p4a-border" strokeWidth={1} />
@@ -96,6 +102,12 @@ export function LineChart({ series, xLabels, yFormat, yTop, yLabel, xLabel, labe
           <text x={W - m.r} y={y(refY.y) - 4} textAnchor="end" fontSize={12} className="fill-p4a-grey">{refY.text}</text>
         </g>
       ) : null}
+      {refLines.map((r) => (
+        <g key={`${r.colour}-${r.y}`} data-testid="chart-ref">
+          <line x1={m.l} x2={W - m.r} y1={y(r.y)} y2={y(r.y)} fill="none" className={SERIES_STROKE[r.colour % SERIES_STROKE.length]} strokeWidth={1.5} strokeDasharray="6 4" />
+          <text x={W - m.r} y={y(r.y) - 4} textAnchor="end" fontSize={12} className="fill-p4a-grey">{r.text}</text>
+        </g>
+      ))}
       {series.map((s, i) => {
         const c = (s.colour ?? i) % SERIES_STROKE.length;
         const dashed = s.dashed ?? (s.colour ?? i) >= SERIES_STROKE.length;

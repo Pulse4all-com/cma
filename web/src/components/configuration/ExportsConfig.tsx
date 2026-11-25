@@ -8,15 +8,16 @@
  * (how many days a link works, the email domains invitations may go to); since addition 0008zm the ages at which Reports, Lead
  * cohorts follows each cohort, at most the days lead to order counts; since addition 0009a, next to the follow-up settings, the five
  * courtesy settings (the start date, empty while courtesy is not set up; the order kinds; the due day; the attempts that flag Not
- * reached; the order cohorts' ages). Use default resets a value to the catalog's.
+ * reached; the order cohorts' ages); since addition 0009zv, next to the forgotten clock-out's grace, whether a forgotten day
+ * without a published shift closes at the office hours of the person's Default market. Use default resets a value to the catalog's.
  * Every value goes through /api/v1/configuration/settings and is validated by the database against
  * its catalog.
  */
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { Copy } from "@/lib/copy";
 import type { TenantSetting } from "@/lib/data";
 import {
-  EXPORT_SETTING_KEYS, EXPORT_SETTING_VALUES, MINUTE_SETTING_KEYS, SECOND_SETTING_KEYS, exportPreview, parseMinutes, settingAnchor,
+  EXPORT_SETTING_KEYS, EXPORT_SETTING_VALUES, MINUTE_SETTING_KEYS, OFFICE_HOURS_CLOSE_SETTING, SECOND_SETTING_KEYS, exportPreview, parseMinutes, settingAnchor,
   type ExportSettingKey, type MinuteSettingKey, type SecondSettingKey,
 } from "@/lib/configuration";
 import { LEAD_AGES_SETTING, LEAD_TO_ORDER_SETTING, parseLeadAges } from "@/lib/cohorts";
@@ -99,6 +100,34 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
     "health.heartbeat_fresh_seconds": "health_heartbeat_fresh_seconds", "health.heartbeat_late_seconds": "health_heartbeat_late_seconds",
   };
   const valueLabel = (v: string) => (VALUE_KEYS[v] ? t[VALUE_KEYS[v]] : v);
+
+  /** workday.auto_close_office_hours (addition 0009zv): a choice saved at once, as the export settings; the hint states the
+   * order of the close and the tenant's usual closing time (workday.auto_close_at) */
+  function officeHoursClose() {
+    const s = valueOf(OFFICE_HOURS_CLOSE_SETTING);
+    const closeAt = valueOf("workday.auto_close_at")?.value;
+    return (
+      <label id={settingAnchor(OFFICE_HOURS_CLOSE_SETTING)} className={`${label} scroll-mt-24`}>
+        <span>
+          {t.workday_auto_close_office_hours}
+          {s?.isDefault ? <span className="ml-2 font-normal text-caption text-p4a-muted">({t.isDefault})</span> : null}
+        </span>
+        <span className="flex gap-2">
+          <select className={`${field} flex-1`} value={s?.value ?? "false"}
+            onChange={(e) => save(() => send("PUT", "/api/v1/configuration/settings", { key: OFFICE_HOURS_CLOSE_SETTING, value: e.target.value }))}>
+            <option value="true">{t.officeHoursOn}</option>
+            <option value="false">{t.officeHoursOff}</option>
+          </select>
+          {s && !s.isDefault ? (
+            <Button variant="text" size="md" onClick={() => save(() => send("PUT", "/api/v1/configuration/settings", { key: OFFICE_HOURS_CLOSE_SETTING, value: null }))}>
+              {t.resetToDefault}
+            </Button>
+          ) : null}
+        </span>
+        <span className="font-normal text-caption text-p4a-muted">{t.officeHoursHint.replace("{time}", closeAt ? ` (${closeAt})` : "")}</span>
+      </label>
+    );
+  }
 
   async function saveMinutes(key: MinuteSettingKey | SecondSettingKey) {
     const text = minutes[key];
@@ -186,7 +215,8 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
             const bad = minutes[key] !== undefined && parseMinutes(minutes[key] ?? "") === null;
             const seconds = (SECOND_SETTING_KEYS as readonly string[]).includes(key);
             return (
-              <label key={key} id={settingAnchor(key)} className={`${label} scroll-mt-24`}>
+              <Fragment key={key}>
+              <label id={settingAnchor(key)} className={`${label} scroll-mt-24`}>
                 <span>
                   {t[MINUTE_KEYS[key]]}
                   {s?.isDefault ? <span className="ml-2 font-normal text-caption text-p4a-muted">({t.isDefault})</span> : null}
@@ -208,6 +238,9 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
                 </span>
                 <span className="font-normal text-caption text-p4a-muted">{seconds ? t.secondsHint : t.minutesHint}</span>
               </label>
+              {/* next to the forgotten clock-out's grace: the close at the Default market's office hours (addition 0009zv) */}
+              {key === "workday.auto_close_grace_minutes" ? officeHoursClose() : null}
+              </Fragment>
             );
           })}
         </div>

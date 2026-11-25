@@ -10,10 +10,10 @@ import { addDays, dateKeyInZone, isDateKey, startOfWeek } from "@/lib/time";
 import { onRoster } from "@/lib/roster";
 import type {
   LiveBoardData, DataQualityReport,
-  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MessageStat, MessageTarget, MyMessage, MyMessages, MyProfile, MyRosterDay, SentMessage, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
+  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MessageStat, MessageTarget, MessagesWritten, MyMessage, MyMessages, MyProfile, MyRosterDay, SentMessage, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
   SkillInfo, SkillInput, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow,
   TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday, HoursMarket,
-  CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus,
+  CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadAttempt, SpeedToLeadDeals, SpeedToLeadFigures, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadView,
   AlertRule, LinkedAccount, MarketConfig, MarketHoliday, OfficeHours, SourceCallOutcome, SourceConnection, SourceDetail, SourceRead, SourceForm, SourceKind,
   SourceLine, SourcePipeline, SourceStore, SourceTag,
   InboundFigures, InboundGroup, InboundNow, OutboundNow, InboundService, MissedReason, SourceMissedReason,
@@ -56,6 +56,7 @@ import { INVITE_TOKEN_RE } from "@/lib/invitations";
 import { recordUrlPreview, settingsProblem } from "@/lib/sources";
 import {
   applyConnections, callRecords, callRules, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead, speedFigures,
+  SPEED_DEALS_PAGE, speedDealsPage, speedPeriodFigures, speedTrendGroup,
   historyStartOf, inboundCalls, inboundFigures, missedReasonOf, parseCallsFilter, PER_AGENT_PERMISSION, previousCalls, previousPeriod, rangeProblem,
   FORMS_GROUPS, formsAnswersOf, formsFigures, formsHistoryStart, parseAnswerFilter, parseFormsFilter, previousForms, type FormSubmissionRecord,
   type CallRecord, type CallRules, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture, timeInZone,
@@ -252,6 +253,7 @@ function mockSpeedRows(me: Principal, range: { from: DateKey; to: DateKey }): Sp
       const callAt = called ? new Date(createdMs + Math.round(businessMinutes * 60_000 * (1 + h("gap")))).toISOString() : null;
       const noon = known ? new Date(localMs(addDays(date, 1), "12:00", me.timeZone)).toISOString() : null;
       const team = TEAM[Math.floor(h("agent") * TEAM.length)]!;
+      const tries = called ? 1 + Math.floor(h("tries") * 4) : 0;
       const mapped = Math.floor(h("agent") * 1000) % 5 !== 0;
       const waiting = status === "not_called_open" && known ? Math.round(30 + h("wait") * 900) * 60 : null;
       // late once past the target, for an open deal not called yet only: a deal closed before its first call is in no share
@@ -268,9 +270,6 @@ function mockSpeedRows(me: Principal, range: { from: DateKey; to: DateKey }): Sp
         marketSource: known ? (h("src") < 0.8 ? "record" : "contact") : null,
         isClosed: status === "closed_before_first_call" || (called && h("closed") < 0.4),
         status,
-        firstCallSourceId: called ? String(70_000_000 + Math.floor(h("call") * 9_000_000)) : null,
-        firstCallAt: callAt,
-        firstCallLinked: called ? connectionsOf(me).telephony && h("linked") < 0.8 : null,
         firstAnyCallAt: callAt,
         firstAnyDirection: called ? "outbound" : null,
         inboundFirst: false,
@@ -287,13 +286,98 @@ function mockSpeedRows(me: Principal, range: { from: DateKey; to: DateKey }): Sp
         waitingBusinessSeconds: waiting,
         firstAttemptCallId: called ? `00000000-0000-7000-9000-${String(rows.length + 1).padStart(12, "0")}` : null,
         firstAttemptAt: callAt,
-        attemptsSoFar: called ? 1 + Math.floor(h("tries") * 4) : 0,
+        attemptsSoFar: tries,
         dealOwnerUserId: mapped ? team.userId : null,
+        // the attempts an hour apart from the first (mockSpeedAttempts), a Conversation on the last when the first connected
+        lastAttemptAt: called ? new Date(Date.parse(callAt!) + (tries - 1) * 3_600_000).toISOString() : null,
+        lastCallAt: called ? new Date(Date.parse(callAt!) + (tries - 1) * 3_600_000).toISOString() : null,
+        conversationsSoFar: called && h("conn") < 0.6 ? 1 : 0,
+        windowEnd: new Date(now).toISOString(),
         recordUrl: `https://example.com/crm/deal/${String(90_000_000 + Math.floor(h("id") * 9_000_000))}`,
       });
     }
   }
   return rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.dealSourceId.localeCompare(b.dealSourceId));
+}
+
+/** The cockpit's figures from the mock's rows: the period and the previous one (previousPeriod, like for like) */
+function mockSpeedFigures(me: Principal, range: { from: DateKey; to: DateKey }, market: string | null): SpeedToLeadFigures {
+  const today = mockToday(me);
+  const prev = previousPeriod(range, today);
+  const inMarket = (r: SpeedToLeadRow) => market === null || r.market === market;
+  const cur = mockSpeedRows(me, range).filter(inMarket);
+  const nowLocal = timeInZone(new Date().toISOString(), me.timeZone);
+  const before = prev.to < prev.from ? [] : mockSpeedRows(me, prev).filter(inMarket)
+    .filter((r) => !prev.partial || r.date < prev.to || timeInZone(r.createdAt, me.timeZone) <= nowLocal);
+  const whole = (key: string) => { const v = mockSetting(key); return v === "" ? null : Number(v); };
+  return {
+    ...range, previousFrom: prev.from, previousTo: prev.to, previousUntil: prev.partial ? new Date().toISOString() : null,
+    settings: {
+      targetMinutes: whole("speed_to_lead.target_minutes"), nextDayCutoff: mockSetting("speed_to_lead.next_day_cutoff") || "12:00",
+      goalWithinTargetPct: whole("speed_to_lead.goal_within_target_pct"), goalBeforeCutoffPct: whole("speed_to_lead.goal_before_cutoff_pct"),
+      staleBusinessDays: whole("speed_to_lead.stale_business_days") ?? 2,
+    },
+    current: speedPeriodFigures(cur), previous: speedPeriodFigures(before),
+  };
+}
+
+/** A deal's attempts in the mock: attemptsSoFar of them an hour apart from the first, the first 20; connected and a Conversation as the row says */
+function mockSpeedAttempts(r: SpeedToLeadRow): SpeedToLeadAttempt[] {
+  if (r.firstAttemptAt === null) return [];
+  const team = TEAM.find((p) => p.userId === r.agentUserId) ?? null;
+  return Array.from({ length: Math.min(20, r.attemptsSoFar) }, (_, i) => {
+    const last = i === r.attemptsSoFar - 1;
+    const connected = (i === 0 && r.firstConnectedAt !== null) || (last && r.conversationsSoFar > 0);
+    return {
+      n: i + 1, startedAt: new Date(Date.parse(r.firstAttemptAt!) + i * 3_600_000).toISOString(),
+      businessSeconds: r.businessSeconds === null ? null : r.businessSeconds + i * 3600,
+      connected, talkSeconds: connected ? (last && r.conversationsSoFar > 0 ? 184 : 12) : null,
+      conversation: last && r.conversationsSoFar > 0, tagMeanings: connected && !(last && r.conversationsSoFar > 0) ? ["not_reached"] : [],
+      agentUserId: team?.userId ?? null, agentName: team?.displayName ?? null,
+    };
+  });
+}
+
+/** One view of the cockpit's deals list from the mock's rows */
+function mockSpeedDeals(me: Principal, range: { from: DateKey; to: DateKey }, market: string | null, view: SpeedToLeadView, limit: number, offset: number): SpeedToLeadDeals {
+  const rows = mockSpeedRows(me, range).filter((r) => market === null || r.market === market);
+  const page = speedDealsPage(rows, view, limit, offset);
+  const stale = Number(mockSetting("speed_to_lead.stale_business_days") || 2);
+  const today = mockToday(me);
+  const owners = new Map(TEAM.map((p) => [p.userId, p.displayName]));
+  return {
+    ...range, market, view, limit, offset, total: page.total,
+    rows: page.rows.map((r) => ({
+      dealId: r.dealId, connectionId: r.connectionId, dealSourceId: r.dealSourceId, market: r.market, pipelineId: r.pipelineId,
+      pipelineLabel: r.pipelineLabel, createdAt: r.createdAt, status: r.status,
+      businessSeconds: r.status === "called" ? r.businessSeconds : r.waitingBusinessSeconds, withinTarget: r.withinTarget,
+      beforeNextNoon: r.beforeNextNoon, cutoffAt: r.nextBusinessNoon, ownerUserId: r.dealOwnerUserId,
+      ownerName: r.dealOwnerUserId ? owners.get(r.dealOwnerUserId) ?? null : null, attemptsSoFar: r.attemptsSoFar,
+      attempts: mockSpeedAttempts(r),
+      // working days counted as calendar weekdays in the mock (Monday to Friday)
+      stale: r.status === "not_called_open" && r.market !== "unknown" && weekdaysBetween(r.date, today) > stale,
+      // office hours 09:00 to 17:00 in the mock: 1.5 working days are 12 business hours; the cutoff at 12:00 the next day
+      cutoffBusinessSeconds: r.market === "unknown" ? null : 8 * 3600 - Math.min(8 * 3600, Math.max(0, mockOfficeSecondsOfDay(r.createdAt, me.timeZone))) + 3 * 3600,
+      spanBusinessSeconds: r.market === "unknown" ? null : 12 * 3600,
+      recordUrl: r.recordUrl,
+    })),
+  };
+}
+
+/** The office seconds of the creation's day already gone at the creation, in a 09:00 to 17:00 day (the mock's timeline) */
+function mockOfficeSecondsOfDay(createdAt: Instant, timeZone: string): number {
+  const [h, m] = timeInZone(createdAt, timeZone).split(":").map(Number);
+  return (h! - 9) * 3600 + m! * 60;
+}
+
+/** The weekdays (Monday to Friday) after `from` up to `to` */
+function weekdaysBetween(from: DateKey, to: DateKey): number {
+  let n = 0;
+  for (let d = addDays(from, 1); d <= to; d = addDays(d, 1)) {
+    const dow = new Date(`${d}T00:00:00Z`).getUTCDay();
+    if (dow !== 0 && dow !== 6) n++;
+  }
+  return n;
 }
 
 /** The checks of cma.data_quality_checks() in its order, with the database's descriptions */
@@ -1538,11 +1622,19 @@ const MOCK_SETTINGS: TenantSetting[] = [
   { key: "speed_to_lead.pre_window_minutes", value: "10", isDefault: false },
   // speed to lead in one function (addition 0009zq): the next working day's cutoff at its catalog default, as Pulse4all has it
   { key: "speed_to_lead.next_day_cutoff", value: "12:00", isDefault: true },
+  // Speed to lead's cockpit (addition 0009zu): no goals yet (Pulse4all's come from Martin), stale after 2 working days
+  { key: "speed_to_lead.goal_within_target_pct", value: "", isDefault: true },
+  { key: "speed_to_lead.goal_before_cutoff_pct", value: "", isDefault: true },
+  { key: "speed_to_lead.stale_business_days", value: "2", isDefault: true },
   // lead cohorts (addition 0008zm): the ages and the days lead to order counts, at their catalog defaults
   { key: "cohorts.lead_ages_days", value: "1,7,30,60,90", isDefault: true },
   { key: "lead_to_order.max_days", value: "90", isDefault: true },
   // split shifts (addition 0008zp): on, as Pulse4all Subscriptions has it (seed 02); the catalog default is off
   { key: "workday.clock_in_again", value: "true", isDefault: false },
+  // forgotten clock-outs (addition 0009zv): closed at the Default market's office hours, as Pulse4all Subscriptions has it
+  // (seed 02); the usual closing time 17:00 (seed 02, addition 0008b) the hint names
+  { key: "workday.auto_close_office_hours", value: "true", isDefault: false },
+  { key: "workday.auto_close_at", value: "17:00", isDefault: false },
   // courtesy (addition 0009a): set up sixty days back, so the mock's page has orders in every state; the rest at the catalog defaults
   { key: "courtesy.start_date", value: dateKeyInZone(new Date(Date.now() - 60 * 86_400_000), "Europe/Amsterdam"), isDefault: false },
   { key: "courtesy.order_kinds", value: "first,repeat", isDefault: true },
@@ -2209,14 +2301,14 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "export.csv.duration_format": "decimal_hours", "export.csv.utf8_bom": "true", "roster.adherence_tolerance_minutes": "5",
   "workday.auto_close_grace_minutes": "120", "telephony.connected_min_seconds": "0",
   "auth.invitation_valid_days": "7", "auth.invitation_email_domains": "",
-  "reports.cancellation_kind": "", "speed_to_lead.target_minutes": "60", "speed_to_lead.next_day_cutoff": "12:00", "tickets.sla_minutes": "240", "tickets.sla_warning_pct": "75", "leads.age_buckets_business_days": "1,2,5", "tasks.callback_window_minutes": "240",
+  "reports.cancellation_kind": "", "speed_to_lead.target_minutes": "60", "speed_to_lead.next_day_cutoff": "12:00", "speed_to_lead.goal_within_target_pct": "", "speed_to_lead.goal_before_cutoff_pct": "", "speed_to_lead.stale_business_days": "2", "tickets.sla_minutes": "240", "tickets.sla_warning_pct": "75", "leads.age_buckets_business_days": "1,2,5", "tasks.callback_window_minutes": "240",
   "follow_up.list_rows": "100",
   "attribution.window_days": "90", "attribution.level_order": "lead_deal,conversation,email,phone_match,attempt,known_contact",
   "attribution.assisted_levels": "lead_deal,conversation,email,phone_match", "attribution.known_contact_minutes": "60", "attribution.order_match_minutes": "1440",
   "attempts.max_bucket": "5", "attempts.since_last_buckets_business_days": "1,2,5", "attempts.source": "telephony",
   "calls.conversation_min_talk_seconds": "30", "attempts.speed_buckets_business_minutes": "5,15,60,240,1440",
   "cohorts.lead_ages_days": "1,7,30,60,90", "lead_to_order.max_days": "90",
-  "workday.clock_in_again": "false",
+  "workday.clock_in_again": "false", "workday.auto_close_office_hours": "false", "workday.auto_close_at": "24:00",
   "courtesy.start_date": "", "courtesy.order_kinds": "first,repeat", "courtesy.due_days": "10", "courtesy.alert_attempts": "3", "courtesy.ages_days": "10,14,21,30",
   // the reviews settings' catalog defaults (104), so emptying the history start resets it as the database does (CMA-099)
   "reviews.negative_max_rating": "2", "reviews.history_start_date": "",
@@ -4039,6 +4131,15 @@ export const mockData: CmaData = {
     if (value !== null && key === LEAD_TO_ORDER_SETTING && Number(value) < Math.max(0, ...leadAgesOf(mockSetting(LEAD_AGES_SETTING)))) {
       throw new CmaDbError("CMA04", `Setting ${key} takes at least the largest age of ${LEAD_AGES_SETTING}`);
     }
+    // as cma.check_tenant_setting (addition 0009zu): Speed to lead's goals, a whole number of percent 0 to 100 or empty; the
+    // stale days 1 to 30
+    if (value !== null && (key === "speed_to_lead.goal_within_target_pct" || key === "speed_to_lead.goal_before_cutoff_pct")) {
+      value = value.trim();
+      if (value !== "" && !/^(100|[1-9]?[0-9])$/.test(value)) throw new CmaDbError("CMA04", `Setting ${key} takes a whole number of percent from 0 to 100, or nothing (no goal)`);
+    }
+    if (value !== null && key === "speed_to_lead.stale_business_days" && !(/^[0-9]{1,2}$/.test(value) && Number(value) >= 1 && Number(value) <= 30)) {
+      throw new CmaDbError("CMA04", `Setting ${key} takes a whole number of working days from 1 to 30`);
+    }
     // as cma.check_tenant_setting (addition 0009a): the five courtesy settings, kept as the database keeps them
     if (value !== null && (COURTESY_SETTING_KEYS as readonly string[]).includes(key)) {
       const v = parseCourtesySetting(key as CourtesySettingKey, value);
@@ -4153,7 +4254,7 @@ export const mockData: CmaData = {
     return { messages: listed.map(({ m, d }) => toMyMessage(m, d)), unreadCount: own.filter(({ d }) => d.readAt === null).length };
   },
 
-  async markMessagesRead(me, ids): Promise<number> {
+  async markMessagesRead(me, ids): Promise<MessagesWritten> {
     const now = new Date().toISOString();
     let n = 0;
     for (const id of ids) {
@@ -4164,18 +4265,20 @@ export const mockData: CmaData = {
       d.readAt = now;
       n += 1;
     }
-    return n;
+    return { changed: n, unreadCount: ownMessages(me, now).filter(({ d }) => d.readAt === null).length };
   },
 
-  async acknowledgeMessage(me, id): Promise<void> {
+  async acknowledgeMessage(me, id): Promise<MessagesWritten> {
     const now = new Date().toISOString();
     const m = state.messages.get(id);
     const d = m && !m.withdrawnAt ? deliveryOf(m, me) : null;
     if (!d) throw new CmaDbError("CMA02", "not found");
-    if (d.acknowledgedAt !== null) return;
+    const unread = () => ownMessages(me, now).filter(({ d: x }) => x.readAt === null).length;
+    if (d.acknowledgedAt !== null) return { changed: 0, unreadCount: unread() };
     d.deliveredAt ??= now;
     d.readAt ??= now;
     d.acknowledgedAt = now;
+    return { changed: 1, unreadCount: unread() };
   },
 
   async sendMessage(me, input): Promise<SentMessage> {
@@ -4599,12 +4702,47 @@ export const mockData: CmaData = {
   async getSpeedToLeadSummary(me, range, group, market = null) {
     assertAny(me, ["reports.view", "performance.team"]);
     assertReportRange(range);
-    if (!["day", "market", "agent", "pipeline"].includes(group)) throw new CmaDbError("CMA04", "group by day, market, agent or pipeline");
+    if (!["day", "week", "market", "agent", "pipeline"].includes(group)) throw new CmaDbError("CMA04", "group by day, week, market, agent or pipeline");
     const names = new Map(TEAM.map((p) => [p.userId, p.displayName]));
     const rows = mockSpeedRows(me, range).filter((r) => market === null || r.market === market);
     const settings = state.config ? state.config.settings : MOCK_SETTINGS;
     const nextDayCutoff = settings.find((x) => x.key === "speed_to_lead.next_day_cutoff")?.value ?? "12:00";
     return { ...range, group, rows: groupSpeedToLead(rows, group, (id) => names.get(id) ?? null), nextDayCutoff };
+  },
+
+  async getSpeedToLeadFigures(me, range, market) {
+    assertAny(me, ["reports.view", "performance.team"]);
+    assertReportRange(range);
+    return mockSpeedFigures(me, range, market);
+  },
+
+  async getSpeedToLeadDeals(me, range, market, view, limit, offset) {
+    assertAny(me, ["reports.view", "performance.team"]);
+    assertReportRange(range);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200 || !Number.isInteger(offset) || offset < 0) throw new CmaDbError("CMA04", "limit from 1 to 200 and offset 0 or more");
+    return mockSpeedDeals(me, range, market, view, limit, offset);
+  },
+
+  async getSpeedToLeadPage(me, range, market, group, view, offset) {
+    assertAny(me, ["reports.view", "performance.team"]);
+    assertReportRange(range);
+    if (!["day", "week", "market", "agent", "pipeline"].includes(group)) throw new CmaDbError("CMA04", "group by day, week, market, agent or pipeline");
+    const names = new Map(TEAM.map((p) => [p.userId, p.displayName]));
+    const rows = mockSpeedRows(me, range);
+    const narrowed = rows.filter((r) => market === null || r.market === market);
+    const trendGroup = speedTrendGroup(range);
+    const nameOf = (id: string) => names.get(id) ?? null;
+    return {
+      figures: mockSpeedFigures(me, range, market),
+      markets: groupSpeedToLead(rows, "market", nameOf),
+      trendGroup,
+      trend: groupSpeedToLead(narrowed, trendGroup, nameOf),
+      // the mock's markets work Monday to Friday
+      workingWeekdays: [1, 2, 3, 4, 5],
+      group,
+      groups: groupSpeedToLead(narrowed, group, nameOf),
+      deals: mockSpeedDeals(me, range, market, view, SPEED_DEALS_PAGE, offset),
+    };
   },
 
   async getIntake(me, range): Promise<Intake> {
@@ -4775,6 +4913,12 @@ export const mockData: CmaData = {
     assertAny(me, [...FOLLOW_UP_PERMISSIONS]);
     const now = Date.now();
     return { rows: mockFollowUpRows(me, now).tasks, computedAt: new Date(now).toISOString() };
+  },
+
+  async getFollowUpComputedAt(me): Promise<Instant> {
+    assertAny(me, [...FOLLOW_UP_PERMISSIONS]);
+    // the mock's snapshot moves once a minute, as the refresh job's does
+    return new Date(Math.floor(Date.now() / 60_000) * 60_000).toISOString();
   },
 
   async getFollowUpSummary(me): Promise<FollowUpSummaryAt> {

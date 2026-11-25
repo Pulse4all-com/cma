@@ -32,6 +32,11 @@
 -- Since addition 0009zq (234_speed_to_lead_one.sql) the Dashboard's speed-to-lead row reads the one-row total of
 -- cma.speed_to_lead_summary ('speed to lead total', which needs 234: before it the group is refused, CMA04), and Speed to
 -- lead's page has its rows read timed as a row of its own ('speed to lead {P}', 'rows').
+-- Since addition 0009zu (242_speed_to_lead_cockpit.sql) Speed to lead's page is the cockpit: its two rows ('summary by
+-- day', 'rows') are its one read, cma.speed_to_lead_page ('page (not called yet, first page)'), and the Called tab's page
+-- 2 ('page (called, page 2)', a set of its own: a tab or a further page is a load of its own), the page over this month
+-- in part a (the default view, read again every minute while open), and the API's figures, deals list and rows, each a
+-- set of its own; all but the rows need 242 (before it the functions do not exist: they read FAIL).
 -- Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
@@ -437,6 +442,9 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'subscriptions filtered', 'page under a market, no proposition and the monthly group', $q$select cma.subscriptions_page((select min(t.market) from cma.subscription_take t where t.tenant_id = cma.current_tenant_id()), null, 'none', 'monthly', (date '{month}' - interval '12 months')::date, date '{month}')$q$, 'list', array['reports.view', 'performance.team']),
 ('a', 'subscriptions further page', 'list page 2', $q$select cma.subscription_rows(null, null, null, null, 'total', 'monthly_amount', true, 2, 50, false)$q$, 'list', array['reports.view', 'performance.team']),
 ('a', 'subscriptions file', 'records file of the Total subscriptions', $q$select cma.subscription_rows(null, null, null, null, 'total', 'monthly_amount', true, 1, 50, true)$q$, 'overview', array['reports.view', 'performance.team']),
+-- Speed to lead's page over this month to today (addition 0009zu): the view a plain visit opens, and the one the page
+-- reads again every 60 seconds while it is open
+('a', 'speed to lead this month', 'page (not called yet, first page)', $q$select cma.speed_to_lead_page(date_trunc('month', x.today)::date, x.today, null, 'day', 'not_called', 50, 0) from (select (now() at time zone t.timezone)::date as today from cma.tenant t where t.id = cma.current_tenant_id()) x$q$, 'overview', array['reports.view', 'performance.team']),
 -- Campaigns
 ('a', 'campaigns', 'journeys', $q$select * from cma.journeys()$q$, 'agent', array['reports.view', 'performance.team']),
 -- report cores, the previous month then 92 days ({P} is replaced by the period's name, {f} and {t} by its bounds)
@@ -444,8 +452,19 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'dashboard {P}', 'intake per day', $q$select * from cma.intake_per_day('{f}', '{t}')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'dashboard {P}', 'speed to lead total', $q$select * from cma.speed_to_lead_summary('{f}', '{t}', 'total')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'dashboard {P}', 'callbacks kept', $q$select * from cma.callbacks_kept_report('{f}', '{t}')$q$, 'overview', array['reports.view', 'performance.team']),
-('b', 'speed to lead {P}', 'summary by day', $q$select * from cma.speed_to_lead_summary('{f}', '{t}', 'day')$q$, 'overview', array['reports.view', 'performance.team']),
-('b', 'speed to lead {P}', 'rows', $q$select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) from cma.speed_to_lead_rows('{f}', '{t}') r$q$, 'list', array['reports.view', 'performance.team']),
+-- Speed to lead's cockpit (addition 0009zu): the page makes one read (cma.speed_to_lead_page: the figures with the
+-- previous period, the markets, the trend, the Group by table and the deals list's first page of 50), the Not called yet
+-- tab first; a tab or a further page is the same read again (the Called tab's page 2 its own row). A report core
+-- (overview, 500 ms) that holds a list's first page
+-- (local, three times prod's volume, one CPU, 25 November 2026: 540-650 ms, the Called tab's page 2 765-875, the API's
+-- deals list 545-665 against a list's 300; a stored take is decided after this file runs in prod on 0009zu, as
+-- docs/open-decisions.md says)
+('b', 'speed to lead {P}', 'page (not called yet, first page)', $q$select cma.speed_to_lead_page('{f}', '{t}', null, 'day', 'not_called', 50, 0)$q$, 'overview', array['reports.view', 'performance.team']),
+('b', 'speed to lead further page {P}', 'page (called, page 2)', $q$select cma.speed_to_lead_page('{f}', '{t}', null, 'day', 'called', 50, 50)$q$, 'overview', array['reports.view', 'performance.team']),
+-- the API's reads of the cockpit (each a request of its own): the figures, a deals list's first page, and the rows
+('b', 'speed to lead api {P}', 'figures', $q$select * from cma.speed_to_lead_figures('{f}', '{t}')$q$, 'overview', array['reports.view', 'performance.team']),
+('b', 'speed to lead api deals {P}', 'deals list (called, first page)', $q$select d.*, cma.record_url(d.connection_id, 'deal', d.deal_source_id) from cma.speed_to_lead_deals_of('{f}', '{t}', null, 'called', 50, 0) d$q$, 'list', array['reports.view', 'performance.team']),
+('b', 'speed to lead api rows {P}', 'rows', $q$select r.deal_id, cma.record_url(r.connection_id, 'deal', r.deal_source_id) from cma.speed_to_lead_rows('{f}', '{t}') r$q$, 'list', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'overview by day', $q$select * from cma.calls_overview('{f}', '{t}', null, null, 'day')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'overview by market', $q$select * from cma.calls_overview('{f}', '{t}', null, null, 'market') where period = 'current' and group_key is not null$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'overview by line', $q$select * from cma.calls_overview('{f}', '{t}', null, null, 'line') where period = 'current' and group_key is not null$q$, 'overview', array['reports.view', 'performance.team']),
