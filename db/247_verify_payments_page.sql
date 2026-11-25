@@ -8,14 +8,17 @@
 -- gives some of the take's rows each payment state with a since, an overdue flag, a return code and an amount at risk
 -- as the owner (the seed's subscriptions are all paid or ended), and reads the page as the seed's manager (cma_app,
 -- row-level security on). Every check writes one row, PASS or FAIL, and the last row is the verdict, because Cloud SQL
--- Studio shows no notices. Run as your own IAM login after 246_payments_page.sql: in dev normal, then provoked; in prod
--- block A (block B refuses prod's data). No row carries a name, an address, an email or a phone number.
+-- Studio shows no notices. Run as your own IAM login after 246_payments_page.sql: in dev normal (13 PASS, verdict PASS),
+-- then provoked (every row FAIL, verdict PROVOKED, NOT A PASS); in prod the whole script, where block B refuses prod's
+-- data (its row reads REFUSED) and the verdict says PASS, A ONLY when block A passes. No row carries a name, an address,
+-- an email or a phone number.
 --   A  the addition row after 0009zv; the six functions the application's (not public's), invoker's rights, JIT off
 --   B  for every filter (none, each market, each store, a proposition, none, each interval group, a market with an
 --      interval): the tiles per payment state, the overdue and the amount at risk per currency against the take; the
 --      base the five states alone (Paused and Canceled left out); the cross table's sums against the tiles and its
 --      instruments against the mirror; the Failed rate's parts (tiles, months, rates, stores' starts and the floor)
---      equal to Customers → Subscriptions' for the same market and store; the list's totals per state against the
+--      equal to Customers → Subscriptions' for the same market and store, without a floor of the rates and again with
+--      one inside the range (subscriptions.rates_start_month, as prod holds it); the list's totals per state against the
 --      tiles, its pages walked whole under two sorts in their order, the file's rows; the refusals (CMA06 for an agent,
 --      CMA04 for every bad filter, state, sort, page and file record); the file's audit row without an id; another
 --      tenant's application (row-level security) sees none of the take; a tenant without the take is history false and
@@ -88,8 +91,8 @@ declare
   v_m1 text; v_s1 uuid; v_audit bigint; v_st text; v_sort text;
 begin
   if not v_dev then
-    insert into verify_0009zw values (59, 'B a dev or local database (the dev seed''s agent.two@example.com active)', 'FAIL',
-      'REFUSED: no dev seed, so this is no dev or local database; nothing ran');
+    insert into verify_0009zw values (59, 'B a dev or local database (the dev seed''s agent.two@example.com active)', 'REFUSED',
+      'no dev seed, so this is no dev or local database; block B did not run');
     return;
   end if;
   begin
@@ -226,7 +229,7 @@ begin
                          is distinct from (v_j #>> '{tiles,at_risk,subscriptions}')::bigint then 'at_risk' end,
                case when (cma.payment_rows(v_f.market, v_f.store, v_f.proposition, v_f.interval_group, 'all', 'amount_at_risk', true, 1, 50, false) ->> 'total')::bigint
                          is distinct from (v_j #>> '{tiles,total}')::bigint then 'all' end,
-               (select string_agg(b ->> 'key', ',') from jsonb_array_elements(v_j #> '{tiles,by_state}') b
+               (select string_agg(b ->> 'key', ',' order by b ->> 'key' collate "C") from jsonb_array_elements(v_j #> '{tiles,by_state}') b
                 where (cma.payment_rows(v_f.market, v_f.store, v_f.proposition, v_f.interval_group, b ->> 'key', 'subscription', false, 1, 50, false) ->> 'total')::bigint
                       <> (b ->> 'subscriptions')::bigint),
                case when (v_j #>> '{list,total}')::bigint is distinct from (v_j #>> '{tiles,at_risk,subscriptions}')::bigint then 'first_page' end)
@@ -241,6 +244,32 @@ begin
       case when v_bad2 = '' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(nullif(v_bad2, ''), 'every filter as the take and the mirror')];
     v_rows := v_rows || array['4', 'B3 the Failed rate''s parts (the tile''s last complete month, the rates per market and month, the months, the stores'' starts and the floor) equal Customers → Subscriptions'' for the same market and store',
       case when v_bad3 = '' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(nullif(v_bad3, ''), 'every filter equal')];
+    -- B3b the same comparison with a floor of the rates inside the range (subscriptions.rates_start_month, as prod holds
+    --     one; rolled back with the block): 246's floor branches against 224's, for no filter and each market
+    insert into cma.tenant_setting (tenant_id, key, value) values (v_t, 'subscriptions.rates_start_month', to_char(v_from + interval '6 months', 'YYYY-MM'))
+      on conflict (tenant_id, key) do update set value = excluded.value;
+    v_bad5 := '';
+    for v_f in select * from v0009zw_filters where n < 20 order by n loop
+      perform set_config('app.user_id', v_mgr::text, true);
+      perform set_config('role', 'cma_app', true);
+      v_j := cma.payments_page(v_f.market, v_f.store, null, null, v_from, v_month);
+      v_s := cma.subscriptions_page(v_f.market, v_f.store, null, null, v_from, v_month);
+      perform set_config('role', 'cma_owner', true);
+      if (v_j #> '{tiles,rates}') is distinct from (select case when v_s #> '{tiles,rates}' = 'null'::jsonb then 'null'::jsonb
+                                                               else (v_s #> '{tiles,rates}') - 'churned' end)
+         or (select jsonb_agg(r - 'churned' order by r ->> 'market' collate "C", r ->> 'month' collate "C") from jsonb_array_elements(v_s -> 'rates') r)
+            is distinct from (select jsonb_agg(r order by r ->> 'market' collate "C", r ->> 'month' collate "C") from jsonb_array_elements(v_j -> 'rates') r)
+         or (select jsonb_agg(jsonb_build_object('month', m -> 'month', 'complete', case when m -> 'complete' = 'null'::jsonb then 'null'::jsonb else (m -> 'complete') - 'churned' end)
+                              order by m ->> 'month' collate "C") from jsonb_array_elements(v_s -> 'months') m)
+            is distinct from (select jsonb_agg(m order by m ->> 'month' collate "C") from jsonb_array_elements(v_j -> 'months') m)
+         or (v_j -> 'rates_start_month') is distinct from (v_s -> 'rates_start_month') or v_j ->> 'rates_start_month' is null then
+        v_bad5 := v_bad5 || v_f.n || ' ';
+      end if;
+    end loop;
+    delete from cma.tenant_setting s where s.tenant_id = v_t and s.key = 'subscriptions.rates_start_month';
+    v_rows := v_rows || array['13', 'B3b with a floor of the rates inside the range: the Failed rate''s parts, the rates, the months and the floor equal Customers → Subscriptions'' for no filter and each market',
+      case when v_bad5 = '' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(nullif(v_bad5, ''), 'every filter equal with the floor')];
+
     v_rows := v_rows || array['5', 'B4 the list''s totals: at_risk the amount at risk''s subscriptions, all the tiles'' total, each state its tile, the page''s first page the at-risk list',
       case when v_bad4 = '' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(nullif(v_bad4, ''), 'every filter as the tiles')];
 
@@ -293,8 +322,12 @@ begin
                or (r ->> 'return_code') is distinct from x.chargeback_return_code or ((r ->> 'overdue')::boolean) is distinct from x.overdue
                or ((r ->> 'amount_at_risk')::numeric) is distinct from round(x.amount_at_risk, 2)
                or ((r ->> 'state_since')::timestamptz) is distinct from x.state_since
-               or (r ->> 'payment_state') is distinct from x.payment_state or (r ->> 'contact_url') is not null);
-    v_rows := v_rows || array['8', 'B7 each file row''s codes: the instrument and number the mirror''s; the state, since, overdue, return code and amount at risk the take''s; no link in a file row',
+               or (r ->> 'payment_state') is distinct from x.payment_state or (r ->> 'contact_url') is not null
+               or (r ->> 'contact_id') is distinct from (select cc.crm_contact_source_id from cma.flash_subscription_stores_of(v_t) y
+                                                         join cma.commerce_customer cc on cc.tenant_id = v_t and cc.connection_id = y.store_connection_id
+                                                                                      and cc.source_id = s.customer_source_id
+                                                         where y.connection_id = x.connection_id));
+    v_rows := v_rows || array['8', 'B7 each file row''s codes: the instrument, number and CRM contact id the mirror''s; the state, since, overdue, return code and amount at risk the take''s; no link in a file row',
       case when v_n = 0 and jsonb_array_length(v_k -> 'rows') > 0 and not v_provoke then 'PASS' else 'FAIL' end,
       v_n || ' rows differ of ' || jsonb_array_length(v_k -> 'rows')];
 
@@ -384,12 +417,14 @@ select check_name, result, detail
 from (select ord, check_name, result, detail from verify_0009zw
       union all
       select 99, 'verdict',
-             case when not current_setting('verify.dev')::boolean then 'REFUSED'
-                  when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0009zw where result = 'PASS') = 12
+             case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
+                  when not current_setting('verify.dev')::boolean then
+                    case when (select count(*) from verify_0009zw where result = 'PASS' and ord < 2) = 1
+                              and not exists (select 1 from verify_0009zw where result not in ('PASS', 'REFUSED')) then 'PASS, A ONLY' else 'FAIL' end
+                  when (select count(*) from verify_0009zw where result = 'PASS') = 13
                        and not exists (select 1 from verify_0009zw where result <> 'PASS') then 'PASS'
                   else 'FAIL' end,
              format('247_verify_payments_page: %s PASS, %s FAIL', (select count(*) from verify_0009zw where result = 'PASS'),
-                                                                 (select count(*) from verify_0009zw where result <> 'PASS'))) x
+                                                                 (select count(*) from verify_0009zw where result not in ('PASS', 'REFUSED')))) x
 order by ord;
 reset role;

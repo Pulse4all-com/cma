@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { NoReportPermission } from "@/components/ReportParts";
 import { PlaceholderBody } from "@/components/PlaceholderPage";
 import { Shell } from "@/components/Shell";
@@ -120,7 +121,7 @@ export default async function PaymentsPage({ searchParams }: PageProps<"/reports
         )}>{t.title}</PageTitle>
         <p className="-mt-2 mb-6 max-w-4xl text-small text-p4a-muted">
           {t.intro}{" "}
-          <a href={flashPayments} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline print:hidden" data-testid="payments-open-flash">{t.openFlash}</a>
+          <Link href={flashPayments as Route} className="font-semibold text-p4a-deepblue underline-offset-2 hover:underline print:hidden" data-testid="payments-open-flash">{t.openFlash}</Link>
         </p>
 
         <div className="mb-6 print:hidden">

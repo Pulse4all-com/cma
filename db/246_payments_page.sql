@@ -7,11 +7,12 @@
 -- 224_subscription_rates_start.sql (0009zl), whose functions it calls and never re-creates. Rerunnable, forward-only, in
 -- one transaction with a lock timeout. Run as your own IAM login: dev first, then 247_verify_payments_page.sql there
 -- (normal, then provoked). No other verify reads what this script adds; no verify is edited. 131_time_all.sql is edited
--- by this change (the page's rows). Prod: this script and 247's block A before the merge of its pull request (the web
--- that calls these functions comes with the merge; main's web calls none of them).
+-- by this change (the page's rows). Prod: this script and 247 before the merge of its pull request (block B refuses
+-- prod's data; the verdict reads PASS, A ONLY), and 131 part a after it (the web that calls these functions comes with
+-- the merge; main's web calls none of them).
 --
--- Why (Martin, 25 November 2026): "Onder Subscriptions zit al een stuk over payments, dat wil ik eigenlijk ook als basis
--- gebruiken voor de view Payments onder Customers." His choices of the same day: Customers → Subscriptions keeps its
+-- Why (Martin, 25 November 2026, in English): Customers → Subscriptions already holds a part about payments, and he wants
+-- it as the basis of the Payments view under Customers. His choices of the same day: Customers → Subscriptions keeps its
 -- payment parts (the Failed rate, the mix by payment instrument and payment state, the list's Payment state column) and
 -- Payments reuses them and goes deeper; the first version holds the subscriptions alone (an order's Financial status
 -- stays on Flash's Payments overview); renewals, failed renewals, chargebacks and refunds per month stand as a Pending
@@ -419,9 +420,8 @@ begin
   if p_part is null or p_part not in ('records', 'months', 'rows') then
     raise exception 'part is records, months or rows' using errcode = 'CMA04';
   end if;
-  if p_state is null or p_state not in ('at_risk', 'in_retry', 'charged_back', 'awaiting_payment', 'failed', 'paid', 'all') then
-    raise exception 'state is at_risk, in_retry, charged_back, awaiting_payment, failed, paid or all' using errcode = 'CMA04';
-  end if;
+  -- the list's own check of the state (the sort and direction given are its defaults), so the two never differ
+  perform cma.assert_payment_list(p_state, 'amount_at_risk', true);
   if p_rows is null or p_rows < 0 then
     raise exception 'a file record names its rows' using errcode = 'CMA04';
   end if;
