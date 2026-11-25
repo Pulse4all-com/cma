@@ -31,6 +31,8 @@ export function IdlePrefetch({ hrefs, runKey }: { hrefs: readonly string[]; runK
       return;
     }
     if (ran.has(runKey)) return;
+    // a new head start (after Clock in): the earlier "none" no longer holds until this one has asked
+    delete mark.headStart;
     const w = window as IdleWindow;
     const run = () => {
       ran.add(runKey);

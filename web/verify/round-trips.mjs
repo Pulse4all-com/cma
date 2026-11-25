@@ -107,9 +107,8 @@ for (const row of budget.filter((r) => r.kind !== "prefetch")) {
 // React Server Components payload carries (the page's Shell writes it, as in the HTML) and held to the row's budget; the
 // set prefetched must be exactly the subject's rows (no report, never Log out), or none on a day that is not open (a note).
 // Each route the page marked is printed with when it was asked and answered, so a short set names its reason. Then the
-// persistent frame: a click to a
-// rail page and Back load no new inbox from scratch (the message centre mounts once per tab: no /api/v1/me/messages
-// request without ?since= after the first, which is how a fresh mount polls).
+// persistent frame: a click to a rail page and Back load no new inbox from scratch (the message centre mounts once per
+// tab: no /api/v1/me/messages request without ?since= after the first, which is how a fresh mount polls).
 const browserLines = [];
 if (prefetchRows.length > 0) {
   const { chromium } = await import("playwright");
@@ -126,7 +125,7 @@ if (prefetchRows.length > 0) {
     const asSubject = { "x-cma-mock-subject": subject };
     await fetch(`${BASE}/api/v1/me/day/start`, { method: "POST", headers: { ...asSubject, "x-cma-request": "1" } }).catch(() => null);
     const day = await fetch(`${BASE}/api/v1/me/day`, { headers: asSubject }).then((r) => (r.ok ? r.json() : null)).then((b) => b?.data ?? null).catch(() => null);
-    const dayState = day?.status ?? "no day";
+    const dayState = day?.status ?? "none (no workday)";
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: asSubject });
     const page = await ctx.newPage();
     const fetched = new Map();
@@ -178,7 +177,7 @@ if (prefetchRows.length > 0) {
     const closed = day !== null && dayState !== "working";
     const want = closed ? [] : group.map((r) => r.path).sort();
     const got = [...fetched.keys()].sort();
-    browserLines.push(`${subject} ${from}: the day ${dayState}, the page's head start ${marker === null ? "never marked within 30 s" : JSON.stringify(marker)}`);
+    browserLines.push(`${subject} ${from}: the day: ${dayState}; the page's head start ${marker === null ? "never marked within 30 s" : JSON.stringify(marker)}`);
     for (const [p, a] of asked) browserLines.push(`  ${p}: asked at ${a.at} ms, ${a.done === null ? "no answer within 30 s" : `answered ${a.status} at ${a.done} ms`}${a.meta ? "" : ", no cma-db meta in the payload"}`);
     if (closed) for (const row of group) notes.push(`${subject} prefetch ${row.path} from ${from}: not measured, the day is ${dayState} (the head start waits for an open day; Clock in again is off or over)`);
     if (JSON.stringify(got) !== JSON.stringify(want)) {
@@ -188,7 +187,7 @@ if (prefetchRows.length > 0) {
         if (a.done === null) return `${p} no answer within 30 s`;
         return `${p} answered ${a.status} without a cma-db meta`;
       });
-      problems.push(`${subject} ${from}: prefetched ${JSON.stringify(got)}, expected ${JSON.stringify(want)} (the day ${dayState}${why.length ? "; " + why.join("; ") : ""})`);
+      problems.push(`${subject} ${from}: prefetched ${JSON.stringify(got)}, expected ${JSON.stringify(want)} (the day: ${dayState}${why.length ? "; " + why.join("; ") : ""})`);
     }
     for (const row of group) {
       const cost = fetched.get(row.path);
