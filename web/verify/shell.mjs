@@ -109,6 +109,10 @@ expect("staleTimes: dynamic and full prefetches 30 s", /staleTimes:\s*\{\s*dynam
 
 const idle = src("components/IdlePrefetch.tsx");
 expect("the head start runs at most once per tab and day state (a module-level set, keyed)", [/^const ran = new Set<string>\(\);/m.test(idle), /ran\.has\(runKey\)/.test(idle)], [true, true], [false, false]);
+const welcome = src("app/(shell)/(welcome)/page.tsx");
+expect("the head start marks the document: the routes once asked, \"none\" when empty, rendered for an empty list too",
+  [/mark\.headStart = "none"/.test(idle), /mark\.headStart = list\.join\(" "\)/.test(idle), /if \(hrefs\.length === 0\) return null/.test(welcome)],
+  [true, true, false], [false, false, true]);
 
 // ---- D3: the day shown at once
 const T0 = Date.parse("2026-11-25T09:00:00Z");
