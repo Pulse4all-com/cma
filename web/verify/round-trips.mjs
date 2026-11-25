@@ -61,7 +61,9 @@ async function holds(subject, permission) {
 const problems = [];
 const notes = [];
 const observed = [];
-for (const row of budget) {
+// Rows of kind "prefetch" are measured in a browser below (night N07, D5); the others by a plain request
+const prefetchRows = budget.filter((row) => row.kind === "prefetch");
+for (const row of budget.filter((r) => r.kind !== "prefetch")) {
   if (row.permission) {
     const h = await holds(row.subject, row.permission);
     if (typeof h === "string") { problems.push(`${row.subject} ${row.path}: ${h}`); continue; }
@@ -105,10 +107,96 @@ for (const row of budget) {
   }
 }
 
+// ---- In a browser (night N07, decisions D2 and D5) -------------------------------------------------------------------
+// The head start: a subject opens a page (row.from) and, once its blocks have settled and the browser is idle, the page
+// prefetches the role's top destinations in full. Each prefetched destination's cost is read from the cma-db meta its
+// React Server Components payload carries (the page's Shell writes it, as in the HTML) and held to the row's budget; the
+// set prefetched must be exactly the subject's rows (no report, never Log out). Then the persistent frame: a click to a
+// rail page and Back load no new inbox from scratch (the message centre mounts once per tab: no /api/v1/me/messages
+// request without ?since= after the first, which is how a fresh mount polls).
+const browserLines = [];
+if (prefetchRows.length > 0) {
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch();
+  // the meta inside the payload's serialised element, quotes escaped or not
+  const metaCost = (text) => {
+    const all = [...text.matchAll(/cma-db\\?"\s*,\s*\\?"content\\?"\s*:\s*\\?"(tx=\d+;rt=\d+;ms=[\d.]+)/g)];
+    return all.length ? parse(all.at(-1)[1]) : null;
+  };
+  for (const group of Object.values(Object.groupBy(prefetchRows, (r) => `${r.subject} ${r.from}`))) {
+    const { subject, from } = group[0];
+    // The head start waits for an open day (a person whose time is kept): the subject's day is opened first, as Clock in
+    // does (dev data; an open day answers as it is)
+    await fetch(`${BASE}/api/v1/me/day/start`, { method: "POST", headers: { "x-cma-mock-subject": subject, "x-cma-request": "1" } }).catch(() => null);
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const page = await ctx.newPage();
+    const fetched = new Map();
+    const pending = [];
+    let fresh = 0;
+    let loaded = false;
+    let navigated = false;
+    // counted when asked (a request), not when answered: a client navigation never waits for the network to go idle
+    page.on("request", (req) => {
+      const url = new URL(req.url());
+      if (url.pathname === "/api/v1/me/messages" && !url.searchParams.has("since") && loaded) fresh += 1;
+    });
+    page.on("response", (res) => {
+      const req = res.request();
+      const url = new URL(res.url());
+
+      const h = req.headers();
+      // a full prefetch: a React Server Components request without Next-Router-Prefetch (that header marks the loading
+      // boundary's prefetch, which renders no page and carries no meta), before the navigation below
+      if (navigated || !h.rsc || h["next-router-prefetch"]) return;
+      pending.push(res.text().then((text) => {
+        const cost = metaCost(text);
+        if (!cost) return;
+        const prev = fetched.get(url.pathname);
+        if (!prev || cost.tx > prev.tx || cost.rt > prev.rt) fetched.set(url.pathname, cost);
+      }).catch(() => undefined));
+    });
+    await page.goto(BASE + from, { waitUntil: "networkidle" });
+    loaded = true;
+    // the blocks settle, the browser goes idle, the prefetches run
+    await page.waitForTimeout(5000);
+    await page.waitForLoadState("networkidle");
+    await Promise.all(pending);
+    const want = group.map((r) => r.path).sort();
+    const got = [...fetched.keys()].sort();
+    if (JSON.stringify(got) !== JSON.stringify(want)) problems.push(`${subject} ${from}: prefetched ${JSON.stringify(got)}, expected ${JSON.stringify(want)}`);
+    for (const row of group) {
+      const cost = fetched.get(row.path);
+      if (!cost) continue;
+      observed.push({ kind: "prefetch", from, path: row.path, subject, tx: cost.tx, rt: cost.rt });
+      const maxTx = provoke ? 0 : row.tx;
+      const maxRt = provoke ? 0 : row.rt;
+      if (cost.tx > maxTx) problems.push(`${subject} prefetch ${row.path}: ${cost.tx} transactions, budget ${maxTx}`);
+      if (cost.rt > maxRt) problems.push(`${subject} prefetch ${row.path}: ${cost.rt} statements, budget ${maxRt}`);
+      browserLines.push(`${subject} prefetch ${row.path} from ${from}: ${cost.tx} tx, ${cost.rt} rt`);
+    }
+    // the frame persists: a click on a visible rail link (a prefetched one where the rail shows it) and Back
+    const visible = await page.locator("nav[data-rail-nav] a[href]").evaluateAll((as) => as.filter((a) => a.offsetParent !== null).map((a) => a.getAttribute("href")));
+    const target = want.find((h) => visible.includes(h)) ?? visible.find((h) => h !== from) ?? want[0];
+    const before = fresh;
+    navigated = true;
+    await page.locator(`nav[data-rail-nav] a[href="${target}"]`).first().click();
+    await page.waitForURL(`**${target}`);
+    await page.waitForTimeout(2000);
+    await page.goBack();
+    await page.waitForTimeout(2000);
+    const extra = fresh - before;
+    browserLines.push(`${subject} ${from} → ${target} → back: ${extra} inbox read from scratch`);
+    if (provoke ? extra === 0 : extra > 0) problems.push(`${subject}: ${extra} inbox read${extra === 1 ? "" : "s"} from scratch on a navigation (the message centre mounted again)${provoke ? " (provoked: 0 counts as a failure)" : ""}`);
+    await ctx.close();
+  }
+  await browser.close();
+}
+
 if (observedOnly) {
   console.log(JSON.stringify(observed, null, 2));
   process.exit(0);
 }
+for (const l of browserLines) console.log("  " + l);
 for (const n of notes) console.log("  note: " + n);
 if (problems.length) {
   for (const p of problems) console.log("  " + p);

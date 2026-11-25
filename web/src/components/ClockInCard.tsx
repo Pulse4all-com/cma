@@ -14,7 +14,7 @@
  * canClockInAgain), the same card shows below the ended day in its "again" variant, with the time
  * until which it can, and calls the same route; the database opens a new session.
  */
-import { useRef, useState, useTransition } from "react";
+import { useOptimistic, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Copy } from "@/lib/copy";
 import { workdayStartsAt } from "@/lib/live";
@@ -35,6 +35,11 @@ export function ClockInCard({
   const [pending, startTransition] = useTransition();
   const [failed, setFailed] = useState(false);
   const [startsAt, setStartsAt] = useState<string | null>(null);
+  /**
+   * Clocked in, shown at once (night N07, D3): the card says so from the click on, while the day opens and the page is read
+   * again; a refusal ends the transition and the card is as it was, with its problem line
+   */
+  const [clockedIn, showClockedIn] = useOptimistic(false);
   /** One clock-in at a time: a second Enter while the first is in flight does nothing */
   const inFlight = useRef(false);
 
@@ -44,6 +49,7 @@ export function ClockInCard({
     setFailed(false);
     setStartsAt(null);
     startTransition(async () => {
+      showClockedIn(true);
       const res = await fetch("/api/v1/me/day/start", { method: "POST", headers: { "x-cma-request": "1" } }).catch(() => null);
       if (!res?.ok) {
         const body = res ? ((await res.json().catch(() => null)) as { error?: { message?: string } } | null) : null;
@@ -51,10 +57,22 @@ export function ClockInCard({
         if (at) setStartsAt(at);
         else setFailed(true);
       }
-      // Also after a refusal: the day may have been opened in another tab
+      // Also after a refusal: the day may have been opened in another tab. The page then draws the open day; the
+      // optimistic card holds until that render lands, since the refresh is part of this transition
       router.refresh();
       inFlight.current = false;
     });
+  }
+
+  if (clockedIn) {
+    return (
+      <Card>
+        <div data-testid="clock-in-shown">
+          <Badge tone="neutral">{copy.welcome.clockedIn}</Badge>
+          <p className="mt-4 text-body" role="status">{copy.welcome.clockedInNow.replace("{status}", defaultStatusName)}</p>
+        </div>
+      </Card>
+    );
   }
 
   return (

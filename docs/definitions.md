@@ -814,7 +814,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl:
 | Status | Decided |
 | Decided | 10 November 2026 (Martin); docs/decisions.md, 10 Nov 2026, "Assets → Pledge lists: the download is exactly the current file" and "Definitions: "Pledge list", "Loan", ..." (addition 0009j) |
 | Used by | Assets → Pledge lists; the checks of that page (`unknown_loan`, `no_model_values`, `no_first_shipped`, `no_language`, `customer_ref_invalid`, `no_start_date`) |
-| As built today | `cma.pledge_page()`, `cma.pledge_finding_rows(check, limit)` and `cma.pledge_file(date)` (`168`), read by `web/src/app/reports/pledge-lists/page.tsx` and the two API routes. Matches the definition |
+| As built today | `cma.pledge_page()`, `cma.pledge_finding_rows(check, limit)` and `cma.pledge_file(date)` (`168`), read by `web/src/app/(shell)/reports/pledge-lists/page.tsx` and the two API routes. Matches the definition |
 
 ### Loan
 
@@ -2179,6 +2179,26 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Decided | 12 Nov 2026, "Addition 0009o" and "Definitions: `follow_up.recompute_minutes` ..." (this PR); 16 Nov 2026, "Definitions: the meaning of each follow-up figure ..." (this PR) |
 | Used by | Sales → Follow-up, the Live board's Follow-up now, Welcome's Waiting for you, the `follow_up.*` and `live.follow_up_now.*` catalog keys (the counts' time is the snapshot's computed_at; the five row fields' time, `follow_up.leads.waiting_business_minutes`, `follow_up.leads.target_state`, `follow_up.tickets.open_business_minutes`, `follow_up.tickets.sla_state` and `follow_up.tickets.minutes_to_breach`, is the read's now()); Configuration → System health (the job's counts) |
 | As built today | Matches the definition once `178` has run: the entry checks the marker (no audit row of an input table since 2 minutes before the last check, no migration committed since, the next clock change not reached, younger than the setting), else computes. Limits: an input change committed more than 2 minutes after its write, and a change of the tenant's zone, are seen at the next computation at the latest. Before `178` every minute rewrites every item. Since `190` (addition 0009u) a list row's clock fields (a ticket's open business time, minutes to breach and `sla_state`, a lead's waiting business time and `past_target`) are derived at the read's `now()` from the stored created_at, market and response time, not stored; the item's state column, the attention filter, the order and the snapshot's counts stay as the refresh stores them, so a row's state words can lead them by up to one job run |
+
+### Job gate
+
+| Field | Value |
+|---|---|
+| Term | Job gate (no label on screen; nl: Poort van een taak); the waits it gives: Deferred, After a timeout and Nothing to read |
+| Key | `cma.job_gate_of(job)`, `cma.web_busy(job)`; the log line's `reason` `deferred`, `after_timeout`, `nothing_to_read`; the run row's counts `defer_wait`, `timeout_wait`, `nothing_to_read`; settings `jobs.defer_web_statements` (2 by default, 1 to 100) and `jobs.defer_max_in_a_row` (5 by default, 0 to 60) |
+| Definition | The question a web minute job (`refresh_follow_up`, `refresh_data_quality`, `refresh_active_customers`, `flash_snapshot`) asks for the current tenant before its heavy step: compute now, or wait. Nothing to read: the follow-up of a tenant without an active CRM connection and without stored items. After a timeout: the job's latest runs for the tenant were cancelled by the statement timeout (`57014`), so it waits 5, 10, 20, 40 and at most 60 minutes after the last one; any other outcome resets it. Deferred: the web service has `jobs.defer_web_statements` or more active statements, so the job leaves the database to the pages for this minute, at most `jobs.defer_max_in_a_row` minutes in a row. |
+| Source | `cma.job_gate_of(job)`, from the job's own rows in `cma.sync_run` and `cma.web_busy(job)` (the number of active statements of the web service, nothing else) |
+| Counts / does not count | A gated run is one run row, `succeeded`, with its wait among its counts (`defer_wait`, `timeout_wait` or `nothing_to_read`, 1); it is never `skipped`, which means another refresh of the tenant held the lock, and never `backoff`, which is the data-quality job's wait after a failed computation (Refreshed at) |
+| Unit and display | Counts and a log line per tenant; no screen label |
+| Time rule | The transaction time of the run; the waits count from the latest cancelled run |
+| Scope | Per tenant and job |
+| Equivalent in the source system | None |
+| Not to use | "Skipped" or "backoff" for a gated run |
+| Status | Decided (Martin, 24 November 2026) |
+| Decided | 24 Nov 2026, "D7 The minute jobs defer to the web" and 25 Nov 2026, "Definitions: Job gate" (PR N07a, addition 0009zr) |
+| Used by | The four minute jobs (`web/jobs/*.mjs`), docs/OPERATIONS.md 4.1, docs/architecture/api.md (the job paragraphs) |
+| As built today | Matches the definition once `236` has run; the jobs compute as before on a database without the gate. `237` proves the waits after timeouts, the deferrals in a row and nothing to read |
+
 
 ### Current take
 
@@ -3767,7 +3787,7 @@ Decided by Martin on 24 November 2026 (addition 0009zp), applying Kira's rule in
 | Status | Decided |
 | Decided | 24 November 2026 (Martin); docs/decisions.md, 24 Nov 2026, "Definitions: Call center work and Overall are the two groups of Reports → Intake" (this PR, addition 0009zp) |
 | Used by | `intake.form_submissions`, `intake.lead_deals_created`, `intake.lead_deals_closed`, `intake.tickets_created`, `intake.tickets_closed`, `intake.calls_in`, `intake.calls_out`, `intake.tagged_calls`, `intake.volume_bar`; Reports → Intake |
-| As built today | `web/src/app/reports/intake/page.tsx`, copy `intake.groupWork` and `hints.groupWork`. Matches the definition |
+| As built today | `web/src/app/(shell)/reports/intake/page.tsx`, copy `intake.groupWork` and `hints.groupWork`. Matches the definition |
 
 ### Overall (Intake group)
 
@@ -3786,7 +3806,7 @@ Decided by Martin on 24 November 2026 (addition 0009zp), applying Kira's rule in
 | Status | Decided |
 | Decided | 24 November 2026 (Martin); docs/decisions.md, 24 Nov 2026, "Definitions: Call center work and Overall are the two groups of Reports → Intake" (this PR, addition 0009zp) |
 | Used by | `intake.other_deals_created`, `intake.new_customers`, `intake.first_orders`, `intake.repeat_orders`, `intake.renewals`, `dashboard.intake.first_orders`; Reports → Intake, Dashboard (Intake row) |
-| As built today | `web/src/app/reports/intake/page.tsx`, `web/src/components/IntakeRow.tsx`; copy keys as above. Matches the definition |
+| As built today | `web/src/app/(shell)/reports/intake/page.tsx`, `web/src/components/IntakeRow.tsx`; copy keys as above. Matches the definition |
 
 ## Retired words
 
@@ -3841,7 +3861,7 @@ Where the code or the catalog says something else than this file: every retired 
 | W13 | `web/src/lib/copy.ts` | `attempts.noteCrm` | Attempts are outbound calls logged in the customer records | Attempts come from the telephony system only (R1) |
 | W17 | `web/src/lib/copy.ts` | `speedToLead.intro` "first outbound call"; Dutch `speedToLead.intro`, `speedToLead.minutesNote` "belpoging"; Dutch `attempts.speed`, `attempts.colMedianSpeed`, `attempts.speedTitle`, `attempts.speedCol`, `hints.atOutcomes` "speed to lead" | The first outbound (CRM) call; two Dutch labels for one term | The first attempt; one Dutch label, "Snelheid tot lead", and one Dutch word for attempt, "poging" |
 | W18 | `web/src/lib/copy.ts` | `email.conversation`, `email.opened` "Conversations opened" ("Gesprekken geopend"), `email.waitingIntro`, `emailPerAgent.intro`, hints `emailOpened`, `emailOpenedCol`, `emailClosedCol`, `emailWait*`, `emailAgentReplies`, `emailAgentClosed` | Conversation for an inbox thread | Another word for the email thread: Conversation is a call term (to settle when Email is defined) |
-| W19 | `web/src/lib/copy.ts`; `web/src/app/api/v1/reports/first-orders/route.ts`, `callbacks-kept/route.ts`; `web/src/app/reports/orders-per-person/page.tsx` | `reports.noTelephony` "No telephony connected", `noShop`, `noEmail`, `noOrders`, `noTelephonyHint`, `noShopHint`, `noFormsHint`; the API field `connected` of First orders, Callbacks kept and Orders per person | Connected for a source that is set up | Another word, to choose in the definitions brief (for example "set up"): Connected is a call term. Customers → Reviews already says "set up" (`isSetUp`, `is_set_up`; Review terms) |
+| W19 | `web/src/lib/copy.ts`; `web/src/app/api/v1/reports/first-orders/route.ts`, `callbacks-kept/route.ts`; `web/src/app/(shell)/reports/orders-per-person/page.tsx` | `reports.noTelephony` "No telephony connected", `noShop`, `noEmail`, `noOrders`, `noTelephonyHint`, `noShopHint`, `noFormsHint`; the API field `connected` of First orders, Callbacks kept and Orders per person | Connected for a source that is set up | Another word, to choose in the definitions brief (for example "set up"): Connected is a call term. Customers → Reviews already says "set up" (`isSetUp`, `is_set_up`; Review terms) |
 | W20 | `web/src/lib/copy.ts`; `web/src/lib/csv.ts` | `funnel.colReachedWon`, `funnelFile.reachedWon`, `hints.fnColReachedWon` ("Reached won", "Gewonnen bereikt"); API `reachedWon` | Reached for a deal won now | A word that is not retired (for example "Won now") |
 | W21 | `web/src/lib/data/types.ts` | API fields `unanswered`, `unansweredByReason` (Inbound) | 0008i's words (the Calls, Calls per agent and Attempts per deal fields took the terms' keys in addition 0008zc) | The term's camelCase key (`missedInbound`) |
 | W25 | `web/src/components/configuration/SourceConfig.tsx` (Configuration → Sources, Lines); the Data quality page | The number of counted lines | Not shown: Lines lists each line with its Counted switch, and a line Aircall adds arrives counted | Data quality or Configuration → Sources shows the number of counted lines, so the list can be compared with the 46-number filter in Aircall Analytics (Call, Scope) after a line is added in Aircall |

@@ -41,7 +41,7 @@ const src = (p) => readFileSync(new URL(`../src/${p}`, import.meta.url), "utf8")
 
 // ---- C. Copy --------------------------------------------------------------------------------------------------------------
 {
-  const files = ["components/SubscriptionsReport.tsx", "app/reports/subscriptions/page.tsx", "components/SubscriptionsFilters.tsx"].map(src).join("\n");
+  const files = ["components/SubscriptionsReport.tsx", "app/(shell)/reports/subscriptions/page.tsx", "components/SubscriptionsFilters.tsx"].map(src).join("\n");
   const used = [...new Set([...files.matchAll(/\bt\.([a-zA-Z_]+)\b/g)].map((m) => m[1]))].filter((k) => !["replace", "length"].includes(k));
   // keys built from a prefix and a value: every value of the prefix's list must exist
   const built = [

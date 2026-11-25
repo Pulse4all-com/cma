@@ -21903,7 +21903,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible (LiveRefresh); 'Updated \u2026 ago' under the title says the snapshot's age",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves; 'Updated \u2026 ago' under the title says the snapshot's age",
       "computed_in": {
         "sql": [
           {
@@ -22058,7 +22058,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves",
       "computed_in": {
         "sql": [
           {
@@ -22199,7 +22199,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves",
       "computed_in": {
         "sql": [
           {
@@ -22331,7 +22331,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves",
       "computed_in": {
         "sql": [
           {
@@ -22432,7 +22432,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves",
       "computed_in": {
         "sql": [
           {
@@ -22551,7 +22551,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves",
       "computed_in": {
         "sql": [
           {
@@ -22649,7 +22649,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves",
       "computed_in": {
         "sql": [
           {
@@ -22752,7 +22752,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves",
       "computed_in": {
         "sql": [
           {
@@ -95129,7 +95129,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": "Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.",
       "settings": [
         {
@@ -95267,7 +95267,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": "Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.",
       "settings": [
         {
@@ -95411,7 +95411,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": "Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.",
       "settings": [
         {
@@ -95571,7 +95571,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. The tile shows the stored take's figure first and the live one after, in the same place (decision D16): the live figure is read when the page opens (cma.active_now, which reads cma.active_present_of) and the title row then says Updated with its time; with the tenant setting active.present_source = take the four tiles are read from the stored take instead and the row says As of with the take's time. What it is compared with is the stored take's (below). Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": "Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.",
       "settings": [
         {
@@ -95725,7 +95725,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": "Against the previous month's end and against the month end twelve months before that (the reconstructed month ends); absent where the history does not reach (never 0). No comparison with a previous period.",
       "settings": [
         {
@@ -95876,7 +95876,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -96047,7 +96047,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -96219,7 +96219,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -96383,7 +96383,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -96536,7 +96536,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -96689,7 +96689,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -96869,7 +96869,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -97040,7 +97040,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -97198,7 +97198,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -97365,7 +97365,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -97536,7 +97536,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -97712,7 +97712,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -97886,7 +97886,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -98061,7 +98061,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -98230,7 +98230,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -98400,7 +98400,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -98549,7 +98549,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -98730,7 +98730,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -98902,7 +98902,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -99075,7 +99075,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {
@@ -99288,7 +99288,7 @@
         "the page's filters, in the database: market (the store's market, or unknown), segment (the contact's segment as crm.customer_segments spells it, or unknown) and acquisition channel (indirect, direct, unknown); a subscription whose customer the store does not hold counts under segment and channel unknown, in the subscriptions and the amounts only",
         "a source not set up (no store, or no subscriptions connection) gives no figure, never zero"
       ],
-      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (5) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
+      "time": "Now = now() at read time; today and the month ends in the tenant's time zone. A month end is the instant the next month starts; the running month's point is now. Whole months as PostgreSQL's age() counts them (cma.flash_age_months_of), between dates in the tenant's zone. Stored take (decision D13): the history and every figure but the tiles' present are read from the take the scheduler refreshes every customers.refresh_minutes (10) or as soon as a settings change marks it stale; the page says its time (History as of) and says so when it is older than customers.history_notice_minutes (15) or missing (History is being prepared, never zeros).",
       "comparison": null,
       "settings": [
         {

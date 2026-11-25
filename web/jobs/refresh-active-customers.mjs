@@ -31,6 +31,8 @@
  */
 import pg from "pg";
 import { codeOf, hearIdleErrors, isMain, retryOnce, withClient } from "./lib/connection.mjs";
+import { sessionPoolOptions } from "./lib/session-options.mjs";
+import { gateOf, gatedCounts, gatedSeverity } from "./lib/gate.mjs";
 
 const LOGIN_SYSTEM = "scheduler";   // the login id of each tenant's system user, as 0005a writes it
 const LOGIN_ID = "scheduler";
@@ -42,7 +44,7 @@ const STATEMENT_TIMEOUT_MS = 55_000;
 
 async function openPool() {
   const database = process.env.CMA_DB_NAME ?? "cma";
-  const common = { database, max: 1, statement_timeout: STATEMENT_TIMEOUT_MS, connectionTimeoutMillis: 10_000 };
+  const common = { database, max: 1, statement_timeout: STATEMENT_TIMEOUT_MS, connectionTimeoutMillis: 10_000, ...sessionPoolOptions() };
   if (process.env.CMA_DB_HOST) {
     return { pool: new pg.Pool({ host: process.env.CMA_DB_HOST, port: Number(process.env.CMA_DB_PORT ?? 5432), user: required("CMA_DB_USER"),
       password: process.env.CMA_DB_PASSWORD || undefined, ...common, application_name: "cma-refresh-active-customers-local" }), close: () => undefined };
@@ -113,6 +115,14 @@ export async function refreshTenants({ connect, log }) {
         }
         // 2. The run row, before the refresh, so a refresh that fails still leaves a failed row; once per tenant and run
         if (!runId) runId = (await asScheduler(client, tenant_id, me, "select cma.job_run_start($1) as id", [JOB])).rows[0].id;
+        // 2b. The gate (addition 0009zr, decision D7): nothing to read, the statement timeout's backoff, or the web's load
+        // defers the heavy step to a later minute; the run row says which wait it was in
+        const g = await gateOf((text, values) => asScheduler(client, tenant_id, me, text, values), JOB);
+        if (!g.go) {
+          const counts = gatedCounts(g);
+          await asScheduler(client, tenant_id, me, "select cma.job_run_finish($1::uuid, 'succeeded', $2::jsonb)", [runId, JSON.stringify(counts)]);
+          return { r: { refreshed: false, reason: g.reason, gated: true }, counts };
+        }
         // 3. The refresh: skipped while the tenant's take is younger than its setting and not stale (reason fresh), when
         // its sources are not set up (reason not_set_up) or when another refresh of this tenant holds its lock (running)
         const r = (await asScheduler(client, tenant_id, me, "select cma.active_refresh() as r")).rows[0].r;
@@ -133,7 +143,7 @@ export async function refreshTenants({ connect, log }) {
       }), { log, fields: { tenant_id } });
       // A fresh take is the normal case between two due minutes, as a tenant without its sources: INFO; a refresh skipped
       // for a running one is a warning
-      log(r.refreshed || r.reason === "fresh" || r.reason === "not_set_up" ? "INFO" : "WARNING", { tenant_id, rows: counts.rows, duration_ms: counts.duration_ms, refreshed: Boolean(r.refreshed),
+      log(r.refreshed || r.reason === "fresh" || r.reason === "not_set_up" ? "INFO" : r.gated ? gatedSeverity(r.reason) : "WARNING", { tenant_id, rows: counts.rows, duration_ms: counts.duration_ms, refreshed: Boolean(r.refreshed),
         ...(r.refreshed ? {} : { reason: r.reason ?? "running" }),
         facts_rows: counts.facts_rows, facts_duration_ms: counts.facts_duration_ms, facts_refreshed: counts.facts_skipped === 0 });
     } catch (e) {

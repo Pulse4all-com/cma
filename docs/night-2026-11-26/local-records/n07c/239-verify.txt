@@ -1,0 +1,24 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:239_verify_email_not_responding_speed.sql:25: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DROP FUNCTION
+DROP FUNCTION
+          check_name          |   result    |                       detail                        
+------------------------------+-------------+-----------------------------------------------------
+ E1 structure                 | OK          | order and grants
+ E2 equals 100 now            | OK          | 0 rows differ over 150 deals not responding
+ E3 equals 100 thirty days on | OK          | 0 rows differ over 166 deals
+ verdict                      | PASS 0009zs | 239_verify_email_not_responding_speed: 3 OK, 0 FAIL
+(4 rows)
+
+RESET

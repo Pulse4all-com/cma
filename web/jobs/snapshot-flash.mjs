@@ -57,6 +57,8 @@
  */
 import pg from "pg";
 import { codeOf, hearIdleErrors, isConnectionError, isMain, retryOnce, withClient } from "./lib/connection.mjs";
+import { sessionPoolOptions } from "./lib/session-options.mjs";
+import { gateOf, gatedCounts } from "./lib/gate.mjs";
 
 const LOGIN_SYSTEM = "scheduler";   // the login id of each tenant's system user, as 0005a writes it
 const LOGIN_ID = "scheduler";
@@ -79,7 +81,7 @@ export function poolMax(value) {
 
 async function openPool() {
   const database = process.env.CMA_DB_NAME ?? "cma";
-  const common = { database, max: poolMax(process.env.CMA_DB_POOL_MAX), statement_timeout: STATEMENT_TIMEOUT_MS, connectionTimeoutMillis: 10_000 };
+  const common = { database, max: poolMax(process.env.CMA_DB_POOL_MAX), statement_timeout: STATEMENT_TIMEOUT_MS, connectionTimeoutMillis: 10_000, ...sessionPoolOptions() };
   if (process.env.CMA_DB_HOST) {
     return { pool: new pg.Pool({ host: process.env.CMA_DB_HOST, port: Number(process.env.CMA_DB_PORT ?? 5432), user: required("CMA_DB_USER"),
       password: process.env.CMA_DB_PASSWORD || undefined, ...common, application_name: "cma-snapshot-flash-local" }), close: () => undefined };
@@ -234,6 +236,7 @@ export async function snapshotTenants({ connect, log }) {
     let takeSent = false;    // a take went out: a retry without its answer cannot know whether its commit landed
     let finishSent = false;  // the run row's finish went out and no answer came back: likewise
     let note = null;
+    let gateWait = null;     // the gate's counts once asked (0009zr): false when it said go
     const finishedFirst = (e) => answer !== null && e?.code === "CMA03";
     try {
       const r = await retryOnce(() => withClient(connect, async (client) => {
@@ -255,6 +258,17 @@ export async function snapshotTenants({ connect, log }) {
         // figures the page reads. Idempotent (a take just refreshed is fresh), so a retry whose first answer was lost asks
         // again. A database error of the whole call (a timeout, a database without 0009e) is a failed refresh with its
         // code: the run row fails, and the dated take still runs
+        // 3a. The gate (addition 0009zr, decision D7): the wait after statement timeouts or the web's load defers the current takes, the
+        // minute's heavy step, to a later minute (the dated take and the pledge file below still run: once a day each)
+        if (!current && gateWait === null) {
+          const g = await gateOf((text, values) => asScheduler(client, tenant_id, me, text, values), JOB);
+          if (!g.go) {
+            gateWait = gatedCounts(g);
+            current = {};
+          } else {
+            gateWait = false;
+          }
+        }
         if (!current) {
           try {
             current = (await asScheduler(client, tenant_id, me, "select cma.flash_current_refresh(cma.current_tenant_id()) as r")).rows[0].r;
@@ -295,7 +309,8 @@ export async function snapshotTenants({ connect, log }) {
           }
         }
         // 5. The run row's finish; after a finish whose answer was lost, CMA03 means it landed: the first counts stand
-        const counts = { ...countsOf(answer), ...currentCountsOf(current), ...pledgeCountsOf(pledge) };
+        const counts = { ...countsOf(answer), ...currentCountsOf(current), ...pledgeCountsOf(pledge),
+          ...(gateWait ? Object.fromEntries(Object.entries(gateWait).filter(([k]) => k.endsWith("_wait"))) : {}) };
         const runError = runErrorOf(answer, current, pledge);
         const lostFinish = finishSent;
         finishSent = true;

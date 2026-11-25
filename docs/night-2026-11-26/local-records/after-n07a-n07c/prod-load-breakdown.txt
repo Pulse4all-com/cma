@@ -1,0 +1,376 @@
+Pager usage is off.
+BEGIN
+SET
+SET
+SET
+            started            | budget_s 
+-------------------------------+----------
+ 2026-11-24 18:01:43.060204+00 | 95
+(1 row)
+
+
+==== 0. The server ====
+            server_version             | pg_stat_statements_installed | hours_since_stats_reset 
+---------------------------------------+------------------------------+-------------------------
+ 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) |                            1 |                        
+(1 row)
+
+  application  | state | sessions | oldest_xact_seconds 
+---------------+-------+----------+---------------------
+ cma-web-local | idle  |        3 |                    
+(1 row)
+
+ vacuuming_now | phase | heap_blks_total | heap_blks_scanned 
+---------------+-------+-----------------+-------------------
+(0 rows)
+
+
+==== 1. Follow-up items per tenant and kind now; the stored snapshots ====
+         tenant          |  kind  | items 
+-------------------------+--------+-------
+ pulse4all-subscriptions | lead   |  1380
+ pulse4all-subscriptions | task   |  7500
+ pulse4all-subscriptions | ticket |  3600
+(3 rows)
+
+         tenant          |           snapshot           | age_seconds | duration_ms 
+-------------------------+------------------------------+-------------+-------------
+ pulse4all-invest        | data_quality                 |        4661 |          67
+ pulse4all-invest        | follow_up                    |        4631 |         506
+ pulse4all-subscriptions | data_quality                 |        4661 |        5733
+ pulse4all-subscriptions | flash_current customers      |        4655 |          74
+ pulse4all-subscriptions | flash_current installed_base |        4655 |         175
+ pulse4all-subscriptions | flash_current open_deals     |        4655 |          50
+ pulse4all-subscriptions | flash_current open_tasks     |        4655 |          99
+ pulse4all-subscriptions | flash_current open_tickets   |        4655 |          57
+ pulse4all-subscriptions | flash_current subscriptions  |        4655 |         221
+ pulse4all-subscriptions | follow_up                    |        4631 |        2428
+(10 rows)
+
+(for flash_current the last column is the rows of the take, not a duration)
+
+==== 2. The tables ====
+-- 2a the 15 most read since the stats reset (cumulative counts)
+      table_name      | seq_scan | seq_tup_read | idx_scan | idx_tup_fetch | n_tup_ins | n_tup_upd | n_tup_del | n_live_tup | n_dead_tup 
+----------------------+----------+--------------+----------+---------------+-----------+-----------+-----------+------------+------------
+ crm_association      |       18 |      2438985 | 20444950 |     524233290 |    162821 |        10 |         0 |     162599 |        224
+ subscription_change  |  2931250 |    296044650 |   174970 |          4040 |       103 |         0 |         0 |        101 |          2
+ crm_contact          |     3737 |    224370856 | 32067041 |      31412133 |     72464 |     60014 |         0 |      60300 |      12174
+ device               |    11409 |    232254016 |   146450 |        130568 |     20408 |     29920 |         0 |      20400 |          8
+ commerce_customer    |     1789 |    212594250 |  1352150 |       2302835 |    120531 |        19 |         0 |     120450 |        100
+ subscription_event   |      260 |    109296738 |  6492457 |      89408371 |    824762 |    303649 |         3 |     806484 |      18280
+ telephony_call       |      689 |    134640000 | 12404913 |      48255139 |    198130 |         0 |         0 |     198000 |        130
+ setting              |  3665070 |    160464353 |   917144 |        916343 |       104 |        20 |         1 |        103 |         14
+ tenant_setting       |  4575198 |    159805880 |     4889 |          4681 |       195 |        59 |         8 |         55 |         16
+ crm_record           |     5655 |    128392133 |  3847080 |      11344427 |     53833 |        20 |         0 |      22330 |         21
+ renewal_outcome      |      258 |    122747743 |    18404 |      12457276 |  10342968 |         3 |     18029 |     154407 |          0
+ email_message        |        9 |            0 |  2452454 |     127645500 |     51000 |         0 |         0 |      51000 |          0
+ subscription         |     2849 |     63983149 | 31428535 |      53228284 |     22782 |     64824 |         0 |      22680 |        128
+ app_user_external_id |  4750992 |     98746081 |   454586 |        291066 |       252 |         0 |         0 |         25 |          7
+ subscription_take    |     4014 |     90833400 |      124 |        407830 |     22769 |    474574 |        30 |      22680 |          0
+(15 rows)
+
+-- 2b the 10 with the most dead rows, and the minutes since their last vacuum and analyze
+      table_name      | n_live_tup | n_dead_tup | n_mod_since_analyze | min_since_autovacuum | min_since_autoanalyze | autovacuum_count | autoanalyze_count | total_mb 
+----------------------+------------+------------+---------------------+----------------------+-----------------------+------------------+-------------------+----------
+ subscription_event   |     806484 |      18280 |                   0 |                      |                       |                0 |                 0 |    575.3
+ crm_contact          |      60300 |      12174 |                   0 |                   89 |                    89 |                1 |                 2 |     33.7
+ commerce_order       |      61135 |       4110 |                   0 |                   89 |                       |                1 |                 0 |     39.9
+ audit_log            |      20223 |        642 |               21990 |                    5 |                       |                6 |                 0 |     87.2
+ active_base          |      22680 |        576 |                 174 |                   89 |                    89 |                1 |                 1 |      8.9
+ crm_association      |     162599 |        224 |                   0 |                   89 |                    89 |                1 |                 1 |     51.3
+ crm_call             |     150000 |        214 |                   0 |                   89 |                    89 |                1 |                 1 |     72.9
+ data_quality_finding |     208240 |        178 |                   0 |                   77 |                    76 |                2 |                 1 |     47.6
+ call_link            |     100000 |        157 |                   0 |                   89 |                    89 |                1 |                 1 |     42.1
+ sync_run             |     360016 |        148 |                  32 |                   89 |                    89 |                1 |                 1 |    248.7
+(10 rows)
+
+-- 2c the tables of the minute jobs: sizes (table and its indexes)
+      table_name       | table_mb | indexes_mb | est_rows 
+-----------------------+----------+------------+----------
+ audit_log             |     70.4 |       16.7 |    20223
+ call_link             |     12.0 |       30.0 |   100000
+ data_quality_finding  |     28.5 |       19.1 |   208240
+ data_quality_snapshot |      0.0 |        0.0 |       -1
+ flash_current_take    |      0.2 |        0.4 |      676
+ follow_up_item        |      7.6 |       10.2 |    12480
+ follow_up_snapshot    |      0.0 |        0.0 |       -1
+ ingest_event          |    205.7 |      298.0 |  1080000
+ sync_run              |     72.2 |      176.5 |   360000
+(9 rows)
+
+
+==== 3. History from sync_run ====
+-- 3a per day (UTC) since 2026-11-06
+         tenant          |           job            |  day_utc   | runs | failed | avg_ms | p95_ms | max_ms | avg_rows | avg_leads | avg_tickets | avg_tasks | current_refreshed 
+-------------------------+--------------------------+------------+------+--------+--------+--------+--------+----------+-----------+-------------+-----------+-------------------
+ pulse4all-invest        | flash_snapshot           | 2026-11-24 |    3 |      1 |     72 |    106 |    111 |        1 |           |             |           |                 0
+ pulse4all-invest        | refresh_active_customers | 2026-11-24 |    1 |      0 |     41 |     41 |     41 |        0 |           |             |           |                  
+ pulse4all-invest        | refresh_data_quality     | 2026-11-24 |    2 |      0 |     42 |     73 |     76 |        0 |           |             |           |                  
+ pulse4all-invest        | refresh_follow_up        | 2026-11-24 |    2 |      0 |    298 |    557 |    586 |        0 |         0 |           0 |         0 |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-06 |  617 |      0 |  29984 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-07 |  618 |      0 |  30000 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-08 |  616 |      0 |  30000 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-09 |  618 |      0 |  30000 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-10 |  617 |      0 |  30016 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-11 |  617 |      0 |  29984 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-12 |  617 |      0 |  30016 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-13 |  617 |      0 |  29984 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-14 |  618 |      0 |  30000 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-15 |  616 |      0 |  30000 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-16 |  618 |      0 |  30000 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-17 |  617 |      0 |  30016 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-18 |  617 |      0 |  29984 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-19 |  617 |      0 |  30016 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-20 |  617 |      0 |  29984 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-21 |  618 |      0 |  30000 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-22 |  616 |      0 |  30000 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-23 |  618 |      0 |  30000 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll              | 2026-11-24 |  424 |      0 |  30000 |  40000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-06 | 3528 |      0 |  19101 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-07 | 3525 |      0 |  19094 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-08 | 3529 |      0 |  19103 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-09 | 3524 |      0 |  19115 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-10 | 3527 |      0 |  19091 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-11 | 3526 |      0 |  19090 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-12 | 3527 |      0 |  19111 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-13 | 3528 |      0 |  19090 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-14 | 3524 |      0 |  19104 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-15 | 3529 |      0 |  19103 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-16 | 3525 |      0 |  19110 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-17 | 3528 |      0 |  19089 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-18 | 3525 |      0 |  19098 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-19 | 3527 |      0 |  19106 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-20 | 3527 |      0 |  19089 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-21 | 3525 |      0 |  19105 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-22 | 3529 |      0 |  19103 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-23 | 3524 |      0 |  19106 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll               | 2026-11-24 | 2425 |      0 |  19093 |  36000 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | flash_snapshot           | 2026-11-24 |    3 |      1 |   1559 |   2704 |   2798 |      566 |           |             |           |                 0
+ pulse4all-subscriptions | forms_poll               | 2026-11-06 | 4762 |    106 |  19109 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-07 | 4760 |    106 |  19110 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-08 | 4762 |    106 |  19111 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-09 | 4759 |    105 |  19124 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-10 | 4762 |    106 |  19104 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-11 | 4760 |    106 |  19101 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-12 | 4761 |    106 |  19123 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-13 | 4762 |    106 |  19101 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-14 | 4759 |    105 |  19118 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-15 | 4762 |    107 |  19111 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-16 | 4760 |    105 |  19121 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-17 | 4762 |    105 |  19104 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-18 | 4760 |    107 |  19105 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-19 | 4761 |    105 |  19118 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-20 | 4761 |    106 |  19100 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-21 | 4760 |    106 |  19118 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-22 | 4762 |    106 |  19111 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-23 | 4759 |    106 |  19118 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll               | 2026-11-24 | 3274 |     72 |  19101 |  37000 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-06 |  364 |     18 |  16143 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-07 |  364 |     17 |  16473 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-08 |  365 |     18 |  16123 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-09 |  366 |     18 |  16172 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-10 |  365 |     17 |  16351 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-11 |  365 |     18 |  16348 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-12 |  365 |     17 |  16014 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-13 |  365 |     18 |  16342 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-14 |  366 |     18 |  16281 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-15 |  364 |     17 |  16143 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-16 |  364 |     18 |  16253 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-17 |  365 |     18 |  16342 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-18 |  366 |     17 |  16227 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-19 |  364 |     18 |  16143 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-20 |  366 |     18 |  16391 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-21 |  365 |     17 |  16233 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-22 |  365 |     18 |  16123 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-23 |  366 |     17 |  16336 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile                | 2026-11-24 |  250 |     12 |  16172 |  32000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | refresh_active_customers | 2026-11-24 |    1 |      0 |   5228 |   5228 |   5228 |      191 |           |             |           |                  
+ pulse4all-subscriptions | refresh_data_quality     | 2026-11-24 |    2 |      0 |   2877 |   5458 |   5745 |   104120 |           |             |           |                  
+ pulse4all-subscriptions | refresh_follow_up        | 2026-11-24 |    2 |      0 |   2624 |   2784 |   2801 |    12480 |      1380 |        3600 |      7500 |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-06 |  617 |      0 |  20016 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-07 |  617 |      0 |  19984 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-08 |  617 |      0 |  20016 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-09 |  618 |      0 |  20000 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-10 |  616 |      0 |  20000 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-11 |  618 |      0 |  20000 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-12 |  617 |      0 |  19984 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-13 |  617 |      0 |  20016 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-14 |  617 |      0 |  19984 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-15 |  617 |      0 |  20016 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-16 |  618 |      0 |  20000 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-17 |  616 |      0 |  20000 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-18 |  618 |      0 |  20000 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-19 |  617 |      0 |  19984 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-20 |  617 |      0 |  20016 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-21 |  617 |      0 |  19984 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-22 |  617 |      0 |  20016 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-23 |  618 |      0 |  20000 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll             | 2026-11-24 |  424 |      0 |  20000 |  30000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-06 | 2455 |      0 |  23569 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-07 | 2459 |      0 |  23569 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-08 | 2453 |      0 |  23581 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-09 | 2459 |      0 |  23569 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-10 | 2455 |      0 |  23585 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-11 | 2457 |      0 |  23557 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-12 | 2456 |      0 |  23579 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-13 | 2454 |      0 |  23575 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-14 | 2459 |      0 |  23569 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-15 | 2454 |      0 |  23575 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-16 | 2459 |      0 |  23569 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-17 | 2454 |      0 |  23591 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-18 | 2457 |      0 |  23557 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-19 | 2457 |      0 |  23573 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-20 | 2455 |      0 |  23569 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-21 | 2458 |      0 |  23574 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-22 | 2453 |      0 |  23581 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-23 | 2459 |      0 |  23569 |  39000 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll       | 2026-11-24 | 1685 |      0 |  23577 |  39000 |  39000 |          |           |             |           |                  
+(122 rows)
+
+-- 3b per hour (UTC) from 2026-11-11 13:00+00 to 2026-11-11 21:00+00
+         tenant          |        job         | hour_utc | runs | failed | avg_ms | max_ms | avg_rows | avg_leads | avg_tickets | avg_tasks | current_refreshed 
+-------------------------+--------------------+----------+------+--------+--------+--------+----------+-----------+-------------+-----------+-------------------
+ pulse4all-subscriptions | assets_poll        | 11-11 13 |   26 |      0 |  30000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll        | 11-11 14 |   25 |      0 |  29600 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll        | 11-11 15 |   26 |      0 |  30000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll        | 11-11 16 |   26 |      0 |  30000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll        | 11-11 17 |   26 |      0 |  30000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll        | 11-11 18 |   26 |      0 |  30000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll        | 11-11 19 |   25 |      0 |  30400 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | assets_poll        | 11-11 20 |   26 |      0 |  30000 |  40000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll         | 11-11 13 |  148 |      0 |  19216 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll         | 11-11 14 |  147 |      0 |  19129 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll         | 11-11 15 |  147 |      0 |  18844 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll         | 11-11 16 |  146 |      0 |  19370 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll         | 11-11 17 |  146 |      0 |  19192 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll         | 11-11 18 |  147 |      0 |  18871 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll         | 11-11 19 |  148 |      0 |  19243 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | email_poll         | 11-11 20 |  148 |      0 |  19014 |  36000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll         | 11-11 13 |  199 |      5 |  19231 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll         | 11-11 14 |  199 |      5 |  19010 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll         | 11-11 15 |  198 |      4 |  18949 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll         | 11-11 16 |  198 |      4 |  19293 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll         | 11-11 17 |  197 |      5 |  19264 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll         | 11-11 18 |  199 |      4 |  18950 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll         | 11-11 19 |  199 |      4 |  19201 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | forms_poll         | 11-11 20 |  199 |      4 |  19080 |  37000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile          | 11-11 13 |   15 |      0 |  15333 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile          | 11-11 14 |   15 |      1 |  14200 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile          | 11-11 15 |   16 |      1 |  18813 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile          | 11-11 16 |   14 |      1 |  12929 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile          | 11-11 17 |   16 |      0 |  19000 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile          | 11-11 18 |   15 |      1 |  16667 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile          | 11-11 19 |   15 |      1 |  12667 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reconcile          | 11-11 20 |   14 |      1 |  20071 |  32000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll       | 11-11 13 |   25 |      0 |  20400 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll       | 11-11 14 |   26 |      0 |  20000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll       | 11-11 15 |   26 |      0 |  20000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll       | 11-11 16 |   26 |      0 |  20000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll       | 11-11 17 |   26 |      0 |  20000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll       | 11-11 18 |   25 |      0 |  19600 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll       | 11-11 19 |   26 |      0 |  20000 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | reviews_poll       | 11-11 20 |   25 |      0 |  20400 |  30000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll | 11-11 13 |  101 |      0 |  23941 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll | 11-11 14 |  102 |      0 |  23206 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll | 11-11 15 |  102 |      0 |  23598 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll | 11-11 16 |  104 |      0 |  23500 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll | 11-11 17 |  104 |      0 |  23500 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll | 11-11 18 |  102 |      0 |  23588 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll | 11-11 19 |  101 |      0 |  23743 |  39000 |          |           |             |           |                  
+ pulse4all-subscriptions | subscriptions_poll | 11-11 20 |  102 |      0 |  23794 |  39000 |          |           |             |           |                  
+(48 rows)
+
+
+==== 4. The database work of the minute jobs (one call each, rolled back) ====
+step | answer or rows out | ms | rows read | rows written | seq scans | idx scans | most read: table rows
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  ---- F pulse4all-invest
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  follow-up: cma.refresh_follow_up() as the job calls it | refreshed rows 0 leads 0 tickets 0 tasks 0 own ms 60 | 65.0 ms | 211100 read | 2 written | 26 seq | 25 idx | crm_contact 120600, crm_record 89741, tenant_setting 247
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  follow-up part: cma.open_leads_of | 0 rows | 15.5 ms | 7 read | 0 written | 0 seq | 17 idx | telephony_call 6, crm_record 1
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  follow-up part: cma.open_tickets_of | 0 rows | 11.6 ms | 105187 read | 0 written | 4 seq | 1 idx | crm_contact 60300, crm_record 44870, commerce_store 17
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  follow-up part: cma.open_tasks_of | 0 rows | 3.6 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  follow-up part: cma.courtesy_unreachable_of | null: courtesy not set up | 0.3 ms | 130 read | 0 written | 2 seq | 0 idx | setting 75, tenant_setting 55
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  F pulse4all-invest | sum | 96.0 ms | 316424 read | 2 written
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  ---- F pulse4all-subscriptions
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  follow-up: cma.refresh_follow_up() as the job calls it | refreshed rows 12480 leads 1380 tickets 3600 tasks 7500 own ms 1509 | 1514.4 ms | 992947 read | 8128 written | 10879 seq | 117497 idx | crm_contact 401492, crm_record 231851, setting 81642
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  follow-up part: cma.open_leads_of | 1380 rows | 994.4 ms | 633270 read | 0 written | 3967 seq | 87461 idx | crm_contact 205592, crm_record 157046, setting 81504
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  follow-up part: cma.open_tickets_of | 3600 rows | 122.4 ms | 165938 read | 0 written | 71 seq | 15 idx | crm_contact 120600, crm_record 44870, business_hours 140
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  follow-up part: cma.open_tasks_of | 7500 rows | 203.9 ms | 127918 read | 0 written | 35 seq | 30004 idx | crm_contact 75300, crm_record 29935, crm_task 22500
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  follow-up part: cma.courtesy_unreachable_of | null: courtesy not set up | 0.4 ms | 130 read | 0 written | 2 seq | 0 idx | setting 75, tenant_setting 55
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  F pulse4all-subscriptions | sum | 2835.5 ms | 1920203 read | 8128 written
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  ---- D pulse4all-invest
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  data quality: cma.refresh_data_quality() as the job calls it | refreshed rows 0 own ms 49 | 50.7 ms | 105865 read | 1 written | 25 seq | 48 idx | crm_contact 60300, crm_record 44870, tenant_setting 270
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  data quality when due: cma.flash_findings_compute_of | 0 rows | 33.9 ms | 105604 read | 0 written | 20 seq | 44 idx | crm_contact 60300, crm_record 44870, tenant_setting 215
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  D pulse4all-invest | sum | 84.6 ms | 211469 read | 1 written
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  ---- D pulse4all-subscriptions
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  data quality: cma.refresh_data_quality() as the job calls it | refreshed rows 208319 own ms 5343 | 5344.4 ms | 3529230 read | 416560 written | 209008 seq | 114191 idx | crm_contact 694900, device 495822, telephony_call 396001
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  data quality when due: cma.flash_findings_compute_of | 208319 rows | 1902.6 ms | 3112422 read | 0 written | 683 seq | 114188 idx | crm_contact 694900, device 495822, telephony_call 396001
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  D pulse4all-subscriptions | sum | 7247.0 ms | 6641652 read | 416560 written
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  ---- S pulse4all-invest
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash: cma.flash_current_refresh() as the job calls it | current_duration_ms 16, current_not_set_up 6 | 17.4 ms | 2821 read | 0 written | 49 seq | 23 idx | setting 1170, role_permission 742, tenant_setting 715
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash current take when due: cma.flash_compute_of customers | 0 rows | 2.9 ms | 515 read | 0 written | 10 seq | 0 idx | setting 276, tenant_setting 220, commerce_store 17
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash current take when due: cma.flash_compute_of subscriptions | 0 rows | 2.1 ms | 498 read | 0 written | 9 seq | 1 idx | setting 276, tenant_setting 220, tenant 2
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash current take when due: cma.flash_compute_of installed_base | 0 rows | 2.2 ms | 535 read | 0 written | 10 seq | 0 idx | setting 276, tenant_setting 220, integration_connection 37
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash current take when due: cma.flash_compute_of open_deals | 0 rows | 2.1 ms | 498 read | 0 written | 9 seq | 1 idx | setting 276, tenant_setting 220, tenant 2
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash current take when due: cma.flash_compute_of open_tickets | 0 rows | 2.0 ms | 498 read | 0 written | 9 seq | 1 idx | setting 276, tenant_setting 220, tenant 2
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash current take when due: cma.flash_compute_of open_tasks | 0 rows | 2.1 ms | 498 read | 0 written | 9 seq | 1 idx | setting 276, tenant_setting 220, tenant 2
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash: cma.flash_snapshot_take() as the job calls it | not taken taken | 1.9 ms | 369 read | 0 written | 9 seq | 1 idx | role_permission 212, setting 59, tenant_setting 55
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash: cma.pledge_snapshot_take() as the job calls it | not_due | 0.9 ms | 398 read | 0 written | 9 seq | 0 idx | role_permission 220, setting 81, tenant_setting 55
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  S pulse4all-invest | sum | 33.6 ms | 6630 read | 0 written
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  ---- S pulse4all-subscriptions
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash: cma.flash_current_refresh() as the job calls it | current_duration_ms 1346, current_refreshed 6, current_rows 676 | 1346.8 ms | 1361758 read | 1352 written | 1162 seq | 91534 idx | device 428400, crm_contact 318600, subscription_event 129067
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash current take when due: cma.flash_compute_of customers | 74 rows | 231.1 ms | 240569 read | 0 written | 73 seq | 16 idx | commerce_customer 120450, crm_contact 60300, subscription 22680
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash current take when due: cma.flash_compute_of subscriptions | 221 rows | 606.7 ms | 202654 read | 0 written | 77 seq | 51869 idx | subscription_event 129067, subscription 45544, device 20400
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash current take when due: cma.flash_compute_of installed_base | 175 rows | 214.4 ms | 329946 read | 0 written | 73 seq | 23 idx | device 224400, device_component 81600, subscription 22680
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash current take when due: cma.flash_compute_of open_deals | 50 rows | 33.9 ms | 107936 read | 0 written | 46 seq | 2101 idx | crm_contact 62400, crm_record 44870, setting 284
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash current take when due: cma.flash_compute_of open_tickets | 57 rows | 123.3 ms | 166415 read | 0 written | 80 seq | 16 idx | crm_contact 120600, crm_record 44870, setting 339
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash current take when due: cma.flash_compute_of open_tasks | 99 rows | 204.6 ms | 128397 read | 0 written | 45 seq | 30005 idx | crm_contact 75300, crm_record 29935, crm_task 22500
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash: cma.flash_snapshot_take() as the job calls it | not taken taken | 0.8 ms | 342 read | 0 written | 9 seq | 1 idx | role_permission 210, setting 59, tenant_setting 37
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  flash: cma.pledge_snapshot_take() as the job calls it | not_due | 0.4 ms | 389 read | 0 written | 9 seq | 0 idx | role_permission 218, setting 81, tenant_setting 55
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  S pulse4all-subscriptions | sum | 2762.0 ms | 2538406 read | 1352 written
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  ---- I pulse4all-invest
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep: cma.link_calls over 2 hours (links made) | 0 | 1.3 ms | 120 read | 0 written | 3 seq | 4 idx | role_permission 100, user_role 11, app_user 8
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  I pulse4all-invest | sum | 1.3 ms | 120 read | 0 written
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  ---- I pulse4all-subscriptions
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep: cma.link_calls over 2 hours (links made) | 17 | 7.3 ms | 891 read | 34 written | 54 seq | 251 idx | crm_call 487, app_user 180, role_permission 99
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfcrm: due events (counted to 10,000, not claimed) | 5602 | 0.9 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfreg: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfrev: due events (counted to 10,000, not claimed) | 0 | 0.3 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfshop: due events (counted to 10,000, not claimed) | 3 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfshop: due events (counted to 10,000, not claimed) | 3 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfshop: due events (counted to 10,000, not claimed) | 2 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfshop: due events (counted to 10,000, not claimed) | 2 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfshop: due events (counted to 10,000, not claimed) | 3 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfshop: due events (counted to 10,000, not claimed) | 3 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfshop: due events (counted to 10,000, not claimed) | 4 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfshop: due events (counted to 10,000, not claimed) | 4 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfshop: due events (counted to 10,000, not claimed) | 2 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfshop: due events (counted to 10,000, not claimed) | 2 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfshop: due events (counted to 10,000, not claimed) | 2 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfshop: due events (counted to 10,000, not claimed) | 2 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfshop: due events (counted to 10,000, not claimed) | 2 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfshop: due events (counted to 10,000, not claimed) | 2 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfsubs: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfsubs: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfsubs: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfsubs: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfsubs: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfsubs: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfsubs: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfsubs: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfsubs: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfsubs: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfsubs: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perfsubs: due events (counted to 10,000, not claimed) | 0 | 0.3 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep perftel: due events (counted to 10,000, not claimed) | 12 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep seedcrm: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep seedshop: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep seedshop: due events (counted to 10,000, not claimed) | 0 | 2.3 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep seedshop: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep seedsubs: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep seedsubs: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  sweep seedsubs: due events (counted to 10,000, not claimed) | 0 | 0.2 ms | 0 read | 0 written | 0 seq | 1 idx | -
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  I pulse4all-subscriptions | sum | 17.7 ms | 891 read | 34 written
+psql:tools/perf/prod-load-breakdown.sql:351: NOTICE:  whole script: 13.8 s
+DO
+ROLLBACK

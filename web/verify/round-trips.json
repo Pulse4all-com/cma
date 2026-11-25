@@ -588,6 +588,52 @@
     ]
   },
   {
+    "path": "/api/v1/reports/follow-up/updated",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "kind": "prefetch",
+    "subject": "agent-two",
+    "from": "/",
+    "path": "/day",
+    "tx": 3,
+    "rt": 13
+  },
+  {
+    "kind": "prefetch",
+    "subject": "agent-two",
+    "from": "/",
+    "path": "/messages",
+    "tx": 2,
+    "rt": 10
+  },
+  {
+    "kind": "prefetch",
+    "subject": "agent-two",
+    "from": "/",
+    "path": "/schedule",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "kind": "prefetch",
+    "subject": "manager",
+    "from": "/",
+    "path": "/live/newco",
+    "tx": 2,
+    "rt": 16
+  },
+  {
+    "kind": "prefetch",
+    "subject": "manager",
+    "from": "/",
+    "path": "/team/hours",
+    "tx": 4,
+    "rt": 17
+  },
+  {
     "path": "/api/v1/telemetry/navigation",
     "subject": "agent-two",
     "method": "POST",

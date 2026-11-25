@@ -10,7 +10,7 @@ import { addDays, dateKeyInZone, isDateKey, startOfWeek } from "@/lib/time";
 import { onRoster } from "@/lib/roster";
 import type {
   LiveBoardData, DataQualityReport,
-  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MessageStat, MessageTarget, MyMessage, MyMessages, MyProfile, MyRosterDay, SentMessage, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
+  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MessageStat, MessageTarget, MessagesWritten, MyMessage, MyMessages, MyProfile, MyRosterDay, SentMessage, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
   SkillInfo, SkillInput, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow,
   TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday, HoursMarket,
   CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus,
@@ -4153,7 +4153,7 @@ export const mockData: CmaData = {
     return { messages: listed.map(({ m, d }) => toMyMessage(m, d)), unreadCount: own.filter(({ d }) => d.readAt === null).length };
   },
 
-  async markMessagesRead(me, ids): Promise<number> {
+  async markMessagesRead(me, ids): Promise<MessagesWritten> {
     const now = new Date().toISOString();
     let n = 0;
     for (const id of ids) {
@@ -4164,18 +4164,20 @@ export const mockData: CmaData = {
       d.readAt = now;
       n += 1;
     }
-    return n;
+    return { changed: n, unreadCount: ownMessages(me, now).filter(({ d }) => d.readAt === null).length };
   },
 
-  async acknowledgeMessage(me, id): Promise<void> {
+  async acknowledgeMessage(me, id): Promise<MessagesWritten> {
     const now = new Date().toISOString();
     const m = state.messages.get(id);
     const d = m && !m.withdrawnAt ? deliveryOf(m, me) : null;
     if (!d) throw new CmaDbError("CMA02", "not found");
-    if (d.acknowledgedAt !== null) return;
+    const unread = () => ownMessages(me, now).filter(({ d: x }) => x.readAt === null).length;
+    if (d.acknowledgedAt !== null) return { changed: 0, unreadCount: unread() };
     d.deliveredAt ??= now;
     d.readAt ??= now;
     d.acknowledgedAt = now;
+    return { changed: 1, unreadCount: unread() };
   },
 
   async sendMessage(me, input): Promise<SentMessage> {
@@ -4775,6 +4777,12 @@ export const mockData: CmaData = {
     assertAny(me, [...FOLLOW_UP_PERMISSIONS]);
     const now = Date.now();
     return { rows: mockFollowUpRows(me, now).tasks, computedAt: new Date(now).toISOString() };
+  },
+
+  async getFollowUpComputedAt(me): Promise<Instant> {
+    assertAny(me, [...FOLLOW_UP_PERMISSIONS]);
+    // the mock's snapshot moves once a minute, as the refresh job's does
+    return new Date(Math.floor(Date.now() / 60_000) * 60_000).toISOString();
   },
 
   async getFollowUpSummary(me): Promise<FollowUpSummaryAt> {
