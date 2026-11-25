@@ -70,12 +70,13 @@ const withAll = (dir = new URL("../src/app/", import.meta.url).pathname) => read
 expect("All: its own letter A, offered by Reviews alone; range=all is today everywhere else",
   [ALL_RANGE_KEY, Object.values(RANGE_KEYS).includes(ALL_RANGE_KEY), withAll(), at("all", "2026-11-01").range, at("all", "2026-11-01").period,
     barSource.includes("allLabel ? RANGES.flatMap((k) => (k === \"custom\" ? [\"all\", k] as const : [k])) : RANGES")],
-  ["A", false, ["reports/reviews/page.tsx"], "today", { from: "2026-11-01", to: "2026-11-01" }, true],
+  ["A", false, ["(shell)/reports/reviews/page.tsx"], "today", { from: "2026-11-01", to: "2026-11-01" }, true],
   ["M", true, [], "all", { from: "2026-01-01", to: "2026-11-01" }, false]);
 
 // ---- every page with the period bar ------------------------------------------------------------
 const pathnames = [...barSource.match(/pathname:\s*([^;]+);/)[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-const pageFile = (p) => `../src/app${p}/page.tsx`;
+// every page with the bar sits in the persistent frame's route group (night N07, D2)
+const pageFile = (p) => `../src/app/(shell)${p}/page.tsx`;
 const rendering = pathnames.filter((p) => {
   // Reports → Flash resolves its period and renders its bar through components/FlashOverview (flashState, FlashTop) since 0008zw
   const page = src(pageFile(p)) + (p === "/reports/flash" ? src("../src/components/FlashOverview.tsx") : "");
@@ -95,7 +96,7 @@ function files(dir) {
 const root = new URL("../src/", import.meta.url).pathname;
 const branching = files(root).filter((f) => /\brange\s*[!=]==?\s*"(yesterday|today|week|month)"|"(yesterday|today|week|month)"\s*[!=]==?\s*range\b/.test(readFileSync(f, "utf8")))
   .map((f) => f.slice(root.length));
-expect("no page or component branches on a range but custom", branching, [], ["app/hours/page.tsx"]);
+expect("no page or component branches on a range but custom", branching, [], ["app/(shell)/hours/page.tsx"]);
 // Y reaches Yesterday on every page: no other control in the app binds it, inside main or in the shell
 const otherY = files(root).filter((f) => /data-shortcut=(?:"y"|\{[^}]*"y"[^}]*\})/.test(readFileSync(f, "utf8"))).map((f) => f.slice(root.length));
 expect("no other control in the app binds Y", otherY, [], ["components/FormsFilters.tsx"]);
@@ -134,7 +135,7 @@ expect("Calls, range=yesterday: a late call on the day before counts whatever th
   [callsFigures(previousCalls(calls, prevY, NOW)).calls, callsFigures(previousCalls(calls, prevT, NOW)).calls], [2, 1], [1, 1]);
 
 // ---- Reports → Forms: no letter twice ---------------------------------------------------------
-const formsPage = src("../src/app/reports/forms/page.tsx");
+const formsPage = src("../src/app/(shell)/reports/forms/page.tsx");
 const lettersIn = (text) => [...text.matchAll(/data-shortcut=(?:"([^"]+)"|\{([^}]*)\})/g)]
   .flatMap((m) => (m[1] !== undefined ? [m[1]] : [...m[2].matchAll(/"([^"]+)"/g)].map((x) => x[1])));
 // The body of one exported function, up to the next export
@@ -179,7 +180,7 @@ expect("Forms: the filters, grouping and download clear of the shell's letters",
 expect("Forms: the period bar meets the shell only on W and C, which the page wins",
   barLetters.filter((k) => shellLetters.includes(k)).sort(), ["c", "w"], ["c", "w", "y"]);
 // Reviews' All (addition 0008zw): A meets no letter of the shell, nor one of Reviews' own controls (the market K, the group G)
-const reviewsLetters = lettersIn(src("../src/app/reports/reviews/page.tsx") + src("../src/components/FunnelFilters.tsx"));
+const reviewsLetters = lettersIn(src("../src/app/(shell)/reports/reviews/page.tsx") + src("../src/components/FunnelFilters.tsx"));
 expect("Reviews: All's A meets no letter of the shell nor of the page's own controls",
   [shellLetters.includes(ALL_RANGE_KEY.toLowerCase()), reviewsLetters.includes(ALL_RANGE_KEY.toLowerCase())], [false, false], [true, true]);
 

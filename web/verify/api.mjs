@@ -1061,7 +1061,7 @@ if (managerDay === null) {
 // Nothing of the run stays: the manager's Default market is cleared again (dev data; not a check)
 await defaultMarket(ADMIN, meM.userId, null);
 
-// ---- messaging (migration 0008), 22 checks --------------------------------------------------
+// ---- messaging (migration 0008), 25 checks (the write answers since night N07) --------------------------------------------------
 // One urgent message per run from the test supervisor to Agent Two (dev data), then read and
 // acknowledged by Agent Two, so the stats show the whole path.
 const inboxBefore = (await get(AGENT, "/api/v1/me/messages")).body?.data;
@@ -1094,11 +1094,24 @@ expect("the sender's own inbox does not hold it",
 expect("since lists only newer messages",
   (await get(AGENT, `/api/v1/me/messages?since=${encodeURIComponent(mine?.createdAt ?? "")}`)).body?.data?.messages?.some((m) => m.id === mid) ?? false, false, true);
 expect("another person cannot read it for the recipient", (await readIds(SUPERVISOR, [mid])).body?.data?.changed, 0, 1);
-expect("marking read changes one row, then none",
-  [(await readIds(AGENT, [mid])).body?.data?.changed, (await readIds(AGENT, [mid])).body?.data?.changed], [1, 0], [0, 1]);
+const read1 = (await readIds(AGENT, [mid])).body?.data;
+const read2 = (await readIds(AGENT, [mid])).body?.data;
+expect("marking read changes one row, then none", [read1?.changed, read2?.changed], [1, 0], [0, 1]);
+// Night N07 (D3): the write answers the unread count after it, from its own transaction, so the screen needs no read
+expect("marking read answers the unread count after it", [typeof read1?.unreadCount, read1?.unreadCount, read2?.unreadCount],
+  ["number", inboxAfter?.unreadCount - 1, inboxAfter?.unreadCount - 1], ["undefined", inboxAfter?.unreadCount, null]);
 expect("acknowledging needs the request header", (await ackOf(AGENT, mid, {})).status, 400, 200);
 expect("acknowledging a message that is not yours is a 404", (await ackOf(SUPERVISOR, mid)).status, 404, 200);
-expect("the recipient acknowledges; a second time changes nothing", [(await ackOf(AGENT, mid)).status, (await ackOf(AGENT, mid)).status], [200, 200], [404, 404]);
+const ack1 = await ackOf(AGENT, mid);
+const ack2 = await ackOf(AGENT, mid);
+expect("the recipient acknowledges; a second time changes nothing", [ack1.status, ack2.status], [200, 200], [404, 404]);
+expect("acknowledging answers the unread count after it (N07, D3)", [ack1.body?.data?.acknowledged, ack1.body?.data?.unreadCount, ack2.body?.data?.unreadCount],
+  [true, inboxBefore?.unreadCount, inboxBefore?.unreadCount], [false, null, null]);
+// Reports → Follow-up's poll (N07, D3): the snapshot's time alone, for the follow-up report's permissions
+const updated = await get(SUPERVISOR, "/api/v1/reports/follow-up/updated");
+expect("the follow-up poll answers the snapshot's time alone; an agent is refused",
+  [updated.status, Object.keys(updated.body?.data ?? {}), Number.isNaN(Date.parse(updated.body?.data?.computedAt ?? "x")), (await get(AGENT, "/api/v1/reports/follow-up/updated")).status],
+  [200, ["computedAt"], false, 403], [403, [], true, 200]);
 const acked = (await get(AGENT, "/api/v1/me/messages")).body?.data?.messages?.find((m) => m.id === mid);
 expect("read and acknowledged times are set and the count is back", [!!acked?.readAt, !!acked?.acknowledgedAt, inboxBefore?.unreadCount === (await get(AGENT, "/api/v1/me/messages")).body?.data?.unreadCount],
   [true, true, true], [false, false, false]);
@@ -1175,6 +1188,10 @@ async function followUpChecks() {
   if ((await get(READER, "/api/v1/me")).status === 200) {
     expect("follow-up: the reader (reports.view alone) reads the tasks, no summary and no per-person figures",
       [(await get(READER, `${fu}/tasks`)).status, (await get(READER, `${fu}/summary`)).status, (await get(READER, `${fu}/by-owner`)).status], [200, 403, 403], [200, 200, 403]);
+    // Night N07: the page's poll is one scalar for every follow-up reader, the reader with reports.view alone too
+    const readerUpdated = await get(READER, `${fu}/updated`);
+    expect("follow-up: the reader polls the snapshot's time alone",
+      [readerUpdated.status, Object.keys(readerUpdated.body?.data ?? {})], [200, ["computedAt"]], [403, []]);
   } else {
     console.log("note  no reader identity in this tenant: the reader's check is left out");
   }

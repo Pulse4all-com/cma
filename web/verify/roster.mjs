@@ -172,7 +172,7 @@ expect("the address gains the team and keeps the week; a stale team is replaced"
 // week and team, so another team is never the previous grid under new props); the planner's select, links, print,
 // writes and address take the same key; the print view resolves the same way
 const src = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
-const page = src("../src/app/roster/planner/page.tsx");
+const page = src("../src/app/(shell)/roster/planner/page.tsx");
 const planner = src("../src/components/RosterPlanner.tsx");
 const print = src("../src/app/roster/planner/print/page.tsx");
 expect("(c) the page: one resolved key for both reads and the planner, no first team",

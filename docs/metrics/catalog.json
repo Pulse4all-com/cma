@@ -21903,7 +21903,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible (LiveRefresh); 'Updated \u2026 ago' under the title says the snapshot's age",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves; 'Updated \u2026 ago' under the title says the snapshot's age",
       "computed_in": {
         "sql": [
           {
@@ -22058,7 +22058,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves",
       "computed_in": {
         "sql": [
           {
@@ -22199,7 +22199,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves",
       "computed_in": {
         "sql": [
           {
@@ -22331,7 +22331,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves",
       "computed_in": {
         "sql": [
           {
@@ -22432,7 +22432,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves",
       "computed_in": {
         "sql": [
           {
@@ -22551,7 +22551,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves",
       "computed_in": {
         "sql": [
           {
@@ -22649,7 +22649,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves",
       "computed_in": {
         "sql": [
           {
@@ -22752,7 +22752,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "follow-up snapshot, computed once a minute per tenant; the page re-reads it every 10 s while the tab is visible",
+      "refresh": "follow-up snapshot, computed once a minute per tenant; the page polls GET /api/v1/reports/follow-up/updated (cma.follow_up_computed_at) while the tab is visible and redraws when the snapshot moves",
       "computed_in": {
         "sql": [
           {
