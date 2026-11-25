@@ -3,12 +3,15 @@
  * brief N07, decision D13; src/jobs/reconcile.mjs, purgeRunRows). On a mocked tenant transaction: batches while the
  * database answers more, at most the night's number of batches, each with its own lock and statement timeouts set
  * before the purge; a database without cma.sync_run_purge purges nothing and fails nothing; a batch that fails (a lock
- * timeout) stops the tenant's purge with its code and keeps what earlier batches deleted.
+ * timeout) stops the tenant's purge with its code and keeps what earlier batches deleted. The existence check names the
+ * signature db/240_audit_and_retention.sql creates (read from the script), and the mock confirms that signature only, so
+ * a check that names another one purges nothing here, as it would in every database (25 November 2026).
  *
  *   node verify/retention.mjs             every check must PASS
  *   node verify/retention.mjs --provoke   every check must FAIL
  */
-import { purgeRunRows } from "../src/jobs/reconcile.mjs";
+import { readFileSync } from "node:fs";
+import { PURGE_SIGNATURE, purgeRunRows } from "../src/jobs/reconcile.mjs";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -19,6 +22,13 @@ function expect(name, actual, expected, provoked) {
   console.log(`${pass ? "PASS" : "FAIL"}  ${name.padEnd(90)} got ${JSON.stringify(actual).slice(0, 80)}`);
 }
 
+/** cma.sync_run_purge's signature as the migration creates it: its argument types, defaults and names left out */
+const created = /create or replace function cma\.sync_run_purge\(([^)]*)\)/.exec(
+  readFileSync(new URL("../../db/240_audit_and_retention.sql", import.meta.url), "utf8"));
+const SIGNATURE_240 = created
+  ? `cma.sync_run_purge(${created[1].split(",").map((a) => a.trim().split(/\s+/)[1]).join(",")})`
+  : null;
+
 /** A tenant transaction answering the purge from a script of answers; records the statements */
 function mockTx({ has = true, answers = [], failOn = -1 } = {}) {
   const log = [];
@@ -27,7 +37,8 @@ function mockTx({ has = true, answers = [], failOn = -1 } = {}) {
     const q = {
       async query(text, values) {
         log.push(text.replace(/\s+/g, " ").slice(0, 60));
-        if (/to_regprocedure/.test(text)) return { rows: [{ has }] };
+        // the database knows the function by the signature the migration created, and by no other
+        if (/to_regprocedure/.test(text)) return { rows: [{ has: has && (values ?? [])[0] === SIGNATURE_240 }] };
         if (/cma\.sync_run_purge/.test(text)) {
           if (call === failOn) { call += 1; throw Object.assign(new Error("canceling statement due to lock timeout"), { code: "55P03" }); }
           const a = answers[call] ?? { deleted: 0, more: false };
@@ -61,6 +72,8 @@ const ctx = { tenantId: "01a10651-0000-7000-8000-000000000001", userId: "u", act
   const r = await purgeRunRows(ctx, { tenantTx: tx });
   expect("a database before 0009zt: nothing purged, nothing failed", r, { deleted: 0, skipped: true }, { deleted: 0, error: "42883" });
 }
+expect("the existence check names the signature 240 creates", [PURGE_SIGNATURE, SIGNATURE_240 !== null],
+  ["cma.sync_run_purge(integer,text,uuid)", true], ["cma.sync_run_purge(integer)", true]);
 {
   const { tx } = mockTx({ answers: [{ deleted: 2000, more: true }], failOn: 1 });
   const r = await purgeRunRows(ctx, { tenantTx: tx });

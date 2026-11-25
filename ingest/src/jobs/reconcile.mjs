@@ -191,6 +191,8 @@ async function reconcileJob({ connectionId = null, lookbackMinutes = DEFAULT_LOO
 
 export const PURGE_BATCH = 2000;
 export const PURGE_BATCHES = 50;
+/** The purge's signature as 240_audit_and_retention.sql creates it (verify/retention.mjs reads that script to compare) */
+export const PURGE_SIGNATURE = "cma.sync_run_purge(integer,text,uuid)";
 
 /**
  * One tenant's run rows past their retention (cma.sync_run_purge, 0009zt), batch by batch while the database says there is
@@ -205,7 +207,7 @@ export async function purgeRunRows(ctx, { batch = PURGE_BATCH, batches = PURGE_B
   try {
     while (more && n < batches) {
       const r = await tenantTx({ ...ctx, actorLabel: "ingest:reconcile" }, async (q) => {
-        const has = (await q.query("select to_regprocedure('cma.sync_run_purge(integer)') is not null as has")).rows[0]?.has;
+        const has = (await q.query("select to_regprocedure($1) is not null as has", [PURGE_SIGNATURE])).rows[0]?.has;
         if (!has) return null;
         await q.query("set local lock_timeout = '2s'");
         await q.query("set local statement_timeout = '30s'");
