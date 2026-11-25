@@ -456,6 +456,9 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 -- previous period, the markets, the trend, the Group by table and the deals list's first page of 50), the Not called yet
 -- tab first; a tab or a further page is the same read again (the Called tab's page 2 its own row). A report core
 -- (overview, 500 ms) that holds a list's first page
+-- (local, three times prod's volume, one CPU, 25 November 2026: 540-650 ms, the Called tab's page 2 765-875, the API's
+-- deals list 545-665 against a list's 300; a stored take is decided after this file runs in prod on 0009zu, as
+-- docs/open-decisions.md says)
 ('b', 'speed to lead {P}', 'page (not called yet, first page)', $q$select cma.speed_to_lead_page('{f}', '{t}', null, 'day', 'not_called', 50, 0)$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'speed to lead further page {P}', 'page (called, page 2)', $q$select cma.speed_to_lead_page('{f}', '{t}', null, 'day', 'called', 50, 50)$q$, 'overview', array['reports.view', 'performance.team']),
 -- the API's reads of the cockpit (each a request of its own): the figures, a deals list's first page, and the rows

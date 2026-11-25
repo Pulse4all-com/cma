@@ -41,9 +41,10 @@
 --                     The brief's cutoff_at is not a column of its own: next_business_noon is that instant already (since
 --                     0009zq it follows speed_to_lead.next_day_cutoff), and the deals list returns it as cutoff_at
 --   cma.speed_to_lead_rows_of (based on 236_jobs_off_the_vcpu.sql; 0009zr's open-only bound kept, and
---                     cma.speed_to_lead_of the same thin wrapper without it) each deal's calls read once (cma.deal_calls_of, which cma.lead_calls_of and
---                     cma.deal_attempts_of both read from the same start), where 0009zq read them twice; the same deals
---                     and answers in every column it keeps (243 W3), the new columns from the same calls (W4)
+--                     cma.speed_to_lead_of the same thin wrapper without it) the first, connected and last call from
+--                     each deal's calls (cma.deal_calls_of), the Attempts from cma.deal_attempts_of per deal that can
+--                     have one, as 234 and 236 (one definition); the same deals and answers in every column it keeps
+--                     (243 W3), the new columns from the same reads (W4: equal to cma.deal_attempts_of's)
 --   cma.open_leads_of        (based on 236_jobs_off_the_vcpu.sql; still the open lead deals only) the owner reference and the last call from the rows, no second read of the
 --                     deals and their calls (open-decisions, B40b idea 2); the same rows in the same order (243 W5); jit off
 --   cma.speed_to_lead_summary (based on 234) dropped and made again: three columns appended (attempts_mean,
@@ -60,31 +61,27 @@
 --
 -- Speed at three times prod's volume (web/verify/perf-volume-fixture.sql, local, PostgreSQL 16 with a uuidv7() shim, the
 -- fixture's subscriptions tenant, Postgres held to one CPU (taskset on the postmaster), each read seven times in one
--- session and the steady calls given (the 6th and 7th included); a relative measure: prod runs it again). Before (0009zq)
--- → this script, the previous month (October) unless named:
---   the follow-up job's cma.open_leads_of (its call, with ordinality)   1,160-1,360 → 700-710 ms (24 Nov, before 0009zr)
---   cma.speed_to_lead_summary total (the Dashboard tile, as cma_app)        690-910 → 430-440 ms
---   cma.speed_to_lead_summary by day (as cma_app)                           710-910 → 435-445 ms
---   cma.speed_to_lead_rows (as cma_app)                                     690-770 → 445-455 ms
---   cma.speed_to_lead_summary total over 92 days (as cma_app)            1,020-1,110 → 760-790 ms
---   cma.attempts_rows_of (Attempts per deal; not changed here)          1,210-1,380 → 1,130-1,190 ms
---   the page: before, the summary by day and the rows (about 1,450 ms together); now one read, cma.speed_to_lead_page
---     (October, with September for the previous period: figures, markets, trend, groups, the first 50 deals) 510-560 ms,
---     the Called tab's page 2 590-600 ms, over 92 days (and the 92 before them) 815-875 ms
---   cma.speed_to_lead_figures 480-515 ms, cma.speed_to_lead_deals_of (called, first page) 505-550 ms (the API's)
--- On a database at 0009zs (0009zr's open-only bound and one definition in cma.speed_to_lead_rows_of; 25 November 2026, the same
--- method, a noisier machine): the follow-up job's cma.open_leads_of 770-890 → 340-540 ms, the summary total 670-1,050 →
--- 410-600 ms, cma.speed_to_lead_rows 750-950 → 430-550 ms; the page 500-555 ms (the Called tab's page 2 570-700), the
--- deals list 530-640 ms and the figures 530-560 ms, as on 24 November within the noise.
+-- session, every call given (the 6th and 7th included); a relative measure: prod runs it again). 25 November 2026,
+-- before (0009zs: 0009zr's one definition in cma.speed_to_lead_rows_of) → this script, October unless named:
+--   the follow-up job's cma.open_leads_of (its call, with ordinality)       740-1,030 → 430-530 ms
+--   cma.speed_to_lead_summary total (the Dashboard tile, as cma_app)        720-1,020 → 465-645 ms
+--   cma.speed_to_lead_rows (as cma_app)                                     810-1,030 → 460-560 ms
+--   the page: before, the summary by day and the rows (two reads); now one read, cma.speed_to_lead_page (October, with
+--     September for the previous period: figures, markets, trend, groups, the first 50 deals) 540-650 ms, the Called
+--     tab's page 2 765-875 ms, over 92 days by week 640-825 ms
+--   cma.speed_to_lead_figures 520-685 ms, cma.speed_to_lead_deals_of (called, first page) 545-665 ms (the API's)
 -- What made the difference: JIT. The body's estimated cost passes jit_above_cost, and compiling it took about 130 ms of
 -- each call (150 to 300 ms of the job's), more than it saved: jit off on the callers, as 0008zr's reads (132). Not on
--- cma.speed_to_lead_of itself: a setting keeps it from being inlined, and its body was then planned with parameters for
--- its bounds (the job's read 1,900 ms, measured). And the plpgsql reads turned to the generic plan from the sixth call of
--- a connection (the deals list 420 → 1,090 ms): force_custom_plan, as cma.courtesy_page_of (150). Reading each deal's
--- calls once saved about 100 ms of a month. Against 131's budgets this is still over at three times prod's volume: the
--- page 510-560 ms against 500 (report core), the deals list read alone 505-550 against 300 (a list's first page); every
--- read of the deals of a period runs cma.speed_to_lead_of over it (about 380 ms of the month), so a stored take of speed
--- to lead would be the next step (the PR names it as open).
+-- cma.speed_to_lead_rows_of or its wrapper: a setting keeps them from being inlined, and the body was then planned with
+-- parameters for its bounds (the job's read 1,900 ms, measured). And the plpgsql reads turned to the generic plan from
+-- the sixth call of a connection (the deals list 420 → 1,090 ms): force_custom_plan, as cma.courtesy_page_of (150). The
+-- open leads read neither the deals nor their calls a second time. The Attempts come from cma.deal_attempts_of, the one
+-- definition (Decision log, 24 Nov 2026): a first draft of this script decided them from each deal's calls read once,
+-- about 100 ms of a month faster; the review found it against that decision and it is undone (Martin, 25 Nov 2026).
+-- Against 131's budgets this is still over at three times prod's volume: the page 540-650 ms against 500 (report core),
+-- the deals list read alone 545-665 against 300 (a list's first page); every read of the deals of a period runs
+-- cma.speed_to_lead_of over it, so a stored take of speed to lead would be the next step, decided after 131 runs in
+-- prod on 0009zu (docs/open-decisions.md).
 --
 -- No index. No lock on a busy table: types, functions, a view and setting rows (a row lock on cma.setting) only.
 -- SQLSTATEs as before; CMA04 for a group, a view, a limit or an offset outside their bounds and for a goal or stale days
@@ -496,16 +493,15 @@ comment on type cma.speed_to_lead_row is
   'One lead deal as cma.speed_to_lead_of gives it (0007d, 0009zq, 0009zu): status called, not_called_open or closed_before_first_call; the measure from the creation to the first Attempt (first_attempt_*), the Attempts so far, the last one and the Conversations among them, and the end of the Attempts'' window; the first call, the first connected call and the last call shown beside it; the agent (the first attempt''s telephony user) and the deal''s owner apart (as a person and as the CRM''s reference)';
 
 -- ---------------------------------------------------------------------------------------------
--- 3. Speed to lead: one function, each deal's calls read once
+-- 3. Speed to lead: one definition, the Attempts from cma.deal_attempts_of
 -- ---------------------------------------------------------------------------------------------
 -- As 0009zq's (234): one row per lead deal created in [p_from, p_to) (null: unbounded), the same deals, the same
--- end and the same answers in every column it keeps (243 compares them with 234's definition row for row). Each deal's
--- calls are read once (cma.deal_calls_of, which cma.lead_calls_of and cma.deal_attempts_of both read from the same
--- start), where 0009zq read them twice: the first call, the first connected call and the last call come from all of
--- them; the Attempts are those cma.deal_attempts_of keeps (under attempts.source crm an outbound CRM call, else a
--- linked outbound telephony call on a counted line, up to the window's end), in its order (the start, then the CRM
--- call's id), so the first, the count, the last and the Conversations among them are its n = 1, its highest n, its
--- last and its conversation (243 compares each deal's with cma.deal_attempts_of's). The first outbound CRM call
+-- end and the same answers in every column it keeps (243 compares them with 234's definition row for row). The first
+-- call, the first connected call and the last call come from each deal's calls (cma.deal_calls_of, from the window's
+-- start); the Attempts are cma.deal_attempts_of's, the one definition, read per deal that can have one, as 234 and 236
+-- (under attempts.source crm an outbound CRM call, else a linked outbound telephony call on a counted line, up to the
+-- window's end), in its order, so the first, the count, the last and the Conversations among them are its n = 1, its
+-- highest n, its latest start and its conversation (243 W4 compares each deal's with cma.deal_attempts_of's). The first outbound CRM call
 -- (first_call_*) is gone (D36); the deal's CRM owner reference is carried for the open leads, and the window's end
 -- (until: the earliest of the close, the contacts' first order and now, as cma.sales_deals_of's window_end) for the
 -- deals list, which reads the attempts of its page's deals from cma.deal_attempts_of with it (0009zu).
@@ -550,40 +546,50 @@ as $$
     -- row is its own
     where not coalesce(p_open_only, false) or not ld.is_closed
   ),
-  -- every call of each deal from the window's start, read once, each marked an Attempt as cma.deal_attempts_of marks
-  -- it (its is_attempt and its window's end, p_until)
+  -- every call of each deal from the window's start (cma.deal_calls_of, which cma.lead_calls_of and
+  -- cma.deal_attempts_of read from the same start): the first call, the first connected call and the last call shown
+  -- beside the measure. The Attempts are not decided here (Decision log, 24 Nov 2026: one definition, cma.deal_attempts_of)
   c as materialized (
-    select d.deal_id, x.call_id, x.direction, x.effective_at, x.is_connected,
-           x.telephony_source_system, x.telephony_user_ref,
-           x.effective_at <= d.until
-             and case when d.attempts_source = 'crm' then x.direction = 'outbound'
-                      else x.is_linked and x.telephony_direction = 'outbound' and x.line_counted end as is_attempt,
-           x.is_conversation
+    select d.deal_id, x.call_id, x.direction, x.effective_at, x.is_connected, x.is_linked
     from d
     cross join lateral cma.deal_calls_of(p_tenant_id, d.connection_id, d.record_type, d.source_id, d.contacts, d.not_before) x
   ),
-  -- per deal: the first call (and its direction), the first connected call and the last call of all of them; the
-  -- first Attempt (its call, start and telephony user), how many, the last one and how many were a Conversation. Each
-  -- "first" is the earliest by the start, then the CRM call's id, as 0009zq's distinct on and cma.deal_attempts_of's n
+  -- per deal: the first call (and its direction), the first connected call and the last call of all of them; "first"
+  -- is the earliest by the start, then the call's id, as 0009zq's distinct on
   k as (
     select c.deal_id,
            min(c.effective_at) as fa_at,
            (array_agg(c.direction order by c.effective_at, c.call_id))[1] as fa_dir,
            min(c.effective_at) filter (where c.is_connected) as fc_at,
-           max(c.effective_at) as last_call_at,
-           (array_agg(c.call_id order by c.effective_at, c.call_id) filter (where c.is_attempt))[1] as at_id,
-           min(c.effective_at) filter (where c.is_attempt) as at_at,
-           (array_agg(c.telephony_source_system order by c.effective_at, c.call_id) filter (where c.is_attempt))[1] as at_system,
-           (array_agg(c.telephony_user_ref order by c.effective_at, c.call_id) filter (where c.is_attempt))[1] as at_user,
-           (count(*) filter (where c.is_attempt))::integer as attempts,
-           max(c.effective_at) filter (where c.is_attempt) as last_at,
-           (count(*) filter (where c.is_attempt and c.is_conversation))::integer as conversations
+           max(c.effective_at) as last_call_at
     from c
     group by c.deal_id
   ),
+  -- each deal's Attempts from the one definition, as 234 and 236: one lateral into cma.deal_attempts_of per deal, one
+  -- aggregate row each (n numbers the attempts from 1, so the first is n = 1, the count the highest n and the last the
+  -- latest start); the last one and the Conversations among them added (0009zu). Only for the deals that can have one:
+  -- an attempt is one of the deal's calls in c, under telephony a linked one, under crm an outbound one; the other
+  -- deals have none and are not read again
+  a as materialized (
+    select d.deal_id, x.*
+    from d
+    cross join lateral (
+      select (array_agg(z.call_id) filter (where z.n = 1))[1] as at_id,
+             min(z.effective_at) filter (where z.n = 1) as at_at,
+             min(z.telephony_source_system) filter (where z.n = 1) as at_system,
+             min(z.telephony_user_ref) filter (where z.n = 1) as at_user,
+             coalesce(max(z.n), 0)::integer as attempts,
+             max(z.effective_at) as last_at,
+             (count(*) filter (where z.conversation))::integer as conversations
+      from cma.deal_attempts_of(p_tenant_id, d.connection_id, d.record_type, d.source_id, d.contacts, d.not_before, d.until,
+                                d.attempts_source) z
+      where z.is_attempt) x
+    where d.deal_id in (select c.deal_id from c
+                        where case when (select s.source from s) = 'crm' then c.direction = 'outbound' else c.is_linked end)
+  ),
   r as (
-    select d.*, k.fa_at, k.fa_dir, k.fc_at, k.last_call_at, k.at_id, k.at_at, k.at_system, k.at_user, k.last_at,
-           coalesce(k.attempts, 0) as attempts, coalesce(k.conversations, 0) as conversations,
+    select d.*, k.fa_at, k.fa_dir, k.fc_at, k.last_call_at, a.at_id, a.at_at, a.at_system, a.at_user, a.last_at,
+           coalesce(a.attempts, 0) as attempts, coalesce(a.conversations, 0) as conversations,
            (select s.target_s from s) as target_s,
            nn.noon,
            bc.time_zone as cal_zone, bc.weekdays as cal_weekdays, bc.opens as cal_opens, bc.closes as cal_closes, bc.holidays as cal_holidays
@@ -593,6 +599,7 @@ as $$
     left join lateral (select cma.next_business_noon_in(bc.time_zone, bc.weekdays, bc.holidays, d.created_at, d.cutoff) as noon
                        offset 0) nn on true
     left join k on k.deal_id = d.deal_id
+    left join a on a.deal_id = d.deal_id
   ),
   m as (
     select r.*, bt.bs, bt.bs_now, xa.user_id as ag_user, xo.user_id as owner_user
@@ -1223,7 +1230,7 @@ $$;
 -- 10. Record the migration
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009zu', 'Speed to lead as a cockpit (Martin, 24 Nov 2026; brief B40b; D36): cma.speed_to_lead_row loses first_call_* and gains last_attempt_at, last_call_at, deal_owner_ref, conversations_so_far and window_end; cma.speed_to_lead_rows_of (0009zr''s one definition, its open-only bound and cma.speed_to_lead_of''s wrapper kept) reads each deal''s calls once; cma.open_leads_of (jit off) reads the owner reference and the last call from its rows; cma.speed_to_lead_summary gains attempts_mean, attempts_median, conversation_share and the group week, null shares in no_attempt; new cma.speed_to_lead_figures (the period and the previous one) and cma.speed_to_lead_deals_of (a view of the deals with their attempts, stale after speed_to_lead.stale_business_days); settings speed_to_lead.goal_within_target_pct, speed_to_lead.goal_before_cutoff_pct (0 to 100 or empty) and speed_to_lead.stale_business_days (1 to 30, default 2) checked by cma.check_tenant_setting')
+values ('0009zu', 'Speed to lead as a cockpit (Martin, 24 Nov 2026; brief B40b; D36): cma.speed_to_lead_row loses first_call_* and gains last_attempt_at, last_call_at, deal_owner_ref, conversations_so_far and window_end; cma.speed_to_lead_rows_of (0009zr''s one definition, its open-only bound and cma.speed_to_lead_of''s wrapper kept) takes the Attempts from cma.deal_attempts_of and the last call from each deal''s calls; cma.open_leads_of (jit off) reads the owner reference and the last call from its rows; cma.speed_to_lead_summary gains attempts_mean, attempts_median, conversation_share and the group week, null shares in no_attempt; new cma.speed_to_lead_figures (the period and the previous one) and cma.speed_to_lead_deals_of (a view of the deals with their attempts, stale after speed_to_lead.stale_business_days); settings speed_to_lead.goal_within_target_pct, speed_to_lead.goal_before_cutoff_pct (0 to 100 or empty) and speed_to_lead.stale_business_days (1 to 30, default 2) checked by cma.check_tenant_setting')
 on conflict (version) do nothing;
 
 commit;
