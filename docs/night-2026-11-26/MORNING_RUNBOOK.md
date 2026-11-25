@@ -15,8 +15,8 @@ outside office hours (before 08:00 or after 18:00 Amsterdam).
   three times prod's volume).
 - **N07d** (web): the request log's `kind`, Server-Timing, the navigation beacon (D10).
 - **N07e** (web): CSP step 2 (nonce, D11), `X-Requested-With` and the session-expiry notice, npm audit at zero.
-- **N07f** (`240`/`241`, addition 0009zt, ingest): the ingest's source writes out of the audit log (D12, **prod waits
-  for Yordi**), the run rows' retention (D13).
+- **N07f** (`240`/`241`, addition 0009zt, ingest): the ingest's source writes out of the audit log (D12, agreed by
+  Yordi on 25 November 2026), the run rows' retention (D13).
 
 **Order.** Merge N07a, N07b, N07c, N07d, N07e, N07f in that order (each is stacked on the one before; after a
 squash-merge the next one is retargeted to `main`). Each database step runs in dev first, then prod. The jobs and the
@@ -27,14 +27,14 @@ ingest check for the new functions, so an image ahead of its migration computes 
 | 0 | Prod "before": request percentiles with `--kind`, the job load, `prod-load-breakdown.sql`, `131`, `124` | 25 min |
 | 1 | Dev: the concurrent indexes, `236` to `241` with their verifies and reruns, the schema snapshot | 40 min |
 | 2 | Merges in order; watch the builds | 30 min |
-| 3 | Prod, outside office hours: the indexes, `236`, `238` (and `240` only after Yordi's yes), verifies | 30 min |
+| 3 | Prod, outside office hours: the indexes, `236`, `238` (and `240` after `244`, 0009zv), verifies | 30 min |
 | 4 | The jobs' deploys: every minute again, with the waits in place | 10 min |
 | 5 | Analyze the small configuration tables | 2 min |
 | 6 | The first `sync_run` purge (after `240`) | 10 min |
 | 7 | `CMA_DB_SESSION_OPTIONS`, one setting at a time, measured in dev first | per setting 20 min |
 | 8 | Prod "after": the same as step 0, a working day later | 25 min |
 | 9 | The Gemini prompt (WP9) | 10 min |
-| 10 | The heads-up to Yordi (D12) | 5 min |
+| 10 | The heads-up to Yordi (D12): done, agreed 25 November 2026 | 0 min |
 
 ---
 
@@ -88,7 +88,7 @@ cd ~/cma && git checkout claude/clever-goodall-7wnx9z-n07c && cma_db dev && run_
 ```
 Expected: `PASS 0009zs` (E1 to E3); provoked E2 "1 rows differ".
 
-**1d. Terminal** (N07f, dev only until Yordi agrees: `240`, `241`, the reruns 77, 107, 113, 169, 195, 197)
+**1d. Terminal** (N07f, dev first: `240`, `241`, the reruns 77, 107, 113, 169, 195, 197)
 ```bash
 cd ~/cma && git checkout claude/clever-goodall-7wnx9z-n07f && cma_db dev && run_migration db/240_audit_and_retention.sql && psql "$PGCONN" -X -f db/241_verify_audit_and_retention.sql | tail -7
 ```
@@ -113,7 +113,7 @@ trigger as an empty value. Expected: six green builds; the Workspace opens after
 
 **3b. Terminal:** `236` twice and `237` against prod as in 1b; then `238` and `239` as in 1c. Expected: `PASS 0009zr`, `PASS 0009zs`; the prod reruns of 1b and 1c (not 73, 75, 81, 95) PASS.
 
-**3c. Only after Yordi's agreement (step 10):** `240` and `241` against prod as in 1d. Expected: `PASS 0009zt`.
+**3c. After `244` (0009zv) in prod:** `240` and `241` against prod as in 1d. Expected: `PASS 0009zt`.
 
 ## 4. The jobs' deploys (after the N07a merge's build)
 
@@ -184,4 +184,4 @@ Expected: numbers for NIGHT_NOTES' WP9 proposals; nothing is changed (D1: no tie
 > run rows keep those changes. The CRM's records, contacts, calls and tasks and the telephony calls stay audited for now. People's changes and
 > every configuration change stay audited; existing audit rows stay. May we run it in prod?
 
-Expected: his yes before step 3c.
+Done: Yordi agreed on 25 November 2026 to D12 as narrowed in N07f (Martin), so step 3c no longer waits.

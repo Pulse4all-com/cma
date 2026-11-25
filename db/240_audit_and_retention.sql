@@ -4,8 +4,8 @@
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics; the retention is two settings. Runs unchanged in every database,
 -- after 238_email_not_responding_speed.sql (0009zs). Rerunnable, forward-only, in one transaction with a lock timeout.
--- PROD WAITS FOR YORDI'S AGREEMENT on D12 (docs/open-decisions.md, the heads-up; the morning runbook says so): dev may run
--- it at once. Run as your own IAM login: dev first, then 241_verify_audit_and_retention.sql there (normal and provoked),
+-- D12 agreed by Yordi on 25 November 2026 (Martin); this has not run in prod yet, and runs in prod after
+-- 244 (0009zv). Run as your own IAM login: dev first, then 241_verify_audit_and_retention.sql there (normal and provoked),
 -- then the verifies that read what this re-creates, each still PASS and none edited: 77, 107, 113, 169 and 195 (they read
 -- cma.audit_row: the audit trigger and its bookkeeping), 197 (cma.sync_run_hour_count and the hourly counts). Then the ingest's image with the reconcile's purge (ingest/src/jobs/reconcile.mjs) and the first purge
 -- (the morning runbook: a Terminal step outside office hours).
@@ -17,7 +17,8 @@
 -- runbook says so); existing audit rows stay." "D13 sync_run retention: an ops setting sync_run.retention_days (90 by
 -- default) for succeeded runs, failed runs kept 365 days, applied by the nightly reconcile in small batches with lock and
 -- statement timeouts; cma.sync_run_hour keeps its counts (deleting a run must not change the hourly bookkeeping); the
--- first purge is a Terminal step outside office hours in the morning runbook." Prod: audit_log 11.1 GB, about 100,000 rows
+-- first purge is a Terminal step outside office hours in the morning runbook." Yordi agreed to D12 as narrowed here on
+-- 25 November 2026 (Martin), so the prod run no longer waits. Prod: audit_log 11.1 GB, about 100,000 rows
 -- a day (crm_contact alone 210,341 updates); sync_run 487 MB.
 --
 -- What it changes
