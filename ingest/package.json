@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node src/server.mjs",
     "lint": "eslint",
-    "test": "npm run verify:signature && npm run verify:mapping && npm run verify:hash && npm run verify:forms && npm run verify:aircall-token && npm run verify:aircall-mapping && npm run verify:aircall-scripts && npm run verify:shopify-signature && npm run verify:shopify-mapping && npm run verify:shopify-client && npm run verify:shopify-scripts && npm run verify:outbox && npm run verify:email-mapping && npm run verify:api-budget && npm run verify:deploy-script && npm run verify:funnel-mapping && npm run verify:reviews-mapping && npm run verify:legacy-calls && npm run verify:assets-mapping && npm run verify:juo-mapping",
+    "verify:retention": "node verify/retention.mjs",
+    "test": "npm run verify:signature && npm run verify:retention && npm run verify:mapping && npm run verify:hash && npm run verify:forms && npm run verify:aircall-token && npm run verify:aircall-mapping && npm run verify:aircall-scripts && npm run verify:shopify-signature && npm run verify:shopify-mapping && npm run verify:shopify-client && npm run verify:shopify-scripts && npm run verify:outbox && npm run verify:email-mapping && npm run verify:api-budget && npm run verify:deploy-script && npm run verify:funnel-mapping && npm run verify:reviews-mapping && npm run verify:legacy-calls && npm run verify:assets-mapping && npm run verify:juo-mapping",
     "verify:signature": "node verify/signature.mjs",
     "verify:mapping": "node verify/mapping.mjs",
     "verify:hash": "node verify/hash.mjs",

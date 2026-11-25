@@ -1,0 +1,34 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:195_verify_audit_bookkeeping.sql:43: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+DROP FUNCTION
+DROP FUNCTION
+                                           check_name                                            | result |                                                                                             detail                                                                                              
+-------------------------------------------------------------------------------------------------+--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ S1 the addition 0009w is recorded once, after 0009v                                             | PASS   | 0009w 1 time(s), after 0009v true
+ P1 pg_stat_statements installed and readable by cma_owner with pg_read_all_stats                | FAIL   | extension in schema public; cma_owner holds pg_read_all_stats t; read as cma_owner refused (55000)
+ P2 pg_stat_statements.track (all once the flag is set)                                          | info   | not loaded
+ A1 audit_log's autovacuum: analyze and insert vacuum after 40,000 rows                          | PASS   | autovacuum_analyze_scale_factor=0, autovacuum_analyze_threshold=40000, autovacuum_vacuum_insert_scale_factor=0, autovacuum_vacuum_insert_threshold=40000
+ A2 audit_log analyzed since 0009w was recorded (UTC)                                            | PASS   | last analyze 2026-11-24 16:29, last autoanalyze never, 22006 rows changed since
+ T1 the bookkeeping (sync_cursor, sync_run, ingest_event): no audit trigger                      | PASS   | ingest_event none; sync_cursor none; sync_run none
+ T2 the configuration caches: audit on insert and delete, audit_change on a real update          | PASS   | connection_form audit:insert+delete,audit_change:update:when; connection_form_field audit:insert+delete,audit_change:update:when; connection_stage audit:insert+delete,audit_change:update:when
+ T3 every other table audited at 0009v still is, on insert, update and delete                    | PASS   | 92 tables, each with audit on insert, update and delete
+ B1 audit rows: none for the bookkeeping, one per real change of a cache, one per business write | PASS   | sync_cursor 0, sync_run 0, ingest_event 0; connection_form 2, connection_form_field 3, connection_stage 2; market 1, connection_pipeline 1
+ B2 the throwaway tenant and its rows are gone                                                   | PASS   | 0 tenant(s) verify-0009w
+ verdict                                                                                         | FAIL   | 195_verify_audit_bookkeeping: 8 PASS, 1 FAIL, 1 info
+(11 rows)
+
+DROP TABLE
+RESET

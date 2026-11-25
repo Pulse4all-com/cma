@@ -43,10 +43,16 @@ export function pushesToMain(segment, currentBranch) {
   });
 }
 
+/**
+ * A segment that runs a script of tools/runners/: through bash, sh or zsh (any option but -n, which only parses),
+ * source, . or the path itself, after variable assignments with or without env
+ */
+const RUNNER = /^(?:env\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:(?:(?:ba|z)?sh)\s+(?:-(?!n\b)\S+\s+)*|source\s+|\.\s+)?\S*tools\/runners\/[\w.-]+\.sh\b/;
+
 /** What a Bash command asks for, by segment (split on ; && || | and newlines) */
 export function inspectBash(command, currentBranch) {
   const segments = command.split(/&&|\|\||;|\||\n/).map((s) => s.trim()).filter(Boolean);
-  const out = { pushMain: false, ghMerge: false, commitOrPush: false };
+  const out = { pushMain: false, ghMerge: false, commitOrPush: false, prodRunner: false };
   for (const s of segments) {
     if (/^git\s+(-C\s+\S+\s+)?push\b/.test(s)) {
       out.commitOrPush = true;
@@ -56,6 +62,11 @@ export function inspectBash(command, currentBranch) {
       out.commitOrPush = true;
     } else if (/^gh\s+pr\s+merge\b/.test(s)) {
       out.ghMerge = true;
+    } else if (RUNNER.test(s) && /pr-merge\.sh\b/.test(s)) {
+      // the merge runner calls the merge itself, where this hook cannot see it (25 November 2026)
+      out.ghMerge = true;
+    } else if (RUNNER.test(s) && /(n07f-prod|n07f-ingest|n07f-first-purge)\.sh\b/.test(s)) {
+      out.prodRunner = true;
     }
   }
   return out;
