@@ -1177,9 +1177,9 @@ const flashLinks = flashLinksOf(srcFiles);
 const periodLinks = flashLinks.filter((l) => l.period);
 expect("a link into /reports/flash that names from or to says range: \"custom\" beside them (lib/period reads them with it alone)",
   periodLinks.filter((l) => !l.custom).map((l) => l.at), [], []);
-expect("the scan sees the links: the churn links of Customers → Subscriptions and Customers → Active name their period",
+expect("the scan sees the links: the churn links of Customers → Subscriptions and Customers → Active, and Customers → Payments' link to Flash's Payments overview, name their period",
   [flashLinks.length >= 8, periodLinks.map((l) => l.at.replace(/:\d+$/, "")).filter((f) => !f.startsWith("provoked/")).sort()],
-  [true, ["app/(shell)/reports/active/page.tsx", "components/SubscriptionsReport.tsx"]], [false, []]);
+  [true, ["app/(shell)/reports/active/page.tsx", "app/(shell)/reports/payments/page.tsx", "components/SubscriptionsReport.tsx"]], [false, []]);
 const subsChurnQuery = Object.fromEntries(new URL(flashHref("/reports/flash", { o: "churn", market: "GB", range: "custom", from: "2026-10-01", to: "2026-10-31" }), "http://x").searchParams);
 const oldChurnQuery = Object.fromEntries(new URL(flashHref("/reports/flash", { o: "churn", market: "GB", from: "2026-10-01", to: "2026-10-31" }), "http://x").searchParams);
 const active30 = Object.fromEntries(new URL(flashHref("/reports/flash", { o: "churn", range: "custom", from: addDays("2026-11-24", -29), to: "2026-11-24" }), "http://x").searchParams);

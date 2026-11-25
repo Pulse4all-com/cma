@@ -2818,6 +2818,74 @@ export interface SubscriptionsPage {
 /** Customers → Active's Churn rate card (cma.subscriptions_churn_card): the last complete month's parts of a market or of every market */
 export type SubscriptionsChurnCard = (SubscriptionsRateParts & { month: DateKey }) | null;
 
+/**
+ * Customers → Payments (addition 0009zw; docs/definitions.md, Payment state, Amount at risk): the payment state of the
+ * subscription base over months, read from the subscription facts' stored takes (cma.payments_page, cma.payment_rows), with
+ * Customers → Subscriptions' filters. The page's base is every present subscription in one of the five payment states of
+ * PAYMENT_STATES (Paused and Canceled are not on it). Ids, codes, counts, months, amounts and links only
+ */
+export type PaymentState = "paid" | "in_retry" | "charged_back" | "awaiting_payment" | "failed";
+/** The list's state: at_risk (an amount at risk; the default), one payment state, or all (the five) */
+export type PaymentsListState = "at_risk" | PaymentState | "all";
+/** The list's sort keys (cma.payment_rows_of's fixed list) */
+export type PaymentsSort = "amount_at_risk" | "state_since" | "subscription" | "market" | "payment_state";
+export interface PaymentsPageQuery extends SubscriptionsFilter {
+  from: DateKey; to: DateKey;
+  state: PaymentsListState; sort: PaymentsSort; descending: boolean;
+  /** The list's page in the same read (from 1; the first when left out) */
+  page?: number;
+}
+export interface PaymentsRowsQuery extends SubscriptionsFilter {
+  state: PaymentsListState; sort: PaymentsSort; descending: boolean;
+  /** From 1, 50 a page; a file reads every row up to the tenant's flash.file_max_rows */
+  page: number; file?: boolean;
+}
+/** A month's base (the Total subscriptions at the previous month end) and its moved-to-failed subscriptions: the Failed rate's parts */
+export interface PaymentsRateParts { base: number | null; movedToFailed: number }
+export interface PaymentsTiles {
+  /** The page's base: the subscriptions in one of the five payment states */
+  total: number;
+  /** Per payment state its subscriptions, the five always, zeros included, in cma.payment_states()'s order */
+  byState: { key: PaymentState; subscriptions: number }[];
+  /** The Awaiting payment subscriptions that are overdue */
+  overdue: number;
+  /** The Amount at risk: its subscriptions and per currency its amount and subscriptions, never added across currencies; the indicative euros only while every currency has a rate */
+  atRisk: { subscriptions: number; amounts: { currency: string; amount: number; subscriptions: number }[]; eur: { amount: number; asOf: string | null } | null };
+  /** The last complete month's Failed rate parts under the market and store filters; null without a complete month */
+  rates: (PaymentsRateParts & { month: DateKey }) | null;
+}
+export interface PaymentsMonth { month: DateKey; complete: PaymentsRateParts | null }
+export interface PaymentsRateRow extends PaymentsRateParts { market: string; month: DateKey }
+export interface PaymentsCrossCell { state: PaymentState; instrument: string; subscriptions: number }
+/** One subscription of the list: the app's id and number, codes, its payment state since, the amounts and the CRM contact's id with its record link */
+export interface PaymentRow {
+  subscriptionId: string; sourceId: string; number: string | null; store: string | null; market: string; status: string; paymentState: PaymentState;
+  stateSince: Instant | null; overdue: boolean | null; returnCode: string | null; instrument: string | null; currency: string | null;
+  amountAtRisk: number | null; monthlyAmount: number | null; contactId: string | null; contactUrl: string | null;
+}
+export interface PaymentRowsPage {
+  page: number; pageSize: number; total: number; state: PaymentsListState; sort: PaymentsSort; descending: boolean; rows: PaymentRow[];
+}
+/** The list's read: setUp false (and nothing more) while no subscriptions connection is set up; history false while no take is stored */
+export interface PaymentRowsList extends PaymentRowsPage { setUp: boolean; history: boolean; timeZone: string; computedAt: Instant | null }
+export interface PaymentsPage {
+  /** False while the tenant has no subscriptions connection set up: every part below is then empty ("Not set up", never zeros) */
+  setUp: boolean;
+  /** False while no take is stored yet ("being prepared", never zeros) */
+  history: boolean;
+  take: { computedAt: Instant; businessDate: DateKey } | null;
+  timeZone: string; today: DateKey; month: DateKey; from: DateKey; to: DateKey; filter: SubscriptionsFilter;
+  settings: { states: PaymentState[]; fx: Record<string, unknown> | null; propositions: string[]; historyMonths: number };
+  filters: SubscriptionsPage["filters"];
+  tiles: PaymentsTiles | null;
+  months: PaymentsMonth[];
+  rates: PaymentsRateRow[];
+  storeStarts: SubscriptionsStoreStart[];
+  ratesStartMonth: DateKey | null;
+  cross: PaymentsCrossCell[] | null;
+  list: PaymentRowsPage | null;
+}
+
 /** Reports → Maintenance (addition 0008zi): the scope of the tracked devices, field or stock (null: every tracked device) */
 export type MaintenanceScope = "field" | "stock";
 /** Reports → Maintenance's grid: the planned exchanges per cell, or the due components and devices at end of life */
@@ -4850,6 +4918,14 @@ export interface CmaData {
   getSubscriptionRows(me: Principal, query: SubscriptionsRowsQuery): Promise<SubscriptionRowsList>;
   /** A file or an API read of the list in the audit log (cma.subscription_file_record): who, which part, filters, range and measure, how many rows */
   recordSubscriptionFile(me: Principal, part: "records" | "months" | "rows", filter: SubscriptionsFilter, measure: SubscriptionsMeasure, rows: number,
+    range?: { from: DateKey; to: DateKey }): Promise<void>;
+  // ---- Customers → Payments (addition 0009zw): the database checks the permission on every call (CMA06)
+  /** The page in one read from the stored takes (cma.payments_page): tiles, months, rates, stores' starts, the cross table, the list's first page */
+  getPaymentsPage(me: Principal, query: PaymentsPageQuery): Promise<PaymentsPage>;
+  /** A page of the list, or the file's rows (cma.payment_rows) */
+  getPaymentRows(me: Principal, query: PaymentsRowsQuery): Promise<PaymentRowsList>;
+  /** A file or an API read of the list in the audit log (cma.payment_file_record): who, which part, filters, range and state, how many rows */
+  recordPaymentFile(me: Principal, part: "records" | "months" | "rows", filter: SubscriptionsFilter, state: PaymentsListState, rows: number,
     range?: { from: DateKey; to: DateKey }): Promise<void>;
   // ---- Lead cohorts (addition 0008zm): the database checks the permission on every call (CMA06); at most 92 days of creation dates
   /** Reports → Lead cohorts in one read (cma.lead_cohorts_report): reports.view or performance.team, as the funnel */

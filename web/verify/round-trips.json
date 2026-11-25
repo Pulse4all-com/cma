@@ -344,6 +344,42 @@
     "rt": 13
   },
   {
+    "path": "/reports/payments",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9,
+    "firstTx": 2,
+    "firstRt": 9
+  },
+  {
+    "path": "/reports/payments?market=GB&interval=monthly&state=all",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9,
+    "firstTx": 2,
+    "firstRt": 9
+  },
+  {
+    "path": "/reports/payments?page=2&state=all",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9,
+    "firstTx": 2,
+    "firstRt": 9
+  },
+  {
+    "path": "/api/v1/reports/payments",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 13
+  },
+  {
+    "path": "/api/v1/reports/payments/rows?page=2&state=all",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 13
+  },
+  {
     "path": "/reports/fleet-management",
     "subject": "manager",
     "tx": 2,

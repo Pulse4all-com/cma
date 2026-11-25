@@ -4,7 +4,7 @@ import type { Identity, Principal } from "@/lib/auth/identity";
 import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
 import { tenantCache } from "@/lib/cache";
 import type {
-  ActiveList, ActiveNow, ActiveReport, SubscriptionRowsList, SubscriptionsPage,
+  ActiveList, ActiveNow, ActiveReport, PaymentRowsList, PaymentsPage, SubscriptionRowsList, SubscriptionsPage,
   AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MessageStat, MessagesWritten, MyMessage, MyMessages, MyProfile, MyRosterDay, OrganisationInfo,
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
@@ -38,6 +38,7 @@ import { FLASH_CARD_ORDER, FLASH_LABELLED_DIMS, overviewOf, splitItemsOf, status
 import { dateKeyInZone } from "@/lib/time";
 import { activeFromDb, activeNowFromDb, activeRowsFromDb } from "@/lib/active";
 import { churnCardFromDb, SUBSCRIPTIONS_PAGE_ROWS, subscriptionRowsFromDb, subscriptionsPageFromDb } from "@/lib/subscriptions";
+import { PAYMENTS_PAGE_ROWS, paymentRowsFromDb, paymentsPageFromDb } from "@/lib/payments";
 
 /**
  * CmaData against Postgres, as cma_app (migration 0002).
@@ -4055,6 +4056,35 @@ export const postgresData: CmaData = {
     await withTenant(ctx(me), async (q) => {
       await q.query(`select cma.subscription_file_record($1, $2, $3::uuid, $4, $5, $6, $7, $8::date, $9::date)`,
         [part, filter.market, filter.store, filter.proposition, filter.interval, measure, rows, range?.from ?? null, range?.to ?? null]);
+    });
+  },
+
+  async getPaymentsPage(me, query): Promise<PaymentsPage> {
+    return withTenant(ctx(me), async (q) => {
+      // the page in one read from the subscription facts' stored takes (addition 0009zw): the function checks the
+      // permission and the filters first. One statement, one transaction
+      const j = one((await q.query<{ j: Record<string, unknown> }>(
+        `select cma.payments_page($1, $2::uuid, $3, $4, $5::date, $6::date, $7, $8, $9, $10) as j`,
+        [query.market, query.store, query.proposition, query.interval, query.from, query.to, query.state, query.sort, query.descending, query.page ?? 1])).rows,
+      "payments_page").j;
+      return paymentsPageFromDb(j, { from: query.from, to: query.to, filter: { market: query.market, store: query.store, proposition: query.proposition, interval: query.interval } });
+    });
+  },
+
+  async getPaymentRows(me, query): Promise<PaymentRowsList> {
+    return withTenant(ctx(me), async (q) => {
+      const j = one((await q.query<{ j: Record<string, unknown> }>(
+        `select cma.payment_rows($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10) as j`,
+        [query.market, query.store, query.proposition, query.interval, query.state, query.sort, query.descending, query.page, PAYMENTS_PAGE_ROWS,
+          query.file === true])).rows, "payment_rows").j;
+      return paymentRowsFromDb(j);
+    });
+  },
+
+  async recordPaymentFile(me, part, filter, state, rows, range): Promise<void> {
+    await withTenant(ctx(me), async (q) => {
+      await q.query(`select cma.payment_file_record($1, $2, $3::uuid, $4, $5, $6, $7, $8::date, $9::date)`,
+        [part, filter.market, filter.store, filter.proposition, filter.interval, state, rows, range?.from ?? null, range?.to ?? null]);
     });
   },
 
