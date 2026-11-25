@@ -1,0 +1,30 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ true
+(1 row)
+
+psql:221_verify_source_figure_late_events.sql:40: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+DO
+DO
+                                                                                                                                        check_name                                                                                                                                         | result |                                                      detail                                                      
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+------------------------------------------------------------------------------------------------------------------
+ A1 addition 0009zj recorded, after 0009zi                                                                                                                                                                                                                                                 | PASS   | 
+ A2 the write the application's and no one else's; its JIT off; its exits and pauses counted by the rule (218); the days with events stored since the previous write counted again among the events held now                                                                               | PASS   | jit=off true true true
+ A3 every stored exits and pauses row's CMA value equals the rule's count of the events the CMA held when it was taken (every tenant; counts only)                                                                                                                                         | PASS   | 0 rows, 0 differ at cma_at | 0 lag the events held now
+ A4 no stored exits and pauses row lags the events the CMA holds now (right after 220, or after each store's write)                                                                                                                                                                        | PASS   | 0 rows, 0 differ at cma_at | 0 lag the events held now
+ B1 a day with status events stored after its row was taken is counted again among the events held now (1 to 2, a double report once) and its cma_at moves to now; a day whose event was stored before keeps its value and cma_at; the answer names the rows counted again (with B3's two) | PASS   | {"updated": 0, "inserted": 1, "recounted": 3, "unchanged": 0} | -4=0.00 kept -3=1.00 kept -2=2.00 now 0=0.00 now
+ B2 the other connection's late event moves none of this connection's rows (B1's D-4 kept); a first write, and a second write once the late days are taken, answer with the three counts alone                                                                                             | PASS   | {"updated": 0, "inserted": 1, "unchanged": 0} {"updated": 0, "inserted": 0, "unchanged": 1} | 0=0.00
+ B3 a late event's subscription's next status event, on a later day, is counted again too: a cancellation on D-6 stored late makes the report into canceled on D-5 no move (D-6 0 to 1, D-5 1 to 0, both taken now)                                                                        | PASS   | -6=1.00 now -5=0.00 now
+ verdict                                                                                                                                                                                                                                                                                   | PASS   | 221_verify_source_figure_late_events: 7 PASS, 0 FAIL
+(8 rows)
+
+RESET
