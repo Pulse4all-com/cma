@@ -4,7 +4,7 @@ import { data } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
-/** Every assignment type, active or retired (addition 0009zw), for tenant.configure */
+/** Every assignment type, active or retired (addition 0009zx), for tenant.configure */
 export async function GET() {
   return forPrincipal(async (me) => {
     await data().listConfigStatuses(me);   // the configuration gate; the catalog itself is readable by any person

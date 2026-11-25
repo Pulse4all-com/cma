@@ -15,7 +15,7 @@
  * reverts the cell, P, W and N move between weeks (links), T picks the team, U publishes,
  * C copies the previous week, X opens the print view.
  *
- * Assignments (addition 0009zw, brief A): a Week | Day switch. Week keeps this grid, each cell with a thin bar of the
+ * Assignments (addition 0009zx, brief A): a Week | Day switch. Week keeps this grid, each cell with a thin bar of the
  * day's assignments in their colours (D13); Day is Arno's layout (RosterDay). The week bar adds Copy week, Apply standard
  * week and Save as standard week, each with its report (D9, D10), and Publish shows the plan check first (two warnings,
  * never blocking).
@@ -79,7 +79,7 @@ export function RosterPlanner({
   /** The Day view's words (assignmentsDay) only when the page shows the Day view: the Week view's page stays lighter */
   copy: Pick<Copy, "dayEditor" | "roster" | "assignments"> & Partial<Pick<Copy, "assignmentsDay">>;
   locale: Locale;
-  /** Week (the cells) or Day (Arno's layout of one date, addition 0009zw) */
+  /** Week (the cells) or Day (Arno's layout of one date, addition 0009zx) */
   view?: "week" | "day";
   /** The Day view's date, in the week */
   day?: string;
@@ -111,7 +111,7 @@ export function RosterPlanner({
   const [drafts, setDrafts] = useState<Map<string, string>>(new Map());
   const [states, setStates] = useState<Map<string, CellState>>(new Map());
   const [header, setHeader] = useState(week.header);
-  // The week's blocks per cell, for the thin bar under each cell (addition 0009zw)
+  // The week's blocks per cell, for the thin bar under each cell (addition 0009zx)
   const blockMap = (w: PlannerWeek) => new Map(Object.entries(w.blocks).map(([k, list]) =>
     [k, list.map(([code, start, end, hoursMarket, note]): AssignmentBlock => ({ assignmentId: "", code, start, end, hoursMarket, note }))]));
   const [cellBlocks, setCellBlocks] = useState(() => blockMap(week));
@@ -181,7 +181,7 @@ export function RosterPlanner({
       }
       const stored = ((await res.json()) as { data: (RosterEntry & { assignments: AssignmentBlock[]; endedAssignments: number }) | null }).data;
       setEntries((m) => { const n = new Map(m); if (stored) n.set(k, stored); else n.delete(k); return n; });
-      // the blocks outside the new shift ended with it (addition 0009zw); a clear ends every block of the day
+      // the blocks outside the new shift ended with it (addition 0009zx); a clear ends every block of the day
       const endedNow = stored ? stored.endedAssignments : (cellBlocks.get(k) ?? []).length;
       setCellBlocks((m) => new Map(m).set(k, stored?.assignments ?? []));
       if (endedNow > 0) setNotice(ta.endedWithShift.replace("{n}", String(endedNow)));
@@ -543,7 +543,7 @@ function startOfWeekKey(d: string): string {
 }
 
 /**
- * The thin bar under a week cell (addition 0009zw, D13): the day's blocks in their colours across the shift, a gap in the
+ * The thin bar under a week cell (addition 0009zx, D13): the day's blocks in their colours across the shift, a gap in the
  * page's background; an absence a Background Blue bar. The code is the title, so colour never carries meaning alone
  */
 function CellBar({ entry, blocks, typeOf }: {

@@ -721,12 +721,12 @@ export interface AbsenceType {
   isPaid: boolean;
   sortOrder: number;
   isActive: boolean;
-  /** Carries over (nl Gaat mee bij kopiëren, addition 0009zw, D10): Copy week and Save as standard week take it */
+  /** Carries over (nl Gaat mee bij kopiëren, addition 0009zx, D10): Copy week and Save as standard week take it */
   carriesOver: boolean;
 }
 
 /**
- * An Assignment type (nl Inzettype, addition 0009zw, D2): tenant configuration. Its colour and Work area follow from
+ * An Assignment type (nl Inzettype, addition 0009zx, D2): tenant configuration. Its colour and Work area follow from
  * the status it books (D13); an extra type books none (D4). docs/definitions.md, Assignment type
  */
 export interface AssignmentType {
@@ -812,7 +812,7 @@ export interface RosterReportRow {
   blocksDropped: number;
 }
 
-/** The roster planner's tenant settings and catalogs, read with the week (addition 0009zw) */
+/** The roster planner's tenant settings and catalogs, read with the week (addition 0009zx) */
 export interface RosterPlannerContext {
   /** roster.slot_minutes (D6) */
   slotMinutes: number;
@@ -904,7 +904,7 @@ export interface RosterPerson {
   teamKeys: string[];
   /** Work-type skill keys held now, for coverage */
   workTypeKeys: string[];
-  /** The person's Default market (addition 0009zo); a block without a market is planned under it (addition 0009zw) */
+  /** The person's Default market (addition 0009zo); a block without a market is planned under it (addition 0009zx) */
   defaultHoursMarket: string | null;
 }
 
@@ -937,7 +937,7 @@ export interface RosterWeek {
   people: RosterPerson[];
   entries: RosterEntry[];
   coverage: RosterCoverageRow[];
-  /** The week's current blocks (addition 0009zw) */
+  /** The week's current blocks (addition 0009zx) */
   assignments: RosterAssignment[];
   planner: RosterPlannerContext;
 }
@@ -979,7 +979,7 @@ export interface MyRosterDay {
   note: string | null;
   teamName: string | null;
   publishedAt: Instant | null;
-  /** The date's published blocks (addition 0009zw), in start order */
+  /** The date's published blocks (addition 0009zx), in start order */
   assignments: PublishedAssignment[];
 }
 
@@ -4797,7 +4797,7 @@ export interface CmaData {
    */
   setRosterEntry(me: Principal, weekStart: DateKey, teamKey: string | null, userId: string, date: DateKey, cell: RosterCellInput): Promise<RosterCellAnswer>;
   /**
-   * Replaces a person-date's blocks (cma.roster_set_assignments, addition 0009zw): overlap, off the grid, outside the
+   * Replaces a person-date's blocks (cma.roster_set_assignments, addition 0009zx): overlap, off the grid, outside the
    * shift, a market that is no hours market, the past CMA04; an unknown type or market CMA02. Today in a published week
    * publishes at once, or answers confirm with the count of other changes unless publishOthers (D8)
    */
@@ -4813,7 +4813,7 @@ export interface CmaData {
   /** Apply standard week (D9): fills the week's empty person-dates only; answers the report */
   applyStandardWeek(me: Principal, weekStart: DateKey, teamKey: string | null): Promise<RosterReportRow[]>;
   /**
-   * Configuration → Roster's reads in one transaction (addition 0009zw): the assignment types, the active work statuses a
+   * Configuration → Roster's reads in one transaction (addition 0009zx): the assignment types, the active work statuses a
    * type may book, and the tenant's settings; catalogs any person of the tenant reads (the writes check tenant.configure)
    */
   getRosterConfiguration(me: Principal): Promise<{ types: AssignmentType[]; statuses: WorkStatus[]; settings: TenantSetting[] }>;

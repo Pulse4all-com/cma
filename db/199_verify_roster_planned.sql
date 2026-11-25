@@ -35,7 +35,7 @@
 --   R1  per tenant: roster_people (the whole tenant and each team, this week and next) = 0005's definition narrowed to
 --       people holding roster.planned
 --   R2  per tenant: roster_entries (the same weeks and rosters) = 0005's definition narrowed to people on the roster
---   R3  per tenant: roster_today = 0005's definition narrowed to people on the roster (0005's columns by name: addition 0009zw
+--   R3  per tenant: roster_today = 0005's definition narrowed to people on the roster (0005's columns by name: addition 0009zx
 --       appends assignments to roster_today, and default_hours_market_code to roster_people for R1)
 --       R1 to R3 report the rows compared; provoked, 0005's side loses a row, so the comparison itself must find the
 --       difference (a compare of no rows reads FAIL under the switch)
@@ -468,7 +468,7 @@ begin
           for tk in select null::text union all select x.key::text from cma.team x where x.tenant_id = t.id and x.valid_to is null loop
             v_cmp := v_cmp + 1;
             -- R1: the people, against 0005's narrowed to roster.planned (provoked: 0005's side loses a row); 0005's columns by
-            -- name, as addition 0009zw appends default_hours_market_code
+            -- name, as addition 0009zx appends default_hours_market_code
             select count(*) into v_n from cma.roster_people(wk, tk);
             v_n1 := v_n1 + v_n;
             if exists ((select r.user_id, r.display_name, r.organisation_name, r.timezone, r.team_keys, r.work_type_keys from cma.roster_people(wk, tk) r)

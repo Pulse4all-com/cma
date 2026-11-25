@@ -109,7 +109,7 @@ begin
   from pg_proc p
   join lateral unnest(p.proargnames, p.proargmodes) with ordinality as a(attname, attmode, n) on true
   where p.oid = to_regprocedure('cma.my_roster(date,date)') and a.attmode = 't';
-  -- assignments last since addition 0009zw (246_roster_assignments.sql): the date's published blocks
+  -- assignments last since addition 0009zx (248_roster_assignments.sql): the date's published blocks
   if v_cols is distinct from 'business_date, is_published, kind, start_time, end_time, absence_key, absence_name, note, team_name, published_at, assignments' then
     raise exception 'FAIL A4: my_roster returns [%]', v_cols;
   end if;
@@ -385,7 +385,7 @@ begin
     exception when sqlstate 'CMA04' then null;
     end;
 
-    -- B10. copying a week: alpha's two current cells are a1's shift and a1's sick day; since addition 0009zw (D10) an
+    -- B10. copying a week: alpha's two current cells are a1's shift and a1's sick day; since addition 0009zx (D10) an
     --     absence is copied only when its type carries over, and the default types do not, so the shift lands on v_wk + 7
     --     and the sick day is skipped; the week list shows the states
     v_n := cma.roster_copy_week(v_wk, v_wk + 7, 'alpha');

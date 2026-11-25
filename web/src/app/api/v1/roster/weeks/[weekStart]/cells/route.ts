@@ -13,7 +13,7 @@ type Params = { params: Promise<{ weekStart: string }> };
  * outside the week, a person not on the grid and bad times (400), an entry on another roster that
  * day (409), an unknown absence type (404), and a caller without roster.manage (403). Answers the
  * current cell with its blocks and how many blocks ended with a shortened shift (assignments,
- * endedAssignments; addition 0009zw), null after a clear (which ends every block of the day). Same
+ * endedAssignments; addition 0009zx), null after a clear (which ends every block of the day). Same
  * guards as every write: header x-cma-request: 1, same site.
  */
 export async function PUT(request: Request, { params }: Params) {

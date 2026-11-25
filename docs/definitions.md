@@ -3649,7 +3649,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Market" for it: Market keeps its meaning, the country (the deal's, the line's, the customer's); "billing market" or "country" for an hours market; "activity" or "work type" for the work area; for an hours market an Assignment's market is called `hoursMarket` in the API, never "market" |
 | Status | Decided |
-| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "Hours market (nl Urenmarkt) is …" and the rows that follow it, and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo); 25 November 2026 (Martin, D11), docs/decisions.md, 25 Nov 2026, "From brief B the CMA sets the agent's activity from the plan …" (this PR, addition 0009zw), which reverses "My day has no activity choice" |
+| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "Hours market (nl Urenmarkt) is …" and the rows that follow it, and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo); 25 November 2026 (Martin, D11), docs/decisions.md, 25 Nov 2026, "From brief B the CMA sets the agent's activity from the plan …" (this PR, addition 0009zx), which reverses "My day has no activity choice" |
 | Used by | No catalog key: no metric reads it. Pages: Team → Roster (an Assignment's market), My schedule, My day, Correct day (Team hours), People, the Live board, Configuration → Markets; `GET /api/v1/me/hours-markets`, `POST /api/v1/me/status`, `GET /api/v1/me/day`, `GET /api/v1/team/now`, `GET /api/v1/live/board`, `GET /api/v1/team/days/{userId}/{date}`, `POST .../corrections`, `GET` and `PUT /api/v1/configuration/markets`, `GET /api/v1/team/status-time`, `GET /api/v1/team/exports/hours` and `/status-changes` |
 | As built today | `230` (columns, foreign keys to a market of the same tenant, the kind check on `time_event`, triggers for the mapping rules serialised per tenant, the functions and reads) and `231` (verify); the rules hold in the tables, so a direct write cannot break them. `cma.open_workday` keeps its one-argument signature (an explicit market at clock-in is a market change right after). The capture is built; the billing statement is not (backlog CMA-137). Matches the definition |
 
@@ -3725,9 +3725,9 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None (Pulse4all plans these in Excel today) |
 | Not to use | "Activity", "task", "skill" or "shift" for it (a shift is the planned day, Rostering; a skill is a proficiency, Teams and skills); "slot" for a block (a Slot is one grid cell) |
 | Status | Decided |
-| Decided | 25 November 2026 (Martin, D1, D6, D7); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zw); docs/decisions.md, 25 Nov 2026, "The unit within a shift is an Assignment …" |
+| Decided | 25 November 2026 (Martin, D1, D6, D7); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); docs/decisions.md, 25 Nov 2026, "The unit within a shift is an Assignment …" |
 | Used by | No catalog key: no metric reads it yet. Team → Roster (the planner, week and Day view), My schedule, `cma.roster_today` (assignments last, for the Live board of a later brief); `GET /api/v1/roster/weeks/{monday}`, `PUT /api/v1/roster/weeks/{monday}/assignments` and `/cells`, `GET /api/v1/roster/weeks/{monday}/assignments`, `GET /api/v1/me/roster` |
-| As built today | `246` (tables, triggers for the grid and the hours market, the exclusion constraint, versioning, the functions and reads) and `247` (verify). Brief B (the assignment on the time events) and brief C (plan against actual) are not built; the model needs no schema change for them. Matches the definition |
+| As built today | `248` (tables, triggers for the grid and the hours market, the exclusion constraint, versioning, the functions and reads) and `249` (verify). Brief B (the assignment on the time events) and brief C (plan against actual) are not built; the model needs no schema change for them. Matches the definition |
 
 ### Assignment type
 
@@ -3744,9 +3744,9 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Activity" or "work type" for it (a work type is a skill dimension, Teams and skills; the Work area is Sales or Operations); "project" or "task" |
 | Status | Decided |
-| Decided | 25 November 2026 (Martin, D2, D3, D13); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zw); docs/decisions.md, 25 Nov 2026, "An Assignment type is tenant configuration …" and "Assignment codes are 1 to 6 characters …" |
+| Decided | 25 November 2026 (Martin, D2, D3, D13); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); docs/decisions.md, 25 Nov 2026, "An Assignment type is tenant configuration …" and "Assignment codes are 1 to 6 characters …" |
 | Used by | No catalog key. Configuration → Roster, Team → Roster, My schedule; `GET /api/v1/roster/assignment-types`, `GET` and `PUT /api/v1/configuration/assignment-types` |
-| As built today | `246` (`cma.assignment_type`, trigger `cma.assignment_type_rules`, the freeze of kind, status and extra flag once a plan holds the type) and `02` (Pulse4all's seed). Matches the definition; the brief's wording 2 to 6 characters is 1 to 6 because the seeded X has one |
+| As built today | `248` (`cma.assignment_type`, trigger `cma.assignment_type_rules`, the freeze of kind, status and extra flag once a plan holds the type) and `02` (Pulse4all's seed). Matches the definition; the brief's wording 2 to 6 characters is 1 to 6 because the seeded X has one |
 
 ### Extra hours (X)
 
@@ -3763,9 +3763,9 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Overtime" for it: overtime is a pay rule, which the CMA does not model here |
 | Status | Decided |
-| Decided | 25 November 2026 (Martin, D3 and D4); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zw) |
+| Decided | 25 November 2026 (Martin, D3 and D4); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx) |
 | Used by | No catalog key. Configuration → Roster, Team → Roster |
-| As built today | `246`: the trigger lets an extra type be of kind work with no status. Matches the definition |
+| As built today | `248`: the trigger lets an extra type be of kind work with no status. Matches the definition |
 
 ### Own market
 
@@ -3782,9 +3782,9 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Home market" or "market" alone for it (Market keeps its meaning, the country; the API field is `hoursMarket`) |
 | Status | Decided |
-| Decided | 25 November 2026 (Martin, D1 and D5); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zw) |
+| Decided | 25 November 2026 (Martin, D1 and D5); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx) |
 | Used by | No catalog key. Team → Roster, `PUT /api/v1/roster/weeks/{monday}/assignments`, `GET /api/v1/roster/weeks/{monday}/planned-hours` |
-| As built today | `246` (hours market check on the block) and `web/src/lib/assignments.ts` (`parseAssignment`, `MARKET_ALIASES`, `plannedByKey`). Matches the definition |
+| As built today | `248` (hours market check on the block) and `web/src/lib/assignments.ts` (`parseAssignment`, `MARKET_ALIASES`, `plannedByKey`). Matches the definition |
 
 ### Standard week
 
@@ -3801,9 +3801,9 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Shift template" or "preset" for it (the planned shift templates of 9 October 2026 are replaced by it); "Default week" |
 | Status | Decided |
-| Decided | 25 November 2026 (Martin, D9); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zw); docs/decisions.md, 25 Nov 2026, "One Standard week per tenant …" and "Save as standard week replaces …" |
+| Decided | 25 November 2026 (Martin, D9); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); docs/decisions.md, 25 Nov 2026, "One Standard week per tenant …" and "Save as standard week replaces …" |
 | Used by | No catalog key. Team → Roster; the routes above |
-| As built today | `246`: `cma.save_standard_week` replaces the rows of the people on the chosen roster's grid only; `cma.apply_standard_week` reports the reasons past, not_empty, other_roster, absence_not_carried and blocks_dropped. Matches the definition |
+| As built today | `248`: `cma.save_standard_week` replaces the rows of the people on the chosen roster's grid only; `cma.apply_standard_week` reports the reasons past, not_empty, other_roster, absence_not_carried and blocks_dropped. Matches the definition |
 
 ### Carries over
 
@@ -3820,9 +3820,9 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Recurring" or "repeat" for it |
 | Status | Decided |
-| Decided | 25 November 2026 (Martin, D10); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zw); docs/decisions.md, 25 Nov 2026, "Absence types get the flag carries_over …" |
+| Decided | 25 November 2026 (Martin, D10); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); docs/decisions.md, 25 Nov 2026, "Absence types get the flag carries_over …" |
 | Used by | No catalog key. Configuration → Roster, Team → Roster (Copy week, Save as standard week); `PUT /api/v1/configuration/absence-types/{key}/carries-over`, `POST /api/v1/roster/weeks/{monday}/copy` |
-| As built today | `246`; `cma.roster_copy_week_report` skips absences that do not carry over, and `cma.roster_copy_week` keeps its signature and answers the report's count. Matches the definition |
+| As built today | `248`; `cma.roster_copy_week_report` skips absences that do not carry over, and `cma.roster_copy_week` keeps its signature and answers the report's count. Matches the definition |
 
 ### Slot
 
@@ -3839,9 +3839,9 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Slot" for an Assignment or for a HubSpot or Aircall slot of a form or call line (those keep their own words) |
 | Status | Decided |
-| Decided | 25 November 2026 (Martin, D6); docs/decisions.md, 25 Nov 2026, "The grid is the tenant setting roster.slot_minutes …"; docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zw) |
+| Decided | 25 November 2026 (Martin, D6); docs/decisions.md, 25 Nov 2026, "The grid is the tenant setting roster.slot_minutes …"; docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx) |
 | Used by | No catalog key. Team → Roster; `GET /api/v1/roster/days/{date}/coverage` |
-| As built today | `246` (the setting with its check, the trigger on the block's times). Matches the definition |
+| As built today | `248` (the setting with its check, the trigger on the block's times). Matches the definition |
 
 ### Planner zone
 
@@ -3858,9 +3858,9 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Planner time" or "office time" for it (Office hours are a market's ranges of time) |
 | Status | Decided |
-| Decided | 25 November 2026 (Martin); docs/decisions.md, 25 Nov 2026, "Three more planner settings: …"; docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zw) |
+| Decided | 25 November 2026 (Martin); docs/decisions.md, 25 Nov 2026, "Three more planner settings: …"; docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx) |
 | Used by | No catalog key. Team → Roster (Day view); `GET /api/v1/roster/days/{date}/coverage` |
-| As built today | `246` (setting, trigger, `cma.roster_planner_zone()`) and `web/src/lib/assignments.ts` (`toPlannerMinutes`, `fromPlannerMinutes`). Matches the definition |
+| As built today | `248` (setting, trigger, `cma.roster_planner_zone()`) and `web/src/lib/assignments.ts` (`toPlannerMinutes`, `fromPlannerMinutes`). Matches the definition |
 
 ### Plan check
 
@@ -3877,7 +3877,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Validation" or "error" for it: it warns, it never refuses |
 | Status | Decided |
-| Decided | 25 November 2026 (Martin); docs/decisions.md, 25 Nov 2026, "Three more planner settings: …"; docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zw) |
+| Decided | 25 November 2026 (Martin); docs/decisions.md, 25 Nov 2026, "Three more planner settings: …"; docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx) |
 | Used by | No catalog key. Team → Roster |
 | As built today | `web/src/lib/assignments.ts` (`planCheck`), verified by `verify:roster`. Matches the definition |
 
@@ -3896,9 +3896,9 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Online", "available" or "logged in" for it (those are the clock and the status, Clocked in) |
 | Status | Decided |
-| Decided | 25 November 2026 (Martin, D12); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zw) |
+| Decided | 25 November 2026 (Martin, D12); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx) |
 | Used by | No catalog key; `GET /api/v1/roster/days/{date}/coverage`; Team → Roster (Day view) |
-| As built today | `246` (`cma.roster_slot_coverage`) and `web/src/lib/assignments.ts` (`slotFigures`). Matches the definition |
+| As built today | `248` (`cma.roster_slot_coverage`) and `web/src/lib/assignments.ts` (`slotFigures`). Matches the definition |
 
 ### Planned hours per assignment
 
@@ -3915,9 +3915,9 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Billable hours" or "worked hours" for it: it is a plan, and no time is booked from it |
 | Status | Decided |
-| Decided | 25 November 2026 (Martin, D12); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zw) |
+| Decided | 25 November 2026 (Martin, D12); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx) |
 | Used by | No catalog key. Team → Roster; `GET /api/v1/roster/weeks/{monday}/planned-hours` |
-| As built today | `246` (`cma.roster_planned_hours`, `cma.roster_block_minutes`) and `web/src/lib/assignments.ts` (`plannedByKey`). Matches the definition. Brief C's Plan at day start against actual (CMA-137) reads these figures; it is not built |
+| As built today | `248` (`cma.roster_planned_hours`, `cma.roster_block_minutes`) and `web/src/lib/assignments.ts` (`plannedByKey`). Matches the definition. Brief C's Plan at day start against actual (CMA-137) reads these figures; it is not built |
 
 ## Intake terms
 

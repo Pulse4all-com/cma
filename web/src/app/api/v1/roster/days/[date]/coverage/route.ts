@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 type Params = { params: Promise<{ date: string }> };
 
 /**
- * D12 (addition 0009zw): per slot of the planner zone's day, the people working and the people per assignment type and
+ * D12 (addition 0009zx): per slot of the planner zone's day, the people working and the people per assignment type and
  * hours market, ?team=<key> or none (cma.roster_slot_coverage); a slot without a block has no row. Needs roster.manage
  */
 export async function GET(request: NextRequest, { params }: Params) {

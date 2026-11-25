@@ -13,9 +13,9 @@
  * and the Live board's flags hold only people with their time kept and roster.planned, roles combined; since 19 November
  * 2026 (brief B41) the planner's one team per page view: Everyone without a ?team= or with one that names no current
  * team, and the select, the header, the reads, print, copy, publish and the address all on that one key; since 25 November
- * 2026 (brief A, addition 0009zw) the assignments: the CODE-MARKET parser with the UK alias, painting and emptying over a
+ * 2026 (brief A, addition 0009zx) the assignments: the CODE-MARKET parser with the UK alias, painting and emptying over a
  * selection inside the shift, joined bars, the colours from what a type books, the planner zone, the planned figures per
- * slot and per person on 247's B10 fixture, and the plan check. Copy week, Apply and Save as standard week write the team
+ * slot and per person on 249's B10 fixture, and the plan check. Copy week, Apply and Save as standard week write the team
  * as the other writes do (four writes on the page's key).
  */
 import { readFileSync } from "node:fs";
@@ -196,7 +196,7 @@ expect("(c) the print view resolves the team as the planner does, the team list 
   [/getRosterWeek\(me, weekStart, rosterTeamArg\(plannerTeam\(sp\.team, teams\)\)\)/.test(print), /const teams = plannerNeedsTeams\(sp\.team\) \? await data\(\)\.listTeams\(me\) : \[\];/.test(print)],
   [true, true], [false, false]);
 
-// ---- assignments (addition 0009zw, brief A) -------------------------------------------------------
+// ---- assignments (addition 0009zx, brief A) -------------------------------------------------------
 const types = [
   { code: "SL", name: "Sales", kind: "work", workArea: "sales", isExtra: false, statusIsProductive: true, isActive: true },
   { code: "GO", name: "General Ops", kind: "work", workArea: "operations", isExtra: false, statusIsProductive: true, isActive: true },
@@ -237,7 +237,7 @@ expect("the planner zone: one hour ahead in winter and summer, equal zones untou
     toPlannerMinutes("2026-12-07", "09:00", "Europe/Madrid", "Europe/Madrid"), fromPlannerMinutes(600, "2026-12-07", "Europe/London", "Europe/Madrid"),
     fromPlannerMinutes(1500, "2026-12-07", "Europe/London", "Europe/Madrid")],
   [600, 600, 540, "09:00", "24:00"], [540, 540, 540, "10:00", null]);
-// 247's B10: a2 GO 08-12 (no Default market), LB 12-13, SL 13-16 under GB; a1 (Default NL) SL 09-13, X 13-14, SL 14-17 GB; one
+// 249's B10: a2 GO 08-12 (no Default market), LB 12-13, SL 13-16 under GB; a1 (Default NL) SL 09-13, X 13-14, SL 14-17 GB; one
 // hour ahead on the planner's axis
 const kinds = new Map(types.map((x) => [x.code, x.kind]));
 const h = (x) => x * 60 + 60;
@@ -247,11 +247,11 @@ const fixture = [
 ];
 const figs = slotFigures(fixture, kinds, 15, h(8), h(17));
 const slotAt = (hhmm) => { const f = figs.find((x) => x.start === Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3))); return `w${f.working} ${[...f.byKey].sort().map(([k, n]) => `${k}=${n}`).join(" ")}`; };
-expect("D12 per slot as 247's B10 counts it (the planner's 09:00, 10:00, 13:00, 14:00, 17:45)",
+expect("D12 per slot as 249's B10 counts it (the planner's 09:00, 10:00, 13:00, 14:00, 17:45)",
   [figs.length, slotAt("09:00"), slotAt("10:00"), slotAt("13:00"), slotAt("14:00"), slotAt("17:45")],
   [36, "w1 GO/=1", "w2 GO/=1 SL/NL=1", "w1 LB/=1 SL/NL=1", "w2 SL/GB=1 X/NL=1", "w1 SL/GB=1"],
   [36, "w1 GO/=1", "w2 GO/=1 SL/NL=1", "w2 LB/=1 SL/NL=1", "w2 SL/GB=1 X/NL=1", "w1 SL/GB=1"]);
-expect("D12 per person as 247's B10's planned minutes",
+expect("D12 per person as 249's B10's planned minutes",
   fixture.map((p) => [...plannedByKey(p.blocks, p.defaultMarket)].sort().map(([k, v]) => `${k}=${v}`).join(" ")),
   ["GO/=240 LB/=60 SL/GB=180", "SL/GB=180 SL/NL=240 X/NL=60"], ["GO/=240 LB/=60 SL/GB=180", "SL/GB=180 SL/NL=300"]);
 const day = [{ code: "SL", start: 540, end: 720, market: null, note: null }, { code: "GO", start: 780, end: 1020, market: null, note: null }];

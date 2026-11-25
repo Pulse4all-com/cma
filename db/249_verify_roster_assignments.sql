@@ -1,12 +1,12 @@
 -- =============================================================================================
--- 247_verify_roster_assignments.sql: verifies addition 0009zw (246_roster_assignments.sql), Assignments in the roster
+-- 249_verify_roster_assignments.sql: verifies addition 0009zx (248_roster_assignments.sql), Assignments in the roster
 -- =============================================================================================
 -- Read-only on real data: every behaviour check runs on a throwaway tenant inside a block that always rolls back; the
--- R checks read every active tenant as it is. Run as your own IAM login after 246: dev first (normal, then provoked),
--- then prod before the merge. Expected: the last row reads "PASS | 247_verify_roster_assignments: n PASS, 0 FAIL, ...".
+-- R checks read every active tenant as it is. Run as your own IAM login after 248: dev first (normal, then provoked),
+-- then prod before the merge. Expected: the last row reads "PASS | 249_verify_roster_assignments: n PASS, 0 FAIL, ...".
 --
 -- Checks
---   S1  the addition 0009zw recorded once, after 0009zv
+--   S1  the addition 0009zx recorded once, after 0009zv
 --   S2  the four new tables: row-level security with the tenant policy, the audit trigger, no delete and only the
 --       versioning columns to update for the application, no base-table read for the readers, a cma_read face; the
 --       exclusion constraints in place (btree_gist); absence_type.carries_over and cma_read.absence_type ending with it
@@ -60,11 +60,11 @@ $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);                 -- 'true' for every check, or one check's id such as 'B3'
 
-drop table if exists pg_temp.verify_0009zw;
-create temporary table verify_0009zw (ord integer, check_name text, result text, detail text);
-grant select, insert on pg_temp.verify_0009zw to cma_app;
+drop table if exists pg_temp.verify_0009zx;
+create temporary table verify_0009zx (ord integer, check_name text, result text, detail text);
+grant select, insert on pg_temp.verify_0009zx to cma_app;
 
-create or replace function pg_temp.v0009zw_p(p_id text)
+create or replace function pg_temp.v0009zx_p(p_id text)
 returns boolean
 language sql stable
 as $$
@@ -72,14 +72,14 @@ as $$
 $$;
 
 -- One check's row: PASS when what was found equals what is expected; provoked, the expectation carries a deliberate difference
-create or replace function pg_temp.v0009zw_row(p_ord integer, p_id text, p_name text, p_found text, p_expected text)
+create or replace function pg_temp.v0009zx_row(p_ord integer, p_id text, p_name text, p_found text, p_expected text)
 returns void
 language plpgsql
 as $$
 declare
-  v_exp text := case when pg_temp.v0009zw_p(p_id) then coalesce(p_expected, '') || ' [provoked: a deliberate difference]' else p_expected end;
+  v_exp text := case when pg_temp.v0009zx_p(p_id) then coalesce(p_expected, '') || ' [provoked: a deliberate difference]' else p_expected end;
 begin
-  insert into pg_temp.verify_0009zw values (p_ord, p_id || ' ' || p_name,
+  insert into pg_temp.verify_0009zx values (p_ord, p_id || ' ' || p_name,
     case when p_found is not distinct from v_exp then 'PASS' else 'FAIL' end,
     case when p_found is not distinct from v_exp then left(coalesce(p_found, 'null'), 900)
          else left('found ' || coalesce(p_found, 'null') || ' | expected ' || coalesce(v_exp, 'null'), 3000) end);
@@ -87,7 +87,7 @@ end
 $$;
 
 -- An error's SQLSTATE in words for the refusal checks: the code, or 'accepted' when the call went through
-create or replace function pg_temp.v0009zw_try(p_sql text)
+create or replace function pg_temp.v0009zx_try(p_sql text)
 returns text
 language plpgsql
 as $$
@@ -98,12 +98,12 @@ exception when others then
   return sqlstate;
 end
 $$;
-grant execute on function pg_temp.v0009zw_try(text) to cma_app;
+grant execute on function pg_temp.v0009zx_try(text) to cma_app;
 
 -- ---------------------------------------------------------------------------------------------
 -- 0005's definitions (23_roster.sql), kept to compare with
 -- ---------------------------------------------------------------------------------------------
-create or replace function pg_temp.v0009zw_week_0005(p_week_start date, p_team_key text)
+create or replace function pg_temp.v0009zx_week_0005(p_week_start date, p_team_key text)
 returns table (week_id uuid, team_key text, team_name text, week_start date, status text, version integer,
                published_at timestamptz, published_by_name text, entry_count integer, changed_since_publish boolean)
 language plpgsql stable
@@ -132,7 +132,7 @@ begin
 end
 $$;
 
-create or replace function pg_temp.v0009zw_my_roster_0005(p_from date, p_to date)
+create or replace function pg_temp.v0009zx_my_roster_0005(p_from date, p_to date)
 returns table (business_date date, is_published boolean, kind text, start_time time, end_time time, absence_key text,
                absence_name text, note text, team_name text, published_at timestamptz)
 language plpgsql stable
@@ -178,13 +178,13 @@ declare
   v_cols text;
 begin
   -- S1
-  perform pg_temp.v0009zw_row(1, 'S1', 'the addition 0009zw recorded once, after 0009zv',
-    format('0009zv %s; 0009zw %s, after 0009zv %s',
+  perform pg_temp.v0009zx_row(1, 'S1', 'the addition 0009zx recorded once, after 0009zv',
+    format('0009zv %s; 0009zx %s, after 0009zv %s',
            (select count(*) from cma.schema_migration where version = '0009zv'),
-           (select count(*) from cma.schema_migration where version = '0009zw'),
+           (select count(*) from cma.schema_migration where version = '0009zx'),
            coalesce((select w.applied_at >= v.applied_at from cma.schema_migration w, cma.schema_migration v
-                     where w.version = '0009zw' and v.version = '0009zv'), false)),
-    '0009zv 1; 0009zw 1, after 0009zv t');
+                     where w.version = '0009zx' and v.version = '0009zv'), false)),
+    '0009zv 1; 0009zx 1, after 0009zv t');
 
   -- S2
   foreach t in array array['assignment_type', 'roster_assignment', 'standard_week_entry', 'standard_week_assignment'] loop
@@ -219,7 +219,7 @@ begin
                  and a.attnotnull and a.atttypid = 'boolean'::regtype) then
     v_bad := v_bad || 'absence_type.carries_over; ';
   end if;
-  perform pg_temp.v0009zw_row(2, 'S2', 'the tables: RLS, policy, audit, insert-only for the application, readers'' faces, the exclusion constraints, carries_over',
+  perform pg_temp.v0009zx_row(2, 'S2', 'the tables: RLS, policy, audit, insert-only for the application, readers'' faces, the exclusion constraints, carries_over',
     coalesce(nullif(v_bad, ''), 'ok'), 'ok');
 
   -- S3
@@ -258,11 +258,11 @@ begin
   if (select p.prosrc from pg_proc p where p.oid = to_regprocedure('cma.roster_today()')) !~ 'cma\.on_roster\(' then
     v_bad := v_bad || 'roster_today without cma.on_roster; ';
   end if;
-  perform pg_temp.v0009zw_row(3, 'S3', 'the functions: the owner''s, the application''s, the caller''s rights, the reads stable, the new last columns',
+  perform pg_temp.v0009zx_row(3, 'S3', 'the functions: the owner''s, the application''s, the caller''s rights, the reads stable, the new last columns',
     coalesce(nullif(v_bad, ''), 'ok'), 'ok');
 
   -- S4
-  perform pg_temp.v0009zw_row(4, 'S4', 'the settings and the zone trigger on cma.tenant_setting',
+  perform pg_temp.v0009zx_row(4, 'S4', 'the settings and the zone trigger on cma.tenant_setting',
     (select string_agg(s.key || '=' || s.default_value || coalesce(' [' || array_to_string(s.allowed_values, ',') || ']', ''), '; ' order by s.key collate "C")
      from cma.setting s where s.key in ('roster.slot_minutes', 'roster.lunch_after_minutes', 'roster.lunch_type_code', 'roster.planner_timezone'))
     || '; zone trigger ' || exists (select 1 from pg_trigger g where g.tgrelid = 'cma.tenant_setting'::regclass and g.tgname = 'check_roster_setting'),
@@ -290,7 +290,7 @@ declare
   v_blocks jsonb := '[{"code":"SL","start":"09:00","end":"11:00","hoursMarket":"GB"},{"code":"LB","start":"12:00","end":"12:30"},{"code":"GO","start":"13:00","end":"17:00"}]';
 begin
   begin
-    v_t := cma.create_tenant('verify-0009zw', 'Verify 0009zw', 'UTC');
+    v_t := cma.create_tenant('verify-0009zx', 'Verify 0009zx', 'UTC');
     insert into cma.market (tenant_id, code, name, time_zone, language_code, currency) values
       (v_t, 'GB', 'Verify GB', 'Europe/London', 'en', 'GBP'),
       (v_t, 'NL', 'Verify NL', 'Europe/Amsterdam', 'nl', 'EUR'),
@@ -323,11 +323,11 @@ begin
     perform cma.upsert_assignment_type('X', 'Extra hours', 'work', null, true, 99);
     perform cma.upsert_assignment_type('OLD', 'Retired', 'work', 'v_ops', false, 95, 'inactive');
     v_b1 := format('lower %s; work on lunch %s; extra with a status %s; ',
-      pg_temp.v0009zw_try($q$select cma.upsert_assignment_type('sl', 'Sales', 'work', 'v_sales')$q$),
-      pg_temp.v0009zw_try($q$select cma.upsert_assignment_type('WL', 'Work on lunch', 'work', 'lunch')$q$),
-      pg_temp.v0009zw_try($q$select cma.upsert_assignment_type('XX', 'Extra', 'work', 'v_sales', true)$q$));
+      pg_temp.v0009zx_try($q$select cma.upsert_assignment_type('sl', 'Sales', 'work', 'v_sales')$q$),
+      pg_temp.v0009zx_try($q$select cma.upsert_assignment_type('WL', 'Work on lunch', 'work', 'lunch')$q$),
+      pg_temp.v0009zx_try($q$select cma.upsert_assignment_type('XX', 'Extra', 'work', 'v_sales', true)$q$));
     perform set_config('app.user_id', v_mgr::text, true);
-    v_b1 := v_b1 || format('manager %s; ', pg_temp.v0009zw_try($q$select cma.upsert_assignment_type('MG', 'Manager''s', 'work', 'v_sales')$q$));
+    v_b1 := v_b1 || format('manager %s; ', pg_temp.v0009zx_try($q$select cma.upsert_assignment_type('MG', 'Manager''s', 'work', 'v_sales')$q$));
     perform set_config('app.user_id', v_a1::text, true);
     select v_b1 || 'agent reads ' || string_agg(x.code || ':' || x.kind || ':' || coalesce(x.status_key, '-') || ':' || coalesce(x.work_area, '-') || ':' || x.is_extra || ':' || x.status, ', '
                                                  order by x.sort_order, x.code collate "C")
@@ -340,37 +340,37 @@ begin
 
     -- B2: refusals
     v_b2 := format('overlap %s; off grid %s; outside %s; no shift %s; BE %s; UK %s; unknown type %s; retired type %s; past %s; analyst %s',
-      pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:00","end":"11:00"},{"code":"GO","start":"10:45","end":"12:00"}]')$q$, v_wk, v_a1, v_wk)),
-      pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:05","end":"10:00"}]')$q$, v_wk, v_a1, v_wk)),
-      pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"08:00","end":"10:00"}]')$q$, v_wk, v_a1, v_wk)),
-      pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:00","end":"10:00"}]')$q$, v_wk, v_a1, v_wk + 1)),
-      pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:00","end":"10:00","hoursMarket":"BE"}]')$q$, v_wk, v_a1, v_wk)),
-      pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:00","end":"10:00","hoursMarket":"UK"}]')$q$, v_wk, v_a1, v_wk)),
-      pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"ZZ","start":"09:00","end":"10:00"}]')$q$, v_wk, v_a1, v_wk)),
-      pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"OLD","start":"09:00","end":"10:00"}]')$q$, v_wk, v_a1, v_wk)),
-      pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[]')$q$, v_this - 7, v_a1, v_this - 7)),
-      pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, null, %L, %L, '[]')$q$, v_wk, v_ana, v_wk)));
+      pg_temp.v0009zx_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:00","end":"11:00"},{"code":"GO","start":"10:45","end":"12:00"}]')$q$, v_wk, v_a1, v_wk)),
+      pg_temp.v0009zx_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:05","end":"10:00"}]')$q$, v_wk, v_a1, v_wk)),
+      pg_temp.v0009zx_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"08:00","end":"10:00"}]')$q$, v_wk, v_a1, v_wk)),
+      pg_temp.v0009zx_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:00","end":"10:00"}]')$q$, v_wk, v_a1, v_wk + 1)),
+      pg_temp.v0009zx_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:00","end":"10:00","hoursMarket":"BE"}]')$q$, v_wk, v_a1, v_wk)),
+      pg_temp.v0009zx_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"SL","start":"09:00","end":"10:00","hoursMarket":"UK"}]')$q$, v_wk, v_a1, v_wk)),
+      pg_temp.v0009zx_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"ZZ","start":"09:00","end":"10:00"}]')$q$, v_wk, v_a1, v_wk)),
+      pg_temp.v0009zx_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"OLD","start":"09:00","end":"10:00"}]')$q$, v_wk, v_a1, v_wk)),
+      pg_temp.v0009zx_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[]')$q$, v_this - 7, v_a1, v_this - 7)),
+      pg_temp.v0009zx_try(format($q$select cma.roster_set_assignments(%L, null, %L, %L, '[]')$q$, v_wk, v_ana, v_wk)));
     perform set_config('app.user_id', v_a1::text, true);
-    v_b2 := v_b2 || format('; agent %s', pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[]')$q$, v_wk, v_a1, v_wk)));
+    v_b2 := v_b2 || format('; agent %s', pg_temp.v0009zx_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[]')$q$, v_wk, v_a1, v_wk)));
     perform set_config('app.user_id', v_mgr::text, true);
     v_j := cma.roster_set_assignments(v_wk, 'alpha', v_a1, v_wk, v_blocks);
     v_b2 := v_b2 || format('; written %s/%s/%s published %s', v_j->>'kept', v_j->>'ended', v_j->>'added', v_j->>'published');
     -- the table on its own, as the owner (no function in between)
     perform set_config('role', 'cma_owner', true);
     v_b2 := v_b2 || format('; table: overlap %s, off grid %s, BE %s, UK %s',
-      pg_temp.v0009zw_try(format($q$insert into cma.roster_assignment (tenant_id, roster_week_id, user_id, business_date, assignment_type_id, start_time, end_time)
+      pg_temp.v0009zx_try(format($q$insert into cma.roster_assignment (tenant_id, roster_week_id, user_id, business_date, assignment_type_id, start_time, end_time)
                                     select %L, e.roster_week_id, %L, %L, t.id, '10:00', '10:30' from cma.roster_entry e, cma.assignment_type t
                                     where e.tenant_id = %L and e.user_id = %L and e.business_date = %L and e.valid_to is null and t.tenant_id = %L and t.code = 'GO'$q$,
                                  v_t, v_a1, v_wk, v_t, v_a1, v_wk, v_t)),
-      pg_temp.v0009zw_try(format($q$insert into cma.roster_assignment (tenant_id, roster_week_id, user_id, business_date, assignment_type_id, start_time, end_time)
+      pg_temp.v0009zx_try(format($q$insert into cma.roster_assignment (tenant_id, roster_week_id, user_id, business_date, assignment_type_id, start_time, end_time)
                                     select %L, e.roster_week_id, %L, %L, t.id, '11:10', '11:30' from cma.roster_entry e, cma.assignment_type t
                                     where e.tenant_id = %L and e.user_id = %L and e.business_date = %L and e.valid_to is null and t.tenant_id = %L and t.code = 'GO'$q$,
                                  v_t, v_a1, v_wk, v_t, v_a1, v_wk, v_t)),
-      pg_temp.v0009zw_try(format($q$insert into cma.roster_assignment (tenant_id, roster_week_id, user_id, business_date, assignment_type_id, start_time, end_time, hours_market_code)
+      pg_temp.v0009zx_try(format($q$insert into cma.roster_assignment (tenant_id, roster_week_id, user_id, business_date, assignment_type_id, start_time, end_time, hours_market_code)
                                     select %L, e.roster_week_id, %L, %L, t.id, '11:00', '11:30', 'BE' from cma.roster_entry e, cma.assignment_type t
                                     where e.tenant_id = %L and e.user_id = %L and e.business_date = %L and e.valid_to is null and t.tenant_id = %L and t.code = 'GO'$q$,
                                  v_t, v_a1, v_wk, v_t, v_a1, v_wk, v_t)),
-      pg_temp.v0009zw_try(format($q$insert into cma.roster_assignment (tenant_id, roster_week_id, user_id, business_date, assignment_type_id, start_time, end_time, hours_market_code)
+      pg_temp.v0009zx_try(format($q$insert into cma.roster_assignment (tenant_id, roster_week_id, user_id, business_date, assignment_type_id, start_time, end_time, hours_market_code)
                                     select %L, e.roster_week_id, %L, %L, t.id, '11:00', '11:30', 'UK' from cma.roster_entry e, cma.assignment_type t
                                     where e.tenant_id = %L and e.user_id = %L and e.business_date = %L and e.valid_to is null and t.tenant_id = %L and t.code = 'GO'$q$,
                                  v_t, v_a1, v_wk, v_t, v_a1, v_wk, v_t)));
@@ -497,12 +497,12 @@ begin
     -- B9: settings
     perform set_config('app.user_id', v_adm::text, true);
     v_b9 := format('zone Mars/Base %s; slot 7 %s',
-      pg_temp.v0009zw_try($q$select cma.set_tenant_setting('roster.planner_timezone', 'Mars/Base')$q$),
-      pg_temp.v0009zw_try($q$select cma.set_tenant_setting('roster.slot_minutes', '7')$q$));
+      pg_temp.v0009zx_try($q$select cma.set_tenant_setting('roster.planner_timezone', 'Mars/Base')$q$),
+      pg_temp.v0009zx_try($q$select cma.set_tenant_setting('roster.slot_minutes', '7')$q$));
     perform cma.set_tenant_setting('roster.slot_minutes', '30');
     perform set_config('app.user_id', v_mgr::text, true);
     v_b9 := v_b9 || format('; 08:15 on a 30-minute grid %s',
-      pg_temp.v0009zw_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"GO","start":"08:15","end":"10:00"}]')$q$, v_wk, v_a2, v_wk)));
+      pg_temp.v0009zx_try(format($q$select cma.roster_set_assignments(%L, 'alpha', %L, %L, '[{"code":"GO","start":"08:15","end":"10:00"}]')$q$, v_wk, v_a2, v_wk)));
     perform set_config('app.user_id', v_adm::text, true);
     perform cma.set_tenant_setting('roster.slot_minutes', null);
     perform cma.set_tenant_setting('roster.planner_timezone', 'Africa/Lagos');   -- UTC + 1 all year: B10 holds on any run date
@@ -527,55 +527,55 @@ begin
     -- B12: a type in the plan keeps what it books; its name changes freely
     perform set_config('app.user_id', v_adm::text, true);
     v_b12 := format('GO books sales %s; GO renamed %s',
-      pg_temp.v0009zw_try($q$select cma.upsert_assignment_type('GO', 'General Ops', 'work', 'v_sales', false, 20)$q$),
-      pg_temp.v0009zw_try($q$select cma.upsert_assignment_type('GO', 'Operations, general', 'work', 'v_ops', false, 20)$q$));
+      pg_temp.v0009zx_try($q$select cma.upsert_assignment_type('GO', 'General Ops', 'work', 'v_sales', false, 20)$q$),
+      pg_temp.v0009zx_try($q$select cma.upsert_assignment_type('GO', 'Operations, general', 'work', 'v_ops', false, 20)$q$));
 
     -- B11: an agent reads none of the planner's functions
     perform set_config('app.user_id', v_a1::text, true);
     v_b11 := format('assignments %s; coverage %s; planned %s; cell %s; standard %s; save %s; apply %s; copy %s',
-      pg_temp.v0009zw_try(format($q$select count(*) from cma.roster_assignments(%L, 'alpha')$q$, v_wk)),
-      pg_temp.v0009zw_try(format($q$select count(*) from cma.roster_slot_coverage(%L, 'alpha')$q$, v_wk)),
-      pg_temp.v0009zw_try(format($q$select count(*) from cma.roster_planned_hours(%L, 'alpha')$q$, v_wk)),
-      pg_temp.v0009zw_try(format($q$select count(*) from cma.roster_cell(%L, 'alpha', %L, %L)$q$, v_wk, v_a1, v_wk)),
-      pg_temp.v0009zw_try($q$select count(*) from cma.standard_week()$q$),
-      pg_temp.v0009zw_try(format($q$select count(*) from cma.save_standard_week(%L, 'alpha')$q$, v_wk)),
-      pg_temp.v0009zw_try(format($q$select count(*) from cma.apply_standard_week(%L, 'alpha')$q$, v_wk)),
-      pg_temp.v0009zw_try(format($q$select count(*) from cma.roster_copy_week_report(%L, %L, 'alpha')$q$, v_wk, v_wk + 7)));
+      pg_temp.v0009zx_try(format($q$select count(*) from cma.roster_assignments(%L, 'alpha')$q$, v_wk)),
+      pg_temp.v0009zx_try(format($q$select count(*) from cma.roster_slot_coverage(%L, 'alpha')$q$, v_wk)),
+      pg_temp.v0009zx_try(format($q$select count(*) from cma.roster_planned_hours(%L, 'alpha')$q$, v_wk)),
+      pg_temp.v0009zx_try(format($q$select count(*) from cma.roster_cell(%L, 'alpha', %L, %L)$q$, v_wk, v_a1, v_wk)),
+      pg_temp.v0009zx_try($q$select count(*) from cma.standard_week()$q$),
+      pg_temp.v0009zx_try(format($q$select count(*) from cma.save_standard_week(%L, 'alpha')$q$, v_wk)),
+      pg_temp.v0009zx_try(format($q$select count(*) from cma.apply_standard_week(%L, 'alpha')$q$, v_wk)),
+      pg_temp.v0009zx_try(format($q$select count(*) from cma.roster_copy_week_report(%L, %L, 'alpha')$q$, v_wk, v_wk + 7)));
 
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
     when sqlstate 'CMAOK' then null;
     when others then v_err := sqlstate || ': ' || left(sqlerrm, 300);
       perform set_config('role', 'cma_owner', true);
-      insert into pg_temp.verify_0009zw values (10, 'B the throwaway tenant''s checks ran to their end', 'FAIL', v_err);
+      insert into pg_temp.verify_0009zx values (10, 'B the throwaway tenant''s checks ran to their end', 'FAIL', v_err);
   end;
   perform set_config('role', 'cma_owner', true);
   perform set_config('app.tenant_id', '', true);
   perform set_config('app.user_id', '', true);
 
-  perform pg_temp.v0009zw_row(11, 'B1', 'the type catalog: the refusals, the agent reads it with its status and work area',
+  perform pg_temp.v0009zx_row(11, 'B1', 'the type catalog: the refusals, the agent reads it with its status and work area',
     v_b1, 'lower CMA04; work on lunch CMA04; extra with a status CMA04; manager CMA06; agent reads SL:work:v_sales:sales:false:active, GO:work:v_ops:operations:false:active, LB:pause:lunch:-:false:active, OLD:work:v_ops:operations:false:inactive, X:work:-:-:true:active');
-  perform pg_temp.v0009zw_row(12, 'B2', 'roster_set_assignments'' refusals, the table''s own, and the first write',
+  perform pg_temp.v0009zx_row(12, 'B2', 'roster_set_assignments'' refusals, the table''s own, and the first write',
     v_b2, 'overlap CMA04; off grid CMA04; outside CMA04; no shift CMA04; BE CMA04; UK CMA02; unknown type CMA02; retired type CMA04; past CMA04; analyst CMA04; agent CMA06; written 0/0/3 published false; table: overlap 23P01, off grid CMA04, BE CMA04, UK CMA04');
-  perform pg_temp.v0009zw_row(13, 'B3', 'versioning: the equal blocks kept, the changed one ended with its successor',
+  perform pg_temp.v0009zx_row(13, 'B3', 'versioning: the equal blocks kept, the changed one ended with its successor',
     v_b3, 'kept 2 ended 1 added 1; rows 4, current 3; the ended GO 13:00-17:00 superseded by GO 13:00-16:00; current SL 09:00-11:00 GB, LB 12:00-12:30, GO 13:00-16:00');
-  perform pg_temp.v0009zw_row(14, 'B4', 'the published read: nothing before, the publication while a change waits, then the change',
+  perform pg_temp.v0009zx_row(14, 'B4', 'the published read: nothing before, the publication while a change waits, then the change',
     v_b4, 'before 0; future change published false; changed since publish t; planner SL 09:00-11:00, LB 12:00-12:30, GO 13:00-15:00; agent SL 09:00-11:00 work sales GB false Europe/London, LB 12:00-12:30 pause - NL true Europe/Amsterdam, GO 13:00-16:00 work operations NL true Europe/Amsterdam; after the second publication GO 13:00-15:00');
-  perform pg_temp.v0009zw_row(15, 'B5', 'a shortened shift ends the blocks outside it (reported), an absence ends the rest',
+  perform pg_temp.v0009zx_row(15, 'B5', 'a shortened shift ends the blocks outside it (reported), an absence ends the rest',
     v_b5, 'shortened: cell shift 09:00-12:00, blocks SL, ended 2; without a successor 2; absence: blocks 0');
-  perform pg_temp.v0009zw_row(16, 'B6', 'D8: today publishes at once; another change waiting asks first and writes nothing; confirmed it publishes both',
+  perform pg_temp.v0009zx_row(16, 'B6', 'D8: today publishes at once; another change waiting asks first and writes nothing; confirmed it publishes both',
     v_b6, 'a2 today: published true version 2; with another change waiting: CMA03 publish_others=1; a2 still 10:00-11:00; confirmed: published true version 3; a1 sees 23:00');
-  perform pg_temp.v0009zw_row(17, 'B7', 'Copy week: the blocks with the shift, an absence only when it carries over, the report',
+  perform pg_temp.v0009zx_row(17, 'B7', 'Copy week: the blocks with the shift, an absence only when it carries over, the report',
     v_b7, 'a1 0 skipped absence_not_carried 0; a1 1 done 0; a1 2 skipped absence_not_carried 0; a2 0 done 3 | target GO 08:00-12:00, LB 12:00-13:00, SL 13:00-16:00 GB | entries 0 shift, 1 absence off | copy_week again 2');
-  perform pg_temp.v0009zw_row(18, 'B8', 'the Standard week: save''s report, apply fills empty person-dates only, a second save keeps the replaced rows',
+  perform pg_temp.v0009zx_row(18, 'B8', 'the Standard week: save''s report, apply fills empty person-dates only, a second save keeps the replaced rows',
     v_b8, 'a1 1 skipped absence_not_carried 0; a1 2 done 0; a1 3 skipped absence_not_carried 0; a2 1 done 3 | standard a1 2 absence off 0, a2 1 shift 08:00-16:00 3 | apply a1 1 done 0; a2 0 skipped not_empty 0 | a2 kept 10:00-14:00 | again skipped not_empty, skipped not_empty | after a second save: current 2, ended 2, ended blocks 3');
-  perform pg_temp.v0009zw_row(19, 'B9', 'the settings refuse a name that is no zone and a grid of 7; a 30-minute grid refuses 08:15',
+  perform pg_temp.v0009zx_row(19, 'B9', 'the settings refuse a name that is no zone and a grid of 7; a 30-minute grid refuses 08:15',
     v_b9, 'zone Mars/Base CMA04; slot 7 CMA04; 08:15 on a 30-minute grid CMA04; planner zone Africa/Lagos');
-  perform pg_temp.v0009zw_row(20, 'B10', 'D12: coverage per slot of the planner zone''s day and the planned minutes per type and market',
+  perform pg_temp.v0009zx_row(20, 'B10', 'D12: coverage per slot of the planner zone''s day and the planned minutes per type and market',
     v_b10, '09:00 w1 GO/-=1, 10:00 w2 GO/-=1, 10:00 w2 SL/NL=1, 13:00 w1 LB/-=1, 13:00 w1 SL/NL=1, 14:00 w2 SL/GB=1, 14:00 w2 X/NL=1, 17:45 w1 SL/GB=1 | slots 36, first 09:00, last 17:45 | planned a1 SL/GB=180, a1 SL/NL=240, a1 X/NL=60, a2 GO/-=240, a2 LB/-=60, a2 SL/GB=180');
-  perform pg_temp.v0009zw_row(22, 'B12', 'a type in the plan keeps its kind, status and extra flag; its name is free',
+  perform pg_temp.v0009zx_row(22, 'B12', 'a type in the plan keeps its kind, status and extra flag; its name is free',
     v_b12, 'GO books sales CMA03; GO renamed accepted');
-  perform pg_temp.v0009zw_row(21, 'B11', 'an agent reads none of the planner''s functions',
+  perform pg_temp.v0009zx_row(21, 'B11', 'an agent reads none of the planner''s functions',
     v_b11, 'assignments CMA06; coverage CMA06; planned CMA06; cell CMA06; standard CMA06; save CMA06; apply CMA06; copy CMA06');
 end
 $$;
@@ -594,9 +594,9 @@ declare
   tk        text;
   v_r1 text; v_r2 text; v_r3 text;
   v_n1 integer; v_n2 integer; v_n3 integer;
-  v_o1 integer := case when pg_temp.v0009zw_p('R1') then 1 else 0 end;
-  v_o2 integer := case when pg_temp.v0009zw_p('R2') then 1 else 0 end;
-  v_o3 integer := case when pg_temp.v0009zw_p('R3') then 1 else 0 end;
+  v_o1 integer := case when pg_temp.v0009zx_p('R1') then 1 else 0 end;
+  v_o2 integer := case when pg_temp.v0009zx_p('R2') then 1 else 0 end;
+  v_o3 integer := case when pg_temp.v0009zx_p('R3') then 1 else 0 end;
   v_any boolean := false;
   v_err text;
 begin
@@ -624,8 +624,8 @@ begin
                         from cma.roster_week(wk, tk) n)
                        except all
                        (select o.week_id, o.team_key, o.team_name, o.week_start, o.status, o.version, o.published_at, o.published_by_name, o.entry_count
-                        from pg_temp.v0009zw_week_0005(wk, tk) o offset v_o1))
-               or exists (select 1 from cma.roster_week(wk, tk) n, pg_temp.v0009zw_week_0005(wk, tk) o
+                        from pg_temp.v0009zx_week_0005(wk, tk) o offset v_o1))
+               or exists (select 1 from cma.roster_week(wk, tk) n, pg_temp.v0009zx_week_0005(wk, tk) o
                           where n.changed_since_publish <> o.changed_since_publish
                             and not (n.changed_since_publish and exists (
                               select 1 from cma.roster_assignment a join cma.roster_week w on w.tenant_id = a.tenant_id and w.id = a.roster_week_id
@@ -654,8 +654,8 @@ begin
         v_r2 := case when exists ((select m.business_date, m.is_published, m.kind, m.start_time, m.end_time, m.absence_key, m.absence_name, m.note, m.team_name, m.published_at
                                    from cma.my_roster(v_this, v_this + 13) m)
                                   except all
-                                  (select * from pg_temp.v0009zw_my_roster_0005(v_this, v_this + 13) offset v_o2))
-                       or exists ((select * from pg_temp.v0009zw_my_roster_0005(v_this, v_this + 13) offset v_o2)
+                                  (select * from pg_temp.v0009zx_my_roster_0005(v_this, v_this + 13) offset v_o2))
+                       or exists ((select * from pg_temp.v0009zx_my_roster_0005(v_this, v_this + 13) offset v_o2)
                                   except all
                                   (select m.business_date, m.is_published, m.kind, m.start_time, m.end_time, m.absence_key, m.absence_name, m.note, m.team_name, m.published_at
                                    from cma.my_roster(v_this, v_this + 13) m))
@@ -668,50 +668,50 @@ begin
     perform set_config('app.tenant_id', '', true);
     perform set_config('app.user_id', '', true);
     if v_err is not null then
-      insert into pg_temp.verify_0009zw values (30, 'R1 to R3 ' || t.slug || ': the checks ran to their end', 'FAIL', v_err);
+      insert into pg_temp.verify_0009zx values (30, 'R1 to R3 ' || t.slug || ': the checks ran to their end', 'FAIL', v_err);
       continue;
     end if;
     if v_planner is null then
-      insert into pg_temp.verify_0009zw values (31, 'R1 and R3 ' || t.slug,
-        case when pg_temp.v0009zw_p('R1') or pg_temp.v0009zw_p('R3') then 'FAIL' else 'skip' end, 'no active person holds roster.manage');
+      insert into pg_temp.verify_0009zx values (31, 'R1 and R3 ' || t.slug,
+        case when pg_temp.v0009zx_p('R1') or pg_temp.v0009zx_p('R3') then 'FAIL' else 'skip' end, 'no active person holds roster.manage');
     else
-      insert into pg_temp.verify_0009zw values (31, 'R1 ' || t.slug || ': roster_week = 0005''s, but where a block changed after the publication',
+      insert into pg_temp.verify_0009zx values (31, 'R1 ' || t.slug || ': roster_week = 0005''s, but where a block changed after the publication',
         case when btrim(v_r1) <> '' or (v_o1 = 1 and v_n1 = 0) then 'FAIL' else 'PASS' end,
         format('weeks compared %s; differing %s', v_n1, coalesce(nullif(btrim(v_r1), ''), 'none')));
-      insert into pg_temp.verify_0009zw values (33, 'R3 ' || t.slug || ': absence_types'' earlier columns = the table''s',
+      insert into pg_temp.verify_0009zx values (33, 'R3 ' || t.slug || ': absence_types'' earlier columns = the table''s',
         case when v_r3 <> 'equal' or (v_o3 = 1 and v_n3 = 0) then 'FAIL' else 'PASS' end, format('rows %s; %s', v_n3, v_r3));
     end if;
     if v_viewer is null then
-      insert into pg_temp.verify_0009zw values (32, 'R2 ' || t.slug,
-        case when pg_temp.v0009zw_p('R2') then 'FAIL' else 'skip' end, 'no active person holds roster.view');
+      insert into pg_temp.verify_0009zx values (32, 'R2 ' || t.slug,
+        case when pg_temp.v0009zx_p('R2') then 'FAIL' else 'skip' end, 'no active person holds roster.view');
     else
-      insert into pg_temp.verify_0009zw values (32, 'R2 ' || t.slug || ': my_roster''s earlier columns = 0005''s (this week and next)',
+      insert into pg_temp.verify_0009zx values (32, 'R2 ' || t.slug || ': my_roster''s earlier columns = 0005''s (this week and next)',
         case when v_r2 <> 'equal' or (v_o2 = 1 and v_n2 = 0) then 'FAIL' else 'PASS' end, format('rows %s; %s', v_n2, v_r2));
     end if;
   end loop;
   if not v_any then
-    insert into pg_temp.verify_0009zw values (30, 'R1 to R3 per tenant',
+    insert into pg_temp.verify_0009zx values (30, 'R1 to R3 per tenant',
       case when current_setting('verify.provoke') <> 'false' then 'FAIL' else 'skip' end, 'no active tenant');
   end if;
 end
 $$;
 
-drop function if exists pg_temp.v0009zw_my_roster_0005(date, date);
-drop function if exists pg_temp.v0009zw_week_0005(date, text);
-drop function if exists pg_temp.v0009zw_try(text);
-drop function if exists pg_temp.v0009zw_row(integer, text, text, text, text);
-drop function if exists pg_temp.v0009zw_p(text);
+drop function if exists pg_temp.v0009zx_my_roster_0005(date, date);
+drop function if exists pg_temp.v0009zx_week_0005(date, text);
+drop function if exists pg_temp.v0009zx_try(text);
+drop function if exists pg_temp.v0009zx_row(integer, text, text, text, text);
+drop function if exists pg_temp.v0009zx_p(text);
 
 select check_name, result, detail
-from (select ord, check_name, result, detail from pg_temp.verify_0009zw
+from (select ord, check_name, result, detail from pg_temp.verify_0009zx
       union all
       select 1000000, 'verdict',
              case when current_setting('verify.provoke') <> 'false' then 'PROVOKED, NOT A PASS'
-                  when exists (select 1 from pg_temp.verify_0009zw where result = 'FAIL') then 'FAIL'
-                  when not exists (select 1 from pg_temp.verify_0009zw where result = 'PASS') then 'FAIL'
+                  when exists (select 1 from pg_temp.verify_0009zx where result = 'FAIL') then 'FAIL'
+                  when not exists (select 1 from pg_temp.verify_0009zx where result = 'PASS') then 'FAIL'
                   else 'PASS' end,
-             format('247_verify_roster_assignments: %s PASS, %s FAIL, %s skip', (select count(*) from pg_temp.verify_0009zw where result = 'PASS'),
-                    (select count(*) from pg_temp.verify_0009zw where result = 'FAIL'), (select count(*) from pg_temp.verify_0009zw where result = 'skip'))) x
+             format('249_verify_roster_assignments: %s PASS, %s FAIL, %s skip', (select count(*) from pg_temp.verify_0009zx where result = 'PASS'),
+                    (select count(*) from pg_temp.verify_0009zx where result = 'FAIL'), (select count(*) from pg_temp.verify_0009zx where result = 'skip'))) x
 order by ord, check_name collate "C";
-drop table if exists pg_temp.verify_0009zw;
+drop table if exists pg_temp.verify_0009zx;
 reset role;

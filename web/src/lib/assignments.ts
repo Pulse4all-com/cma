@@ -1,5 +1,5 @@
 /**
- * Assignments in the roster (addition 0009zw, brief A; Decision log, 25 November 2026, D1 to D13): the planner's typing
+ * Assignments in the roster (addition 0009zx, brief A; Decision log, 25 November 2026, D1 to D13): the planner's typing
  * parser ("CODE" or "CODE-MARKET"), painting blocks over slots, the colours a block takes from what its type books, the
  * slot grid, the conversion between a person's zone and the planner zone, the planned figures (D12) and the plan check.
  * Pure and without runtime imports beyond the zone helpers of lib/corrections, so verify/roster.mjs tests it without a

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 type Params = { params: Promise<{ weekStart: string }> };
 
 /**
- * D12 (addition 0009zw): the planned minutes per person, date, assignment type and hours market of the week's current
+ * D12 (addition 0009zx): the planned minutes per person, date, assignment type and hours market of the week's current
  * blocks, ?team=<key> or none (cma.roster_planned_hours). A block without a market counts under the person's Default
  * market. Needs roster.manage
  */

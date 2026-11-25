@@ -361,7 +361,7 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'roster week', 'roster coverage', $q$select * from cma.roster_coverage('{monday}', null)$q$, 'agent', array['roster.manage']),
 ('a', 'roster week', 'roster weeks around', $q$select * from cma.roster_weeks(null, date '{monday}' - 84, date '{monday}' + 90)$q$, 'agent', array['roster.manage']),
 ('a', 'roster week', 'absence types', $q$select * from cma.absence_types()$q$, 'agent', array['roster.manage']),
--- Assignments in the roster (addition 0009zw, brief A): the week's blocks and the planner's settings and catalogs in the
+-- Assignments in the roster (addition 0009zx, brief A): the week's blocks and the planner's settings and catalogs in the
 -- week's transaction (the Week and Day views), the person-date after a cell write, and the figures and Standard week the
 -- API serves; the type catalog as Configuration → Roster reads it
 ('a', 'roster week', 'roster assignments', $q$select * from cma.roster_assignments('{monday}', null)$q$, 'agent', array['roster.manage']),

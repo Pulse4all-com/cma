@@ -8,7 +8,7 @@
 -- 0008zi) its asset register catalogs, (after 0008zn) its Flash settings, (after 0008zp) whether its people may clock in
 -- again on the same day, (after 0008zt) its customer segments and the contact property they come from, the statuses
 -- whose subscriptions hold devices and what each status means, (after 0008zv) which organisation is a contact center,
--- (after 0009zv) whether its forgotten days close at the office hours of the person's Default market and (after 0009zw)
+-- (after 0009zv) whether its forgotten days close at the office hours of the person's Default market and (after 0009zx)
 -- its assignment types, the absences that carry over and the roster planner's settings.
 -- Another customer gets its own seed file with its own values; the migration stays untouched.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
@@ -723,7 +723,7 @@ begin
 end
 $$;
 
--- Assignments in the roster (after addition 0009zw; Martin, 25 November 2026, brief A, D3, D6, D10): Pulse4all
+-- Assignments in the roster (after addition 0009zx; Martin, 25 November 2026, brief A, D3, D6, D10): Pulse4all
 -- Subscriptions' assignment types by the status each books (by status key, never an id): SL Sales books
 -- available_sales; MC, CC, GO, PR, RET, OPC and MEX book available_operations; SB Short break books break and LB Lunch
 -- break books lunch (pauses); X Extra hours books no status (it counts under the status the agent is on, D4). The hours
@@ -733,14 +733,14 @@ $$;
 -- expects a lunch block (LB) from 360 minutes of shift (the grid and the minutes are the catalog defaults, set here so the
 -- tenant's values are its own), in Europe/Madrid as Arno's sheet. A rerun adds what is missing and keeps what was changed since on the
 -- configuration screen (on conflict do nothing); a type whose status the tenant lacks is left out with a notice. A
--- database without the addition says so; rerun this seed after 246_roster_assignments.sql.
+-- database without the addition says so; rerun this seed after 248_roster_assignments.sql.
 do $$
 declare
   v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
   v_missing text;
 begin
   if to_regclass('cma.assignment_type') is null then
-    raise notice 'Assignments in the roster do not exist yet (addition 0009zw): rerun this seed after 246_roster_assignments.sql';
+    raise notice 'Assignments in the roster do not exist yet (addition 0009zx): rerun this seed after 248_roster_assignments.sql';
     return;
   end if;
   select string_agg(distinct v.status_key, ', ') into v_missing

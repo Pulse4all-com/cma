@@ -45,7 +45,7 @@ const BLOCK_START_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const BLOCK_END_RE = /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/;
 
 /**
- * A person-date's blocks as the planner sends them (addition 0009zw): [{ code, start, end, hoursMarket?, note? }], at most 96;
+ * A person-date's blocks as the planner sends them (addition 0009zx): [{ code, start, end, hoursMarket?, note? }], at most 96;
  * times hh:mm in the person's zone (an end of 24:00 allowed), the hours market's code or null (own market). The
  * grid, the shift, overlap and the market's kind are the database's answers (400 or 404)
  */

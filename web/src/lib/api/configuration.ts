@@ -69,7 +69,7 @@ export function checkAbsenceInput(b: Record<string, unknown>): AbsenceTypeInput 
   return { key: checkKey(b.key, /^[a-z0-9_]+$/), name: text(b, "name", 40), isPaid: flag(b, "isPaid"), sortOrder: order(b) };
 }
 
-/** An assignment type (addition 0009zw, D2): { code, name, kind, statusKey, isExtra, sortOrder, active }; an extra type books no status */
+/** An assignment type (addition 0009zx, D2): { code, name, kind, statusKey, isExtra, sortOrder, active }; an extra type books no status */
 export function checkAssignmentTypeInput(b: Record<string, unknown>): AssignmentTypeInput {
   if (typeof b.code !== "string" || !/^[A-Z0-9]{1,6}$/.test(b.code)) throw new ApiError(400, "invalid_code", "code must be 1 to 6 of A-Z and 0-9");
   if (b.kind !== "work" && b.kind !== "pause") throw new ApiError(400, "invalid_kind", "kind must be work or pause");

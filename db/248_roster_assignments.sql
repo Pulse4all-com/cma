@@ -1,15 +1,17 @@
 -- =============================================================================================
--- 246_roster_assignments.sql: addition 0009zw, Assignments in the roster: the planner side (brief A)
+-- 248_roster_assignments.sql: addition 0009zx, Assignments in the roster: the planner side (brief A)
 -- =============================================================================================
 -- Universal: no customer, tenant, status, market or vendor specifics. The assignment types, the absences that carry over
 -- and the planner settings of Pulse4all Subscriptions are seed data in 02_seed_pulse4all.sql, never code. Runs unchanged in
 -- every database, after 244_auto_close_office_hours.sql (0009zv); it refuses to run before 0009zv is recorded. The brief
--- named addition 0009zt with 240 and 241; #321 took those, so this is the next free addition and number pair (0009zw,
--- 246/247). Rerunnable, forward-only, in one transaction with a lock timeout.
--- Run as your own IAM login: dev first, then 247_verify_roster_assignments.sql there (normal, then provoked), then the
+-- named addition 0009zt with 240 and 241; #321 took those, and #331 (Calls per tag) opened on 0009zw with 246/247 while
+-- this was built, so this is 0009zx with 248/249, after #331's stack (Decision log, 25 Nov 2026: two PRs on one number are
+-- renumbered in merge order). It needs nothing of #331's 0009zw and #331 needs nothing of it: the guard asks for 0009zv only,
+-- so either may run first. Rerunnable, forward-only, in one transaction with a lock timeout.
+-- Run as your own IAM login: dev first, then 249_verify_roster_assignments.sql there (normal, then provoked), then the
 -- verifies that read what this changes (below), then 02_seed_pulse4all.sql again (Pulse4all's assignment types, its
 -- absences that carry over and its planner settings), then 131_time_all.sql part a (the roster rows, new and old); then
--- prod, before the merge: this script, 247 and the same verifies, then 02.
+-- prod, before the merge: this script, 249 and the same verifies, then 02.
 --
 -- Needs the extension btree_gist (the overlap rule of D6 is an exclusion constraint over a person, a date and a time range):
 -- section 0 creates it under your own login when the database lacks it (Cloud SQL lets cloudsqlsuperuser create it; it is
@@ -139,12 +141,12 @@ end
 $$;
 
 set role cma_owner;
-select set_config('app.actor_label', 'migration:0009zw', true);
+select set_config('app.actor_label', 'migration:0009zx', true);
 
 do $$
 begin
   if not exists (select 1 from cma.schema_migration where version = '0009zv') then
-    raise exception 'addition 0009zv (244_auto_close_office_hours.sql) must run before 0009zw';
+    raise exception 'addition 0009zv (244_auto_close_office_hours.sql) must run before 0009zx';
   end if;
 end
 $$;
@@ -1706,7 +1708,7 @@ create or replace view cma_read.standard_week_assignment as
 -- 14. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0009zw', 'Assignments in the roster, the planner side (brief A): assignment types (tenant configuration, D2), versioned roster assignments inside a shift on the slot grid without overlap (D1, D6, D7), today''s change publishing the week (D8), the Standard week with save and apply (D9), absence types that carry over with Copy week''s report (D10), the planned figures per slot and per person (D12), the published blocks on My schedule and roster_today, the settings roster.slot_minutes, roster.lunch_after_minutes, roster.lunch_type_code and roster.planner_timezone')
+values ('0009zx', 'Assignments in the roster, the planner side (brief A): assignment types (tenant configuration, D2), versioned roster assignments inside a shift on the slot grid without overlap (D1, D6, D7), today''s change publishing the week (D8), the Standard week with save and apply (D9), absence types that carry over with Copy week''s report (D10), the planned figures per slot and per person (D12), the published blocks on My schedule and roster_today, the settings roster.slot_minutes, roster.lunch_after_minutes, roster.lunch_type_code and roster.planner_timezone')
 on conflict (version) do nothing;
 
 commit;

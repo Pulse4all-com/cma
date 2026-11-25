@@ -962,7 +962,7 @@ function toReport(r: RosterReportDbRow): RosterReportRow {
 const toBlock = (b: BlockJson): AssignmentBlock => ({ assignmentId: b.assignmentId, code: b.code, start: b.start, end: b.end, hoursMarket: b.hoursMarket ?? null, note: b.note ?? null });
 
 /**
- * The planner's settings and catalogs in one statement (addition 0009zw): the four roster settings, the planner zone, the
+ * The planner's settings and catalogs in one statement (addition 0009zx): the four roster settings, the planner zone, the
  * assignment types and the hours markets, so the week's page gains one statement, not a transaction
  */
 async function readPlannerContext(q: Querier): Promise<RosterPlannerContext> {
@@ -2554,7 +2554,7 @@ export const postgresData: CmaData = {
       const note = cell.kind === "clear" ? null : cell.note ?? null;
       await q.query(`select 1 from cma.roster_set_entry($1::date, $2, $3::uuid, $4::date, $5, $6::time, $7::time, $8, $9)`,
         [weekStart, teamKey, userId, date, kind, start, end, absence, note]);
-      // The cell as it stands, with its blocks and the blocks this write ended with the shift (cma.roster_cell, 0009zw)
+      // The cell as it stands, with its blocks and the blocks this write ended with the shift (cma.roster_cell, 0009zx)
       const r = await q.query<Omit<RosterEntryDbRow, "entry_id" | "user_id" | "business_date"> & { entry_id: string | null; assignments: BlockJson[]; ended_assignments: number }>(
         `select * from cma.roster_cell($1::date, $2, $3::uuid, $4::date)`, [weekStart, teamKey, userId, date],
       );

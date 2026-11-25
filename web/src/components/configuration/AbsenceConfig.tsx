@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Absences and coverage (on Configuration → Roster since addition 0009zw): the absence types (add, edit, retire, reactivate, Carries over) and the coverage
+ * Absences and coverage (on Configuration → Roster since addition 0009zx): the absence types (add, edit, retire, reactivate, Carries over) and the coverage
  * targets as a small grid per team: one row per work type, one cell per weekday, saved at once
  * when a cell is left or Enter is pressed (0 or empty clears). Keyboard: A adds an absence type,
  * T picks the team of the grid.
@@ -84,7 +84,7 @@ export function AbsenceConfig({ absences, teams, skills, targets, copy }: { abse
                 <td className={`${td} text-small`}>{a.key}</td>
                 <td className={td}>{a.isPaid ? t.paid : "—"}</td>
                 <td className={td}>
-                  {/* D10 (addition 0009zw): whether Copy week and Save as standard week take an absence of this type */}
+                  {/* D10 (addition 0009zx): whether Copy week and Save as standard week take an absence of this type */}
                   <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${copy.configAssignments.carriesOver}: ${a.name}`}
                     title={copy.configAssignments.carriesOverHint} data-testid={`carries-over-${a.key}`}
                     checked={flag(`carries:${a.key}`, a.carriesOver)}

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The planner's Day view (addition 0009zw, brief A; Arno's layout): one row per person on the roster with the Default
+ * The planner's Day view (addition 0009zx, brief A; Arno's layout): one row per person on the roster with the Default
  * market and the shift, the slots of the tenant's grid (roster.slot_minutes) from the earliest shift start to the latest
  * end of the day as the time axis, in the planner zone (roster.planner_timezone), the assignments as bars (D13).
  *

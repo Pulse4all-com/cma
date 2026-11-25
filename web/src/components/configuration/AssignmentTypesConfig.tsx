@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Assignment types (Configuration → Roster, addition 0009zw, D2): the catalog a planner paints with (code, name, kind, the
+ * Assignment types (Configuration → Roster, addition 0009zx, D2): the catalog a planner paints with (code, name, kind, the
  * status it books, extra hours, order, active) and the planner's settings (the grid, the lunch check, the planner zone).
  * A type's colour and Work area follow from the status it books (D13), so there is no colour to choose. Keyboard: I adds
  * an assignment type.

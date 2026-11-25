@@ -1572,7 +1572,7 @@ function assertExport(me: Principal): void {
 
 /** Fixture settings shaped like cma.tenant_settings: the fictional tenant uses Dutch spreadsheet conventions */
 const MOCK_SETTINGS: TenantSetting[] = [
-  // the roster planner (addition 0009zw): the grid and the plan check at their defaults, the lunch type and Arno's zone
+  // the roster planner (addition 0009zx): the grid and the plan check at their defaults, the lunch type and Arno's zone
   { key: "roster.slot_minutes", value: "15", isDefault: true },
   { key: "roster.lunch_after_minutes", value: "360", isDefault: true },
   { key: "roster.lunch_type_code", value: "LB", isDefault: false },
@@ -2258,7 +2258,7 @@ type MockRosterWeek = {
   cells: Map<string, RosterEntry>;
   /** The cells as of the last publish; null for a draft */
   published: Map<string, RosterEntry> | null;
-  /** `${userId}:${date}` -> current blocks (addition 0009zw), and as of the last publish */
+  /** `${userId}:${date}` -> current blocks (addition 0009zx), and as of the last publish */
   blocks: Map<string, AssignmentBlock[]>;
   publishedBlocks: Map<string, AssignmentBlock[]> | null;
   /** Person-dates written since the last publish (D8's count of other changes) */
@@ -2274,7 +2274,7 @@ const MOCK_ABSENCES: AbsenceType[] = [
   { key: "other", name: "Other", isPaid: false, sortOrder: 50, isActive: true, carriesOver: false },
 ];
 
-/** Fixture assignment types (addition 0009zw) booking the fixture statuses; the screens never branch on a code */
+/** Fixture assignment types (addition 0009zx) booking the fixture statuses; the screens never branch on a code */
 const MOCK_ASSIGNMENT_TYPES: AssignmentType[] = [
   { code: "SL", name: "Sales", sortOrder: 10, isActive: true, kind: "work", statusKey: "available", statusName: "Available", workArea: "sales", isExtra: false, statusIsProductive: true },
   { code: "MC", name: "Missed calls – call back", sortOrder: 20, isActive: true, kind: "work", statusKey: "back_office", statusName: "Back office", workArea: "operations", isExtra: false, statusIsProductive: true },
@@ -2391,7 +2391,7 @@ function seedRosters(): Map<string, MockRosterWeek> {
     w.publishedBlocks = new Map([...w.blocks].map(([k, b]) => [k, b.map((x) => ({ ...x }))]));
     w.changed = new Set();
   };
-  // Arno's day in blocks (addition 0009zw): sales in the morning, lunch, operations in the afternoon, one block under GB
+  // Arno's day in blocks (addition 0009zx): sales in the morning, lunch, operations in the afternoon, one block under GB
   const blocks = (w: MockRosterWeek, userId: string, date: DateKey, list: [string, string, string, string | null][]) =>
     w.blocks.set(`${userId}:${date}`, list.map(([code, start, end, market]) => ({ assignmentId: crypto.randomUUID(), code, start, end, hoursMarket: market, note: null })));
   const nl = rosterWeekOf("nl", week);
@@ -2446,7 +2446,7 @@ function rosterPeopleOf(teamKey: string | null): DirectoryPerson[] {
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
-/** The Standard week of the mock tenant (addition 0009zw, D9): `${userId}:${isoWeekday}` -> the day */
+/** The Standard week of the mock tenant (addition 0009zx, D9): `${userId}:${isoWeekday}` -> the day */
 function mockStandardWeek(): Map<string, StandardWeekDay> {
   const g2 = globalThis as unknown as { __cmaMockStandardWeek?: Map<string, StandardWeekDay> };
   return (g2.__cmaMockStandardWeek ??= new Map());
@@ -4250,7 +4250,7 @@ export const mockData: CmaData = {
     if (entry) w.cells.set(k, entry);
     else w.cells.delete(k);
     w.changed.add(k);
-    // The blocks outside the new shift end with it (addition 0009zw): all of them for a clear or an absence
+    // The blocks outside the new shift end with it (addition 0009zx): all of them for a clear or an absence
     const before = w.blocks.get(k) ?? [];
     const kept = cell.kind === "shift" ? before.filter((b) => b.start >= cell.start && b.end <= cell.end) : [];
     w.blocks.set(k, kept);

@@ -6,7 +6,7 @@ import { ConfigurationPage, mayConfigure } from "../gate";
 import { pickCopy } from "@/lib/copy";
 
 /**
- * Roster (Configuration, migration 0005a; named Roster since addition 0009zw, the address kept): the assignment types and
+ * Roster (Configuration, migration 0005a; named Roster since addition 0009zx, the address kept): the assignment types and
  * the planner's settings (brief A, D2, D6), the absence types with Carries over (D10) and the coverage targets per team
  */
 export default async function AbsencePage() {
@@ -14,7 +14,7 @@ export default async function AbsencePage() {
   if (!r.ok) return r.page;
   const { me, copy } = r;
   const t = copy.configAbsences;
-  // The roster's catalogs and settings in one transaction (addition 0009zw): the page gains one transaction, not three
+  // The roster's catalogs and settings in one transaction (addition 0009zx): the page gains one transaction, not three
   const [absences, teams, skills, targets, roster] = mayConfigure(me)
     ? await Promise.all([
       data().listAbsenceTypes(me), data().listTeams(me), data().listSkills(me), data().listCoverageTargets(me), data().getRosterConfiguration(me),

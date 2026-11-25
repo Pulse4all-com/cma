@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 type Params = { params: Promise<{ weekStart: string }> };
 
 /**
- * The week's current blocks (addition 0009zw), ?team=<key> or none for the whole tenant: the planner's week answer's
+ * The week's current blocks (addition 0009zx), ?team=<key> or none for the whole tenant: the planner's week answer's
  * assignments alone. Needs roster.manage (403 from the database)
  */
 export async function GET(request: NextRequest, { params }: Params) {

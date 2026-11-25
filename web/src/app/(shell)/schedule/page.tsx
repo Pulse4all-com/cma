@@ -16,7 +16,7 @@ import type { PublishedAssignment } from "@/lib/data";
  * read only, in their own zone; a week that is not published yet says so. Shown to people
  * holding roster.view; the database answers only the caller's own rows (cma.my_roster, CMA06
  * without the permission). Never a colleague's schedule: that is the planner's. Since addition
- * 0009zw each day shows its published assignments as the planner's bar (D13) with the blocks and
+ * 0009zx each day shows its published assignments as the planner's bar (D13) with the blocks and
  * times listed under it, in the person's zone; a block whose hours market lies in another zone that
  * day (GB for Spain) shows the market's own time after it in brackets.
  */
@@ -108,7 +108,7 @@ export default async function MySchedulePage({ searchParams }: PageProps<"/sched
 }
 
 /**
- * A day's published blocks (addition 0009zw): the bar across the shift in the planner's colours (D13), then each block
+ * A day's published blocks (addition 0009zx): the bar across the shift in the planner's colours (D13), then each block
  * with its times, code and name; the code is always text, so colour never carries meaning alone. A block under an hours
  * market whose zone differs from the person's that day shows the market's time in brackets (GB for an agent in Spain)
  */
