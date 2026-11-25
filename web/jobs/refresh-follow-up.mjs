@@ -30,6 +30,8 @@
  */
 import pg from "pg";
 import { codeOf, hearIdleErrors, isMain, retryOnce, withClient } from "./lib/connection.mjs";
+import { sessionPoolOptions } from "./lib/session-options.mjs";
+import { gateOf, gatedCounts, gatedSeverity } from "./lib/gate.mjs";
 
 const LOGIN_SYSTEM = "scheduler";   // the login id of each tenant's system user, as 0005a writes it
 const LOGIN_ID = "scheduler";
@@ -40,7 +42,7 @@ const STATEMENT_TIMEOUT_MS = 55_000;
 
 async function openPool() {
   const database = process.env.CMA_DB_NAME ?? "cma";
-  const common = { database, max: 2, statement_timeout: STATEMENT_TIMEOUT_MS, connectionTimeoutMillis: 10_000 };
+  const common = { database, max: 2, statement_timeout: STATEMENT_TIMEOUT_MS, connectionTimeoutMillis: 10_000, ...sessionPoolOptions() };
   if (process.env.CMA_DB_HOST) {
     return { pool: new pg.Pool({ host: process.env.CMA_DB_HOST, port: Number(process.env.CMA_DB_PORT ?? 5432), user: required("CMA_DB_USER"),
       password: process.env.CMA_DB_PASSWORD || undefined, ...common, application_name: "cma-refresh-follow-up-local" }), close: () => undefined };
@@ -111,6 +113,14 @@ export async function refreshTenants({ connect, log }) {
         }
         // 2. The run row, before the refresh, so a refresh that fails still leaves a failed row; once per tenant and run
         if (!runId) runId = (await asScheduler(client, tenant_id, me, "select cma.job_run_start($1) as id", [JOB])).rows[0].id;
+        // 2b. The gate (addition 0009zr, decision D7): nothing to read, the statement timeout's backoff, or the web's load
+        // defers the heavy step to a later minute; the run row says which wait it was in
+        const g = await gateOf((text, values) => asScheduler(client, tenant_id, me, text, values), JOB);
+        if (!g.go) {
+          const counts = gatedCounts(g);
+          await asScheduler(client, tenant_id, me, "select cma.job_run_finish($1::uuid, 'succeeded', $2::jsonb)", [runId, JSON.stringify(counts)]);
+          return { r: { refreshed: false, reason: g.reason, gated: true }, counts };
+        }
         // 3. The refresh: skipped when another refresh of this tenant holds its lock (a run that overran its minute)
         const r = (await asScheduler(client, tenant_id, me, "select cma.refresh_follow_up() as r")).rows[0].r;
         // Since 0009l (172): computed 0 when nothing the figures read had changed (reason unchanged: the figures stand,
@@ -122,7 +132,7 @@ export async function refreshTenants({ connect, log }) {
         await asScheduler(client, tenant_id, me, "select cma.job_run_finish($1::uuid, 'succeeded', $2::jsonb)", [runId, JSON.stringify(counts)]);
         return { r, counts };
       }), { log, fields: { tenant_id } });
-      log(r.refreshed ? "INFO" : "WARNING", { tenant_id, rows: counts.rows, duration_ms: counts.duration_ms, refreshed: Boolean(r.refreshed),
+      log(r.refreshed ? "INFO" : r.gated ? gatedSeverity(r.reason) : "WARNING", { tenant_id, rows: counts.rows, duration_ms: counts.duration_ms, refreshed: Boolean(r.refreshed),
         ...(r.refreshed ? { computed: counts.computed, ...(counts.written !== undefined ? { written: counts.written } : {}) } : {}),
         ...(r.refreshed ? {} : { reason: r.reason ?? "running" }) });
     } catch (e) {
