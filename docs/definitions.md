@@ -3123,7 +3123,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 |---|---|
 | Term | Team (nl: Team), a rail group label |
 | Key | Copy key `nav.team`; group id `team` |
-| Definition | The rail group of the pages about the people of the contact center: People, Quality monitoring and Roster, in that order. The word names a group of pages; "team" for a group of people inside an organisation is Team (Live board's Not to use). |
+| Definition | The rail group of the pages about the people of the contact center: People and Quality monitoring, in that order (Roster sits last in the Time group). The word names a group of pages; "team" for a group of people inside an organisation is Team (Live board's Not to use). |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
 | Counts / does not count | Every page keeps its href and its permission; a group with no page the person may see is absent. A person with `quality.manage` and no other permission of the group sees Quality monitoring alone (an analyst); a supervisor holds none of the group's permissions in the default ladder and sees no Team group |
 | Unit and display | A group after Time and before Reports. The group's breadcrumb leads to the first page of it the person may see: People for a manager, Quality monitoring for an analyst. The digit keys of its pages follow the visible order |
@@ -3132,8 +3132,27 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Equivalent in the source system | None |
 | Not to use | "Team" for one group of people (a team inside an organisation is a different term) |
 | Status | Decided (the label and the order) |
-| Decided | 13 November 2026 (Martin); docs/decisions.md, 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (#278); 14 Nov 2026, "Quality monitoring's permission is `quality.manage`, …" and "Definitions: Fulfillment and Storage (rail pages), …" (#278) |
-| Used by | `nav.team`, `nav.people`, `nav.qualityMonitoring`, `nav.roster`; Team → People (`users.manage_agents` or `users.manage_all`), Quality monitoring (`quality.manage`), Roster (`roster.manage`) |
+| Decided | 13 November 2026 (Martin); docs/decisions.md, 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (#278); 14 Nov 2026, "Quality monitoring's permission is `quality.manage`, …" and "Definitions: Fulfillment and Storage (rail pages), …" (#278); 25 Nov 2026, "Definitions: Roster moves …" (this PR) |
+| Used by | `nav.team`, `nav.people`, `nav.qualityMonitoring`; Team → People (`users.manage_agents` or `users.manage_all`), Quality monitoring (`quality.manage`) |
+| As built today | Matches the definition |
+
+### Time (rail group)
+
+| Field | Value |
+|---|---|
+| Term | Time (nl: Time), a rail group label |
+| Key | Copy key `nav.time`; group id `time` |
+| Definition | The rail group of the pages about time worked and planned: My day, My hours, My schedule, Team hours and Roster, in that order. |
+| Source | `web/src/lib/nav.ts` (`navEntries()`) |
+| Counts / does not count | Every page keeps its href and its permission (My day and My hours `workday.own`, My schedule `roster.view`, Team hours `workday.team`, Roster `roster.manage`); a group with no page the person may see is absent |
+| Unit and display | A group after Live and before Team. The group's breadcrumb leads to the first page of it the person may see; Roster's breadcrumb is Welcome › Time › Roster. For a manager and an admin the digit keys are Welcome 1, Messages 2, Live board 3, My day 4, My hours 5, My schedule 6, Team hours 7, Roster 8, People 9, and Quality monitoring has no key |
+| Time rule | None |
+| Scope | The rail of every tenant; an agent sees My day, My hours and My schedule, a supervisor adds Team hours |
+| Equivalent in the source system | None |
+| Not to use | "Team" for the group that holds Roster |
+| Status | Decided (the order) |
+| Decided | 25 November 2026 (Martin); docs/decisions.md, 25 Nov 2026, "Roster moves …" and "Definitions: Roster moves …" (this PR) |
+| Used by | `nav.time`, `nav.roster`; Time → My day, My hours, My schedule, Team hours, Roster (`roster.manage`) |
 | As built today | Matches the definition |
 
 ### Sales (rail group)
@@ -3460,7 +3479,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Not to use | A role key (agent, supervisor) for who is planned: surfaces follow permissions (Role and surface); "has a roster" or "rostered" for this meaning (a shift is the planned entry, Rostering) |
 | Status | Decided |
 | Decided | 17 November 2026 (Martin, D1 and D2); docs/decisions.md, 17 Nov 2026, "Roster: only people on the roster …" and "Definitions: On the roster …" (addition 0009y, #293) |
-| Used by | `live.people.shift_today`, `roster.planner.planned_minutes_per_person`, `roster.planner.headcount_per_day`, `roster.planner.coverage`; Team → Roster (the planner), the Live board's shift line |
+| Used by | `live.people.shift_today`, `roster.planner.planned_minutes_per_person`, `roster.planner.headcount_per_day`, `roster.planner.coverage`; Time → Roster (the planner), the Live board's shift line |
 | As built today | Matches the definition. A person who leaves the roster keeps stored entries (they are not shown, counted or copied); My schedule (`roster.view`) still shows a person's own published entries |
 
 ### Remove day
