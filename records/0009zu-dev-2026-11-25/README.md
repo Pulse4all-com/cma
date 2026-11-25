@@ -34,3 +34,34 @@ Every line exited 0.
 |---|---|
 | 2. The data map's schema snapshot from dev after 0009zu | committed as `8da180a` on #318's branch; `verify:datamap` PASS |
 | 3. Main's `verify:api` against dev's web (`b489fe3`) on the 0009zu database | 366 of 368. The two failures are the known Flash definition versions (0008zu and 0008zt expected, dev returns 0009ze), not this addition. His output, `verify-api-main.txt`, is on his machine. |
+
+## Step 4: round-trips and perf (Claude Code, local, 25 November 2026, at Martin's request)
+
+This is not a dev run. Claude Code ran it in its own session and Martin asked for it here; the numbers are the session's.
+- **The app:** the branch's production build (standalone, `CMA_AUTH_MODE=mock CMA_DATA_MODE=api CMA_DB_TRACE=1`).
+- **The database:** a local PostgreSQL 16 copy of `web/verify/perf-volume-fixture.sql` (three times prod's volume) at
+  0009zu, held to one CPU.
+- **Main's baseline:** main's build (`eb7bad4`; its Speed to lead page is unchanged up to `9b634e0`) on the same fixture
+  at 0009zs.
+
+| Verifier | Branch | Main |
+|---|---|---|
+| `verify:round-trips` | PASS: 89 requests within budget, 4 not measured (pledges, no permission); provoked FAIL, 212 problems | not run |
+| Speed to lead page, round trips | 2 transactions, 9 statements (budget 2 and 11) | not run |
+| Figures route, round trips | 2 transactions, 9 statements (budget 2 and 9) | not run |
+| Deals route, round trips | 2 transactions, 9 statements (budget 2 and 9) | not run |
+| `verify:perf` | FAIL, 55 problems (second run 56); provoked FAIL, 296 problems | FAIL, 52 problems |
+| `/reports/speed-to-lead`, first byte p50 / p95 | 6.9 / 12.7 ms | 7.7 / 17.6 ms |
+| `/reports/speed-to-lead`, last byte p50 / p95 | 240.7 / 274.5 ms (second run 258.7 / 286.3); budget 200 / 500 ms (report 400 / 1,000 × the container factor 0.5) | 40.3 / 84.9 ms |
+| `/reports/speed-to-lead`, HTML gzip | 15.4 kB (budget 17) | 12.1 kB |
+| `/reports/speed-to-lead`, JavaScript gzip | 154.6 kB (budget 167) | read from the branch's build on disk, so not a comparison |
+
+**What perf's failures mean.** In this session's machine `verify:perf` fails on main too, with 52 routes over the
+halved budgets: Calls, Flash, Funnel, Follow-up, Installed base and others.
+- **Over budget on the branch only:** `/reports/speed-to-lead`'s last-byte p50, 240.7 to 258.7 ms against 200. The page
+  now reads the cockpit, with the previous period, the markets, the trend, the groups and 50 deals with their attempts,
+  where main read the summary and the rows.
+- **Not this change:** the inbound poll's p95 was over in one branch run only.
+- **Still within budget:** the page's p95, its HTML and its JavaScript.
+- **Accepted:** this is the page-read budget Martin accepted on 24 November 2026; the stored take is decided after 131
+  runs in prod (docs/open-decisions.md).
