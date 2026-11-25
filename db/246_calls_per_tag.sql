@@ -36,9 +36,10 @@
 --                  more, not twice, and streams the table after its first paint; /api/v1/reports/calls/tags passes true
 --
 -- Measured locally as the application, Postgres held to one CPU, three times prod's volume
--- (web/verify/perf-volume-fixture.sql, eight calls per session): the page's read 650-1,150 ms for a month, the tag use's own 650-790; the API's read (with the
--- total row) 1,500-3,700 ms. Both are over the 500 ms report-core budget at that volume, as the tag use already is, so
--- 131_time_all.sql's two new rows read FAIL there; prod's run of 131 decides whether the read needs a faster form.
+-- (web/verify/perf-volume-fixture.sql, eight calls per session): the page's read 650-1,150 ms for a month, the tag use's
+-- own 650-790; the API's read (with the total row) 1,500-3,700 ms. Both are over the 500 ms report-core budget at that
+-- volume, as the tag use already is, so 131_time_all.sql's two new rows read FAIL there; prod's run of 131 decides whether
+-- the read needs a faster form.
 -- SQLSTATEs as cma.calls_tag_use: CMA04 a range or filter refused, CMA06 not permitted.
 --
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is

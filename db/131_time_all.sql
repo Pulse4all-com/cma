@@ -37,6 +37,9 @@
 -- 2 ('page (called, page 2)', a set of its own: a tab or a further page is a load of its own), the page over this month
 -- in part a (the default view, read again every minute while open), and the API's figures, deals list and rows, each a
 -- set of its own; all but the rows need 242 (before it the functions do not exist: they read FAIL).
+-- Since addition 0009zw (246_calls_per_tag.sql) Reports → Calls streams Calls per tag after its first paint: its read is a
+-- set of its own ('calls per tag {P}', the page's read without totals), and the API's read with its total row ('calls api
+-- {P}') another; both need 246 (before it they read FAIL).
 -- Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs

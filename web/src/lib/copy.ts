@@ -2185,7 +2185,7 @@ const en = {
     callsTag: "Conversations carrying this tag, and their share of the row's conversations. A conversation with two tags counts under each.",
     callsTagNotCounted: "Conversations carrying this tag, and their share of the row's conversations. This tag does not count, so it is left out of the tags per agent.",
     callsOther: "Conversations carrying one of the tags without a column of their own, and their share of the row's conversations.",
-    callsPerTag: "Every call in the period per tag, outbound and inbound, connected or not, missed calls included,. A call with two tags counts under each, so the rows can add up to more than the total.",
+    callsPerTag: "Every call in the period per tag, outbound and inbound, connected or not, missed calls included. A call with two tags counts under each, so the rows can add up to more than the total.",
     callsPerTagTag: "The tag on the call in the telephony system, any tag, also one that does not count (marked so). A tag removed from a call no longer counts for it.",
     callsPerTagOutbound: "Outbound calls carrying this tag, connected or not, and their share of all outbound calls in the period.",
     callsPerTagInbound: "Inbound calls carrying this tag, answered or missed, and their share of all inbound calls in the period.",
