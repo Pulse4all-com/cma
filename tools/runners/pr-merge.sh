@@ -3,8 +3,10 @@
 #
 #   cd ~/cma && bash tools/runners/pr-merge.sh <number> <head commit sha>
 #
-# Refuses unless the pull request is open and its head is the commit named (gh pr merge --squash --match-head-commit:
-# GitHub refuses a head that moved too). A merge that touches cloudbuild.yaml, or web/ outside web/verify/, builds and
+# Refuses unless the pull request is open, based on main, its head is the commit named (gh pr merge --squash
+# --match-head-commit: GitHub refuses a head that moved too) and GitHub says it merges cleanly: mergeable CONFLICTING or
+# the state DIRTY stops before the merge (merge main into the branch first), UNKNOWN is asked again for up to 2 minutes
+# while GitHub computes it (25 November 2026: #321 conflicted after #329 and the runner still tried). A merge that touches cloudbuild.yaml, or web/ outside web/verify/, builds and
 # deploys prod (Cloud Build trigger cma-web-main): that build is polled until it ends. Otherwise the runner watches for
 # 2 minutes that no build starts. The merge is checked by a read (state MERGED, the merge commit) whatever its exit said.
 # Log and records check: records/pr-<number>-merge-<date>/.
@@ -22,6 +24,17 @@ step "the pull request (read)" 120 rc \
 [ "$(timeout 60 gh pr view "$PR" --json state --jq .state)" = OPEN ] || stop_run "#${PR} is not open"
 [ "$(timeout 60 gh pr view "$PR" --json baseRefName --jq .baseRefName)" = main ] || stop_run "#${PR}'s base is not main: retarget it first"
 [ "$(timeout 60 gh pr view "$PR" --json headRefOid --jq .headRefOid)" = "$HEAD_SHA" ] || stop_run "#${PR}'s head is not ${HEAD_SHA}: someone pushed since; look again"
+step "does it merge cleanly? (read; UNKNOWN asked again while GitHub computes it)" 180 rc '
+  for i in $(seq 1 8); do
+    m="$(timeout 60 gh pr view "$PR" --json mergeable,mergeStateStatus --jq ".mergeable + \" \" + .mergeStateStatus")" || exit 1
+    echo "mergeable ${m% *}, state ${m#* }"
+    case "$m" in
+      CONFLICTING\ *|*\ DIRTY) echo "conflicts with main: merge main into the branch (keep both sides), push, then rerun with the new head"; exit 1 ;;
+      UNKNOWN\ *|*\ UNKNOWN) sleep 15 ;;
+      *) exit 0 ;;
+    esac
+  done
+  echo "GitHub did not say within 2 minutes"; exit 1' || stop_run "#${PR} does not merge cleanly: nothing was merged"
 
 step "the files: does the merge build prod?" 120 rc '
   timeout 60 gh pr diff "$PR" --name-only > "$RUN_TMP/files" || exit 1
@@ -35,7 +48,7 @@ step "squash-merge #${PR} at ${HEAD_SHA:0:7}" 180 rc 'gh pr merge "$PR" --squash
   || note "the merge's exit is not trusted on its own: the read below decides"
 step "merged? (read)" 180 rc '
   for i in $(seq 1 12); do
-    s="$(timeout 60 gh pr view "$PR" --json state,mergeCommit --jq "\(.state) \(.mergeCommit.oid // \"\")")"
+    s="$(timeout 60 gh pr view "$PR" --json state,mergeCommit --jq ".state + \" \" + (.mergeCommit.oid // \"\")")"
     echo "$s"
     case "$s" in "MERGED "[0-9a-f]*) echo "${s#MERGED }" > "$RUN_TMP/merge_sha"; exit 0 ;; esac
     sleep 15
