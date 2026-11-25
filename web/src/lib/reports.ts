@@ -15,7 +15,7 @@ import type { Copy, Locale } from "./copy";
 import type {
   CallsFigures, CallsFilter, CallsGroup, CallsPerson, CallsPersonTag, CallsRow, DataQualityCheck, DateKey, FormAnswerRow, FormCategory, FormsFilter,
   FormsGroup, FormsResolution, FormsRow, HoursRange, InboundFigures, InboundGroup, InboundServiceRow, Instant, IntakeDay, MissedReason,
-  SourceConnections, SpeedToLeadGroup, SpeedToLeadRow, SpeedToLeadSummaryRow, TagMeaning, TagUseRow,
+  SourceConnections, SpeedToLeadGroup, SpeedToLeadPeriodFigures, SpeedToLeadRow, SpeedToLeadSummaryRow, SpeedToLeadView, TagMeaning, TagUseRow,
 } from "./data/types";
 // With their extensions, so verify/reports.mjs can run this module under Node's type stripping
 import { isoWeek } from "./roster.ts";
@@ -32,12 +32,29 @@ export const MAX_REPORT_DAYS = 92;
 export const REPORT_PERMISSIONS = ["reports.view", "performance.team"] as const;
 export const DATA_QUALITY_PERMISSIONS = ["reports.view", "tenant.configure"] as const;
 
+/** The page's Group by table: day, market, agent, pipeline (G cycles them); the week is the trend's over 31 days */
 export const SPEED_TO_LEAD_GROUPS: readonly SpeedToLeadGroup[] = ["day", "market", "agent", "pipeline"];
+/** Every group cma.speed_to_lead_summary takes besides total: the API's (0009zu adds week) */
+export const SPEED_TO_LEAD_API_GROUPS: readonly SpeedToLeadGroup[] = ["day", "week", "market", "agent", "pipeline"];
 
-/** The group named in a query, or null when it is none of the four */
-export function parseGroup(value: unknown): SpeedToLeadGroup | null {
-  return typeof value === "string" && (SPEED_TO_LEAD_GROUPS as readonly string[]).includes(value) ? (value as SpeedToLeadGroup) : null;
+/** The group named in a query, or null when it is none of the page's four (withWeek: the API's five) */
+export function parseGroup(value: unknown, withWeek = false): SpeedToLeadGroup | null {
+  const groups = withWeek ? SPEED_TO_LEAD_API_GROUPS : SPEED_TO_LEAD_GROUPS;
+  return typeof value === "string" && (groups as readonly string[]).includes(value) ? (value as SpeedToLeadGroup) : null;
 }
+
+/** The view of the cockpit's deals list named in a query: not_called (the default) or called */
+export function parseSpeedView(value: unknown): SpeedToLeadView | null {
+  return value === "not_called" || value === "called" ? value : null;
+}
+
+/** The trend's grouping: per day, per week over 31 days (cma.speed_to_lead_page) */
+export function speedTrendGroup(range: HoursRange): "day" | "week" {
+  return daysBetween(range.from, range.to) + 1 > 31 ? "week" : "day";
+}
+
+/** The deals list's page size */
+export const SPEED_DEALS_PAGE = 50;
 
 /** The group G moves to: day, market, agent, pipeline, then day again */
 export function nextGroup(group: SpeedToLeadGroup): SpeedToLeadGroup {
@@ -73,7 +90,7 @@ export function round1(x: number): number {
  * a deal closed before its first attempt never is), the open deals not called yet and the deals
  * closed before the first call apart. The mock data's summary; the screens read the database's
  */
-export function speedFigures(rows: SpeedToLeadRow[]): Omit<SpeedToLeadSummaryRow, "groupKey" | "groupLabel"> {
+export function speedFigures(rows: SpeedToLeadRow[], noAttempt = false): Omit<SpeedToLeadSummaryRow, "groupKey" | "groupLabel"> {
   const seconds = rows.map((r) => r.businessSeconds).filter((s): s is number => s !== null);
   const pct = (flags: (boolean | null)[]) => {
     const known = flags.filter((f) => f !== null);
@@ -81,16 +98,49 @@ export function speedFigures(rows: SpeedToLeadRow[]): Omit<SpeedToLeadSummaryRow
   };
   const median = percentileCont(seconds, 0.5);
   const p80 = percentileCont(seconds, 0.8);
+  const attempts = rows.map((r) => r.attemptsSoFar);
+  const attemptsMedian = percentileCont(attempts, 0.5);
+  // the no_attempt group has no measure of its own: its shares and medians are null (shown as –; 0009zu)
+  const measured = <T,>(x: T): T | null => (noAttempt ? null : x);
   return {
     deals: rows.length,
     called: rows.filter((r) => r.status === "called").length,
-    medianBusinessMinutes: median === null ? null : round1(median / 60),
-    p80BusinessMinutes: p80 === null ? null : round1(p80 / 60),
-    withinTargetPct: pct(rows.map((r) => r.withinTarget)),
-    beforeNextNoonPct: pct(rows.map((r) => r.beforeNextNoon)),
+    medianBusinessMinutes: measured(median === null ? null : round1(median / 60)),
+    p80BusinessMinutes: measured(p80 === null ? null : round1(p80 / 60)),
+    withinTargetPct: measured(pct(rows.map((r) => r.withinTarget))),
+    beforeNextNoonPct: measured(pct(rows.map((r) => r.beforeNextNoon))),
     openNotCalled: rows.filter((r) => r.status === "not_called_open").length,
     closedBeforeFirstCall: rows.filter((r) => r.status === "closed_before_first_call").length,
+    attemptsMean: rows.length === 0 ? null : round2(attempts.reduce((a, b) => a + b, 0) / rows.length),
+    attemptsMedian: attemptsMedian === null ? null : round1(attemptsMedian),
+    conversationShare: measured(rows.length === 0 ? null : round1((100 * rows.filter((r) => r.conversationsSoFar > 0).length) / rows.length)),
   };
+}
+
+/** round(x, 2) as numeric rounds: half away from zero */
+export function round2(x: number): number {
+  return Math.sign(x) * Math.round(Math.abs(x) * 100 + 1e-9) / 100;
+}
+
+/** One period's figures of the cockpit, as cma.speed_to_lead_figures_from computes them (the mock's; the page reads the database's) */
+export function speedPeriodFigures(rows: SpeedToLeadRow[]): SpeedToLeadPeriodFigures {
+  const f = speedFigures(rows);
+  const waits = rows.filter((r) => r.status === "not_called_open" && r.waitingBusinessSeconds !== null).map((r) => r.waitingBusinessSeconds!);
+  return {
+    deals: f.deals, called: f.called, withinTargetPct: f.withinTargetPct, beforeNextNoonPct: f.beforeNextNoonPct,
+    medianBusinessMinutes: f.medianBusinessMinutes, openNotCalled: f.openNotCalled,
+    oldestWaitingBusinessSeconds: waits.length === 0 ? null : Math.max(...waits), closedBeforeFirstCall: f.closedBeforeFirstCall,
+    attemptsMean: f.attemptsMean, attemptsMedian: f.attemptsMedian, conversationShare: f.conversationShare,
+  };
+}
+
+/** One view of the deals list from the rows, newest first then by id, a page of it with the view's count (the mock's) */
+export function speedDealsPage<T extends Pick<SpeedToLeadRow, "status" | "createdAt" | "dealId">>(
+  rows: T[], view: SpeedToLeadView, limit: number, offset: number,
+): { total: number; rows: T[] } {
+  const inView = rows.filter((r) => r.status === (view === "not_called" ? "not_called_open" : "called"))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.dealId.localeCompare(b.dealId));
+  return { total: inView.length, rows: inView.slice(offset, offset + limit) };
 }
 
 /**
@@ -105,6 +155,7 @@ export function groupSpeedToLead(
   for (const r of rows) {
     const [key, label] =
       group === "day" ? [r.date, r.date]
+      : group === "week" ? [startOfWeek(r.date), startOfWeek(r.date)]
       : group === "market" ? [r.market, r.market]
       : group === "agent" ? (r.firstAttemptAt === null ? ["no_attempt", null]
         : r.agentUserId ? [r.agentUserId, agentName(r.agentUserId) ?? "unknown"] : ["unknown", null])
@@ -115,7 +166,7 @@ export function groupSpeedToLead(
   }
   return [...groups.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([groupKey, g]) => ({ groupKey, groupLabel: g.label, ...speedFigures(g.rows) }));
+    .map(([groupKey, g]) => ({ groupKey, groupLabel: g.label, ...speedFigures(g.rows, group === "agent" && groupKey === "no_attempt") }));
 }
 
 /** What a group's label means on screen; the page turns it into words */
@@ -131,6 +182,7 @@ export type GroupDisplay =
 export function groupDisplay(row: Pick<SpeedToLeadSummaryRow, "groupKey" | "groupLabel">, group: SpeedToLeadGroup): GroupDisplay {
   switch (group) {
     case "day":
+    case "week":
       return { kind: "date", date: row.groupKey };
     case "market":
       return row.groupKey === "unknown" ? { kind: "unknownMarket" } : { kind: "text", text: row.groupKey };
@@ -140,6 +192,41 @@ export function groupDisplay(row: Pick<SpeedToLeadSummaryRow, "groupKey" | "grou
     case "pipeline":
       return !row.groupLabel || row.groupLabel === "unknown" ? { kind: "unknownPipeline" } : { kind: "text", text: row.groupLabel };
   }
+}
+
+/**
+ * A share's tone against its goal (Speed to lead's cockpit, 0009zu): none without a goal or without a share (the tile
+ * has no colour), "met" at or above the goal (success surface), "below" under it (error surface)
+ */
+export function goalTone(pct: number | null, goal: number | null): "none" | "met" | "below" {
+  if (goal === null || pct === null) return "none";
+  return pct >= goal ? "met" : "below";
+}
+
+/** One dot of a deal's timeline: where it sits (percent of the span) and what the attempt was */
+export interface TimelineDot { n: number; at: number; kind: "notConnected" | "connected" | "conversation" }
+
+/**
+ * A deal's timeline over its first 1.5 working days in business time (the cockpit's list, 0009zu): the target and the
+ * cutoff marks and one dot per attempt, each as a percent of the span (an attempt beyond it is left out and flagged by
+ * `beyond`); a deal not called yet has its wait as a bar. Null without a span (an unknown market has no business time)
+ */
+export function speedTimeline(
+  d: { spanBusinessSeconds: number | null; cutoffBusinessSeconds: number | null; status: string; businessSeconds: number | null;
+       attempts: { n: number; businessSeconds: number | null; connected: boolean; conversation: boolean }[]; attemptsSoFar: number },
+  targetSeconds: number | null,
+): { target: number | null; cutoff: number | null; dots: TimelineDot[]; beyond: boolean; waiting: number | null } | null {
+  const span = d.spanBusinessSeconds;
+  if (span === null || span <= 0) return null;
+  const pos = (s: number) => Math.round(Math.min(100, Math.max(0, (100 * s) / span)) * 10) / 10;
+  const inSpan = d.attempts.filter((a) => a.businessSeconds !== null && a.businessSeconds <= span);
+  return {
+    target: targetSeconds !== null && targetSeconds <= span ? pos(targetSeconds) : null,
+    cutoff: d.cutoffBusinessSeconds !== null && d.cutoffBusinessSeconds <= span ? pos(d.cutoffBusinessSeconds) : null,
+    dots: inSpan.map((a) => ({ n: a.n, at: pos(a.businessSeconds!), kind: a.conversation ? "conversation" : a.connected ? "connected" : "notConnected" })),
+    beyond: d.attemptsSoFar > inSpan.length,
+    waiting: d.status === "not_called_open" && d.businessSeconds !== null ? pos(d.businessSeconds) : null,
+  };
 }
 
 /** The summary's totals over its groups: counts add up, medians and percentages do not, so those are left out */

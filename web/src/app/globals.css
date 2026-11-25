@@ -35,6 +35,9 @@
   --color-p4a-warning-surface: #fbf1dc;
   --color-p4a-error: #b8433c;
   --color-p4a-error-surface: #f8e4e1;
+  /* success in words on white, where Leaf Green #27ae6f lacks the 4.5:1 contrast for text (Martin, 24 November 2026: Speed
+     to lead's goal status line) */
+  --color-p4a-success-text: #1d7a4f;
   --color-p4a-neutral-surface: #f3f4f6;
   --color-p4a-border: #d9e2ec;
   --color-p4a-muted: #5b6472;

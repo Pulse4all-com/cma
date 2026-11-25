@@ -8056,38 +8056,38 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.speed_to_lead_summary",
-            "migration": "0009zq"
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zq"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
-            "migration": "0008z"
+            "migration": "0008zc"
           },
           {
             "object": "cma.lead_deals_of",
             "migration": "0007d"
           },
           {
-            "object": "cma.lead_calls_of",
-            "migration": "0008zc"
+            "object": "cma.speed_to_lead_groups_from",
+            "migration": "0009zu"
           }
         ],
         "ts": [
           {
-            "file": "src/lib/reports.ts",
-            "export": "groupSpeedToLead"
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
           },
           {
-            "file": "src/lib/data/postgres.ts",
-            "export": "getSpeedToLeadSummary"
+            "file": "src/lib/reports.ts",
+            "export": "groupSpeedToLead"
           }
         ]
       },
@@ -8228,7 +8228,7 @@
         "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
         "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
         "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
-        "first call: CRM calls of the deal's connection, not deleted, currently associated with the deal or one of its contacts (primary contact plus current deal->contact associations), effective start (linked telephony call's started_at while the link is current and the call not deleted, else crm_call.occurred_at) >= created_at - speed_to_lead.pre_window_minutes",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
         "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
       ],
       "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
@@ -8282,38 +8282,38 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.speed_to_lead_summary",
-            "migration": "0009zq"
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zq"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
-            "migration": "0008z"
+            "migration": "0008zc"
           },
           {
             "object": "cma.lead_deals_of",
             "migration": "0007d"
           },
           {
-            "object": "cma.lead_calls_of",
-            "migration": "0008zc"
+            "object": "cma.speed_to_lead_groups_from",
+            "migration": "0009zu"
           }
         ],
         "ts": [
           {
-            "file": "src/lib/reports.ts",
-            "export": "groupSpeedToLead"
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
           },
           {
-            "file": "src/lib/data/postgres.ts",
-            "export": "getSpeedToLeadSummary"
+            "file": "src/lib/reports.ts",
+            "export": "groupSpeedToLead"
           }
         ]
       },
@@ -8454,7 +8454,7 @@
         "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
         "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
         "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
-        "first call: CRM calls of the deal's connection, not deleted, currently associated with the deal or one of its contacts (primary contact plus current deal->contact associations), effective start (linked telephony call's started_at while the link is current and the call not deleted, else crm_call.occurred_at) >= created_at - speed_to_lead.pre_window_minutes",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
         "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
       ],
       "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
@@ -8483,7 +8483,7 @@
     {
       "surface": "report",
       "page": "/reports/speed-to-lead",
-      "comparison": null,
+      "comparison": "Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
       "settings": [
         {
           "key": "intake.start_date",
@@ -8508,38 +8508,42 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.speed_to_lead_summary",
-            "migration": "0009zq"
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zq"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
-            "migration": "0008z"
+            "migration": "0008zc"
           },
           {
             "object": "cma.lead_deals_of",
             "migration": "0007d"
           },
           {
-            "object": "cma.lead_calls_of",
-            "migration": "0008zc"
+            "object": "cma.speed_to_lead_groups_from",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.speed_to_lead_figures_from",
+            "migration": "0009zu"
           }
         ],
         "ts": [
           {
-            "file": "src/lib/reports.ts",
-            "export": "groupSpeedToLead"
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
           },
           {
-            "file": "src/lib/data/postgres.ts",
-            "export": "getSpeedToLeadSummary"
+            "file": "src/lib/reports.ts",
+            "export": "groupSpeedToLead"
           }
         ]
       },
@@ -8680,7 +8684,7 @@
         "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
         "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
         "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
-        "first call: CRM calls of the deal's connection, not deleted, currently associated with the deal or one of its contacts (primary contact plus current deal->contact associations), effective start (linked telephony call's started_at while the link is current and the call not deleted, else crm_call.occurred_at) >= created_at - speed_to_lead.pre_window_minutes",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
         "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
       ],
       "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
@@ -8709,7 +8713,7 @@
     {
       "surface": "report",
       "page": "/reports/speed-to-lead",
-      "comparison": null,
+      "comparison": "Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
       "settings": [
         {
           "key": "intake.start_date",
@@ -8725,6 +8729,16 @@
           "key": "speed_to_lead.target_minutes",
           "default": "60",
           "pulse4all": "60 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.goal_within_target_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.goal_before_cutoff_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
         }
       ],
       "permissions": {
@@ -8734,38 +8748,42 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.speed_to_lead_summary",
-            "migration": "0009zq"
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zq"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
-            "migration": "0008z"
+            "migration": "0008zc"
           },
           {
             "object": "cma.lead_deals_of",
             "migration": "0007d"
           },
           {
-            "object": "cma.lead_calls_of",
-            "migration": "0008zc"
+            "object": "cma.speed_to_lead_groups_from",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.speed_to_lead_figures_from",
+            "migration": "0009zu"
           }
         ],
         "ts": [
           {
-            "file": "src/lib/reports.ts",
-            "export": "groupSpeedToLead"
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
           },
           {
-            "file": "src/lib/data/postgres.ts",
-            "export": "getSpeedToLeadSummary"
+            "file": "src/lib/reports.ts",
+            "export": "groupSpeedToLead"
           }
         ]
       },
@@ -8906,7 +8924,7 @@
         "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
         "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
         "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
-        "first call: CRM calls of the deal's connection, not deleted, currently associated with the deal or one of its contacts (primary contact plus current deal->contact associations), effective start (linked telephony call's started_at while the link is current and the call not deleted, else crm_call.occurred_at) >= created_at - speed_to_lead.pre_window_minutes",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
         "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
       ],
       "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
@@ -8935,7 +8953,7 @@
     {
       "surface": "report",
       "page": "/reports/speed-to-lead",
-      "comparison": null,
+      "comparison": "Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
       "settings": [
         {
           "key": "intake.start_date",
@@ -8956,6 +8974,16 @@
           "key": "speed_to_lead.next_day_cutoff",
           "default": "12:00",
           "pulse4all": "12:00 (the default)"
+        },
+        {
+          "key": "speed_to_lead.goal_within_target_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.goal_before_cutoff_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
         }
       ],
       "permissions": {
@@ -8965,38 +8993,42 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.speed_to_lead_summary",
-            "migration": "0009zq"
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zq"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
-            "migration": "0008z"
+            "migration": "0008zc"
           },
           {
             "object": "cma.lead_deals_of",
             "migration": "0007d"
           },
           {
-            "object": "cma.lead_calls_of",
-            "migration": "0008zc"
+            "object": "cma.speed_to_lead_groups_from",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.speed_to_lead_figures_from",
+            "migration": "0009zu"
           }
         ],
         "ts": [
           {
-            "file": "src/lib/reports.ts",
-            "export": "groupSpeedToLead"
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
           },
           {
-            "file": "src/lib/data/postgres.ts",
-            "export": "getSpeedToLeadSummary"
+            "file": "src/lib/reports.ts",
+            "export": "groupSpeedToLead"
           }
         ]
       },
@@ -9137,7 +9169,7 @@
         "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
         "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
         "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
-        "first call: CRM calls of the deal's connection, not deleted, currently associated with the deal or one of its contacts (primary contact plus current deal->contact associations), effective start (linked telephony call's started_at while the link is current and the call not deleted, else crm_call.occurred_at) >= created_at - speed_to_lead.pre_window_minutes",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
         "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
       ],
       "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
@@ -9166,7 +9198,7 @@
     {
       "surface": "report",
       "page": "/reports/speed-to-lead",
-      "comparison": null,
+      "comparison": "Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
       "settings": [
         {
           "key": "intake.start_date",
@@ -9191,38 +9223,42 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.speed_to_lead_summary",
-            "migration": "0009zq"
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zq"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
-            "migration": "0008z"
+            "migration": "0008zc"
           },
           {
             "object": "cma.lead_deals_of",
             "migration": "0007d"
           },
           {
-            "object": "cma.lead_calls_of",
-            "migration": "0008zc"
+            "object": "cma.speed_to_lead_groups_from",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.speed_to_lead_figures_from",
+            "migration": "0009zu"
           }
         ],
         "ts": [
           {
-            "file": "src/lib/reports.ts",
-            "export": "groupSpeedToLead"
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
           },
           {
-            "file": "src/lib/data/postgres.ts",
-            "export": "getSpeedToLeadSummary"
+            "file": "src/lib/reports.ts",
+            "export": "groupSpeedToLead"
           }
         ]
       },
@@ -9363,7 +9399,7 @@
         "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
         "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
         "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
-        "first call: CRM calls of the deal's connection, not deleted, currently associated with the deal or one of its contacts (primary contact plus current deal->contact associations), effective start (linked telephony call's started_at while the link is current and the call not deleted, else crm_call.occurred_at) >= created_at - speed_to_lead.pre_window_minutes",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
         "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
       ],
       "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
@@ -9392,7 +9428,7 @@
     {
       "surface": "report",
       "page": "/reports/speed-to-lead",
-      "comparison": null,
+      "comparison": "Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
       "settings": [
         {
           "key": "intake.start_date",
@@ -9417,38 +9453,42 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.speed_to_lead_summary",
-            "migration": "0009zq"
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zq"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
-            "migration": "0008z"
+            "migration": "0008zc"
           },
           {
             "object": "cma.lead_deals_of",
             "migration": "0007d"
           },
           {
-            "object": "cma.lead_calls_of",
-            "migration": "0008zc"
+            "object": "cma.speed_to_lead_groups_from",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.speed_to_lead_figures_from",
+            "migration": "0009zu"
           }
         ],
         "ts": [
           {
-            "file": "src/lib/reports.ts",
-            "export": "groupSpeedToLead"
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
           },
           {
-            "file": "src/lib/data/postgres.ts",
-            "export": "getSpeedToLeadSummary"
+            "file": "src/lib/reports.ts",
+            "export": "groupSpeedToLead"
           }
         ]
       },
@@ -9589,7 +9629,7 @@
         "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
         "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
         "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
-        "first call: CRM calls of the deal's connection, not deleted, currently associated with the deal or one of its contacts (primary contact plus current deal->contact associations), effective start (linked telephony call's started_at while the link is current and the call not deleted, else crm_call.occurred_at) >= created_at - speed_to_lead.pre_window_minutes",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
         "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
       ],
       "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
@@ -9600,7 +9640,7 @@
       "tile": "Open, not called",
       "title": {
         "en": "Closed before first call",
-        "nl": "Gesloten v\u00f3\u00f3r de eerste poging"
+        "nl": "Gesloten vóór de eerste poging"
       },
       "definition": "Lead deals of the group that closed, won or lost, or whose contact ordered (for example in the shop), before any Attempt. Shown apart and left out of the median and both shares.",
       "formula": "closed_before_first_call = count(*) filter (where status = 'closed_before_first_call'); status = 'closed_before_first_call' when no first Attempt exists in the deal's window and the deal is closed or its window ended at its contacts' first order (cma.sales_deals_of's window_end_reason 'ordered'); within_target, before_next_noon and waiting_business_seconds are null for such a deal.",
@@ -9613,7 +9653,7 @@
         "per_pipeline"
       ],
       "verify_sql": "select r.business_date,\n       count(*) as deals,\n       count(*) filter (where r.status = 'called') as called,\n       round((percentile_cont(0.5) within group (order by r.business_seconds))::numeric / 60, 1) as median_business_minutes,\n       round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1) as within_target_pct,\n       round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1) as before_next_noon_pct,\n       count(*) filter (where r.status = 'not_called_open') as open_not_called,\n       count(*) filter (where r.status = 'closed_before_first_call') as closed_before_first_call\nfrom cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r\ngroup by r.business_date order by r.business_date",
-      "notes": "Added with the one function (addition 0009zq, Gap D27): was not_called_closed, which counted as late once past the target. Column 'Closed before first call' (nl 'Gesloten v\u00f3\u00f3r de eerste poging') of Sales -> Speed to lead's summary. One query over cma.speed_to_lead_of (the one function since addition 0009zq) recomputes the day-grouped summary; compare the column this entry names. Swap the final group by for market, agent or pipeline to verify the other groupings."
+      "notes": "Added with the one function (addition 0009zq, Gap D27): was not_called_closed, which counted as late once past the target. Column 'Closed before first call' (nl 'Gesloten vóór de eerste poging') of Sales -> Speed to lead's summary. One query over cma.speed_to_lead_of (the one function since addition 0009zq) recomputes the day-grouped summary; compare the column this entry names. Swap the final group by for market, agent or pipeline to verify the other groupings."
     },
     {
       "surface": "report",
@@ -9643,34 +9683,38 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.speed_to_lead_summary",
-            "migration": "0009zq"
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zq"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
-            "migration": "0008z"
+            "migration": "0008zc"
           },
           {
             "object": "cma.lead_deals_of",
             "migration": "0007d"
           },
           {
-            "object": "cma.lead_calls_of",
-            "migration": "0008zc"
+            "object": "cma.speed_to_lead_groups_from",
+            "migration": "0009zu"
           }
         ],
         "ts": [
           {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
+          },
+          {
             "file": "src/lib/reports.ts",
-            "export": "summaryTotals"
+            "export": "groupSpeedToLead"
           }
         ]
       },
@@ -9811,7 +9855,7 @@
         "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
         "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
         "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
-        "first call: CRM calls of the deal's connection, not deleted, currently associated with the deal or one of its contacts (primary contact plus current deal->contact associations), effective start (linked telephony call's started_at while the link is current and the call not deleted, else crm_call.occurred_at) >= created_at - speed_to_lead.pre_window_minutes",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
         "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
       ],
       "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
@@ -9836,7 +9880,7 @@
     {
       "surface": "report",
       "page": "/reports/speed-to-lead",
-      "comparison": null,
+      "comparison": "Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
       "settings": [
         {
           "key": "intake.start_date",
@@ -9852,6 +9896,16 @@
           "key": "speed_to_lead.target_minutes",
           "default": "60",
           "pulse4all": "60 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.goal_within_target_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.goal_before_cutoff_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
         }
       ],
       "permissions": {
@@ -9861,42 +9915,38 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.speed_to_lead_rows",
-            "migration": "0009zq"
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0009zq"
+            "migration": "0009zu"
           },
           {
             "object": "cma.deal_attempts_of",
-            "migration": "0008z"
+            "migration": "0008zc"
           },
           {
             "object": "cma.lead_deals_of",
             "migration": "0007d"
           },
           {
-            "object": "cma.lead_calls_of",
-            "migration": "0008zc"
+            "object": "cma.speed_to_lead_figures_from",
+            "migration": "0009zu"
           }
         ],
         "ts": [
           {
-            "file": "src/lib/reports.ts",
-            "export": "openNotCalled"
-          },
-          {
             "file": "src/lib/data/postgres.ts",
-            "export": "getSpeedToLeadRows"
+            "export": "getSpeedToLeadPage"
           }
         ]
       },
-      "fixture_check": "The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 101 row(s); Martin compares the value with the page in Studio.",
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -9920,13 +9970,10 @@
         }
       ],
       "docs": [
-        "docs/night-2026-10-10/DESIGN.md paragraph 4.4",
         "features.md paragraph 4 (Speed to lead)",
-        "kpis.md paragraph 1",
-        "api.md, GET /api/v1/reports/speed-to-lead",
-        "api.md, GET /api/v1/reports/speed-to-lead/rows",
-        "data-model (lead metrics, 0007d)",
-        "decisions.md 10 Oct 2026 (definition), 12 Oct 2026 (Self Serve not a lead pipeline), 15 Oct 2026 (p80 dropped)"
+        "definitions.md, Speed to lead (As built today)",
+        "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
       ],
       "sources": [
         {
@@ -10033,27 +10080,261 @@
         "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
         "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
         "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
-        "first call: CRM calls of the deal's connection, not deleted, currently associated with the deal or one of its contacts (primary contact plus current deal->contact associations), effective start (linked telephony call's started_at while the link is current and the call not deleted, else crm_call.occurred_at) >= created_at - speed_to_lead.pre_window_minutes",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
         "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
       ],
       "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
       "status": [
         "verified"
       ],
-      "key": "speed_to_lead.open_list.waiting_business_minutes",
-      "tile": "Waiting",
+      "key": "speed_to_lead.oldest_waiting",
+      "tile": "Not called yet",
       "title": {
-        "en": "Waiting",
-        "nl": "Wacht"
+        "en": "Longest waiting",
+        "nl": "Langst wachtend"
       },
-      "definition": "In the 'Not called yet' list: how long the open deal without an attempt has been waiting, in office minutes of its market, longest first.",
-      "formula": "waiting_business_seconds = cma.business_seconds_of(tenant, market, created_at, now()) for rows with status 'not_called_open' (null for market 'unknown'). Screen: fmtBusinessMinutes(floor(waiting_business_seconds / 60)). List = rows filtered to not_called_open, ordered waiting desc (null last, as -1), then created_at, then deal_source_id (TS openNotCalled, src/lib/reports.ts:143-147).",
+      "definition": "Under the Not called yet tile: how long the open deal not called yet that has waited longest has waited, in office time of its market.",
+      "formula": "max(waiting_business_seconds) filter (where status = 'not_called_open') over the period's deals (cma.speed_to_lead_figures_from), waiting = business seconds from the creation to now; shown in business minutes; null ('Nobody is waiting') without such a deal; a deal in an unknown market has no business time and is left out of the max",
       "unit": "business_minutes",
       "grain": [
-        "per_record"
+        "period"
       ],
-      "verify_sql": "select r.deal_source_id, r.waiting_business_seconds from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r where r.status = 'not_called_open' order by r.waiting_business_seconds desc nulls last, r.created_at, r.deal_source_id",
-      "notes": "db/40:476 (waiting only for open uncalled deals), page.tsx:166-187. Recomputed at every page load against now(), so it grows between loads. The row shows ids, created (date in tenant zone + time in the VIEWER's zone, me.timeZone - page.tsx:170-172), market code, pipeline label and a record link built from the connection's own template (cma.record_url, 0008); no customer data (audit rule 15 holds). The identity columns (Deal id, Created, Market, Pipeline, record link) are not separate catalog entries (not a CSV)."
+      "verify_sql": "select max(r.waiting_business_seconds) / 60 as oldest_waiting_business_minutes from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r where r.status = 'not_called_open'",
+      "notes": "Moves with now(): the wait grows while the deal stays open and not called. Narrowed by the page's market filter."
+    },
+    {
+      "surface": "report",
+      "page": "/reports/speed-to-lead",
+      "comparison": "Since addition 0009zu the tile shows the change against the previous period of the same length (cma.forms_previous_of, Attempts per deal's rule): prev_from = from - len, prev_to = min(to, today) - len with len = to-from+1 days; while the period reaches today the previous period's last date is cut at now's time of day (the deal's local creation time). No history start: an empty previous period shows a dash. The previous period's figures are as of now (a deal not called then and called since counts as called)",
+      "settings": [
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.pre_window_minutes",
+          "default": "0",
+          "pulse4all": "0 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.target_minutes",
+          "default": "60",
+          "pulse4all": "60 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.goal_within_target_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.goal_before_cutoff_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.speed_to_lead_of",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008zc"
+          },
+          {
+            "object": "cma.lead_deals_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.speed_to_lead_groups_from",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.speed_to_lead_figures_from",
+            "migration": "0009zu"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
+          }
+        ]
+      },
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "prerequisites": [
+        {
+          "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
+          "check": "crm_call_without_contact"
+        },
+        {
+          "item": "Aircall-HubSpot call link so the effective start is the telephony call's",
+          "check": "telephony_call_unlinked"
+        },
+        {
+          "item": "Lead deals carry a contact (speed to lead needs the contact's calls)",
+          "check": "deal_without_contact"
+        },
+        {
+          "item": "Country on the deal or its primary contact, so business time has a market",
+          "check": "market_not_in_catalog"
+        },
+        {
+          "item": "No test deals in the live pipeline",
+          "check": null
+        }
+      ],
+      "docs": [
+        "features.md paragraph 4 (Speed to lead)",
+        "definitions.md, Speed to lead (As built today)",
+        "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "source_deleted_at",
+            "pipeline_id",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "is_closed",
+            "source_id",
+            "connection_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal creation, property change, association change, deletion) -> ingest service POST /hubspot/<key> -> budgeted read-back -> cma.ingest_upsert_crm_records(); missed or failed events re-read by Cloud Run job ingest-sweep; everything modified in the last 26 h re-read by ingest-reconcile; history by ingest-backfill from intake.start_date",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook association changes -> ingest read-back -> cma.ingest_upsert_crm_records()/associations",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_call",
+          "columns": [
+            "direction",
+            "occurred_at",
+            "source_deleted_at",
+            "outcome_ref",
+            "owner_ref",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (call engagement events) -> ingest service POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_calls(); sweep/reconcile/backfill as for crm_record",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.call_link",
+          "columns": [
+            "crm_call_id",
+            "telephony_call_id",
+            "unlinked_at"
+          ],
+          "owner": "CMA",
+          "fed_by": "the ingest sweep's cma.link_calls(now() - 2 h) pairs telephony calls with CRM calls by the keyed number hash and a 120-second window",
+          "cadence": "every minute (ingest-sweep, docs/ingest/deploy.sh); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.telephony_call",
+          "columns": [
+            "started_at",
+            "answered_at",
+            "source_deleted_at"
+          ],
+          "owner": "Aircall",
+          "fed_by": "Aircall webhook (call.created/answered/ended/tagged/untagged/archived) -> ingest service POST /aircall/<key> -> read-back GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); nightly ingest-reconcile re-lists the look-back's calls",
+          "cadence": "webhook read-back within seconds (the Aircall webhook subscription is created by docs/ingest scripts; its delivery is per event); ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh); Cloud Scheduler itself is outside the repo"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "label"
+          ],
+          "owner": "CMA",
+          "fed_by": "pipeline catalog refreshed by the source's read-back/sweep; is_counted and is_lead set by a person on Configuration -> Sources (cma.set_pipeline_counted / set_pipeline_lead)",
+          "cadence": "catalog with each read-back; flags on demand (configuration)"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "country",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook contact events and on-demand contact reads -> cma.ingest_upsert_crm_contacts(); country slots per 0008m",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant configuration (Configuration -> Markets); market aliases in cma.market_alias",
+          "cadence": "on demand (configuration)"
+        }
+      ],
+      "filters": [
+        "tenant: cma.current_tenant_id() passed explicitly to cma.speed_to_lead_of, under row-level security; the SQL function checks reports.view or performance.team again (CMA06)",
+        "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
+        "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
+        "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
+        "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
+      ],
+      "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
+      "status": [
+        "verified"
+      ],
+      "key": "speed_to_lead.attempts_per_deal",
+      "tile": "Attempts per deal",
+      "title": {
+        "en": "Attempts per deal",
+        "nl": "Pogingen per deal"
+      },
+      "definition": "The average number of Attempts per lead deal so far, deals without an attempt counting 0; the median under it.",
+      "formula": "mean = round(avg(attempts_so_far), 2), median = round(percentile_cont(0.5) within group (order by attempts_so_far), 1) over every deal of the group (as attempts.per_deal counts them); attempts_so_far = the Attempts in the deal's window so far (cma.deal_attempts_of's is_attempt rows); null without deals",
+      "unit": "average",
+      "grain": [
+        "period",
+        "per_day",
+        "per_iso_week",
+        "per_market",
+        "per_person",
+        "per_pipeline"
+      ],
+      "verify_sql": "select round(avg(r.attempts_so_far), 2) as attempts_mean, round((percentile_cont(0.5) within group (order by r.attempts_so_far))::numeric, 1) as attempts_median from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r",
+      "notes": "The tile, the market card's and the Group by table's column. Population: lead deals (cma.lead_deals_of), which Attempts per deal's sales deals equal except a pipeline that is both a lead and an order pipeline. The change has no better direction (as Attempts per deal's tile)."
     },
     {
       "surface": "report",
@@ -10074,6 +10355,16 @@
           "key": "speed_to_lead.target_minutes",
           "default": "60",
           "pulse4all": "60 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.goal_within_target_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.goal_before_cutoff_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
         }
       ],
       "permissions": {
@@ -10083,34 +10374,38 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); no polling. Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
       "computed_in": {
         "sql": [
           {
-            "object": "cma.speed_to_lead_rows",
-            "migration": "0007d"
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
           },
           {
             "object": "cma.speed_to_lead_of",
-            "migration": "0007d"
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008zc"
           },
           {
             "object": "cma.lead_deals_of",
             "migration": "0007d"
           },
           {
-            "object": "cma.lead_calls_of",
-            "migration": "0008zc"
+            "object": "cma.speed_to_lead_groups_from",
+            "migration": "0009zu"
           }
         ],
         "ts": [
           {
-            "file": "src/lib/reports.ts",
-            "export": "openNotCalled"
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
           }
         ]
       },
-      "fixture_check": "The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.",
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
       "prerequisites": [
         {
           "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
@@ -10134,13 +10429,10 @@
         }
       ],
       "docs": [
-        "docs/night-2026-10-10/DESIGN.md paragraph 4.4",
         "features.md paragraph 4 (Speed to lead)",
-        "kpis.md paragraph 1",
-        "api.md, GET /api/v1/reports/speed-to-lead",
-        "api.md, GET /api/v1/reports/speed-to-lead/rows",
-        "data-model (lead metrics, 0007d)",
-        "decisions.md 10 Oct 2026 (definition), 12 Oct 2026 (Self Serve not a lead pipeline), 15 Oct 2026 (p80 dropped)"
+        "definitions.md, Speed to lead (As built today)",
+        "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
       ],
       "sources": [
         {
@@ -10247,27 +10539,1405 @@
         "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
         "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
         "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
-        "first call: CRM calls of the deal's connection, not deleted, currently associated with the deal or one of its contacts (primary contact plus current deal->contact associations), effective start (linked telephony call's started_at while the link is current and the call not deleted, else crm_call.occurred_at) >= created_at - speed_to_lead.pre_window_minutes",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
         "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
       ],
       "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
       "status": [
         "verified"
       ],
-      "key": "speed_to_lead.open_list.no_business_hours",
-      "tile": "No business hours",
+      "key": "speed_to_lead.conversation_share",
+      "tile": "With a conversation",
       "title": {
-        "en": "No business hours",
-        "nl": "Geen kantoortijden"
+        "en": "With a conversation",
+        "nl": "Met een gevoerd gesprek"
       },
-      "definition": "The waiting cell's state for an open deal not called yet whose market is unknown: there is no office-hours calendar to count waiting time in.",
-      "formula": "shown when waiting_business_seconds is null, i.e. market = 'unknown' (cma.business_seconds_of returns null for a market not in the catalog). The row sorts after every row with a waiting time (null as -1 in the TS sort). Hover title: 'The deal's market is unknown, so there is no office time to count'.",
+      "definition": "The share of the lead deals with at least one Attempt that was a Conversation.",
+      "formula": "round(100.0 * count(*) filter (where conversations_so_far > 0) / nullif(count(*), 0), 1) over every deal of the group; conversations_so_far = the Attempts in the window that were a Conversation (cma.is_conversation: connected, at least calls.conversation_min_talk_seconds of talk, no tag meaning not reached or incorrect data); null in the agent grouping's no_attempt",
+      "unit": "share",
+      "grain": [
+        "period",
+        "per_day",
+        "per_iso_week",
+        "per_market",
+        "per_person",
+        "per_pipeline"
+      ],
+      "verify_sql": "select round(100.0 * count(*) filter (where r.conversations_so_far > 0) / nullif(count(*), 0), 1) as conversation_share from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r",
+      "notes": "The market card's and the Group by table's column (the figures carry it too). Needs the telephony tags' meanings set and the call link."
+    },
+    {
+      "surface": "report",
+      "page": "/reports/speed-to-lead",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.pre_window_minutes",
+          "default": "0",
+          "pulse4all": "0 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.target_minutes",
+          "default": "60",
+          "pulse4all": "60 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.goal_within_target_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.goal_before_cutoff_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.goal_within_target_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.goal_before_cutoff_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.speed_to_lead_of",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008zc"
+          },
+          {
+            "object": "cma.lead_deals_of",
+            "migration": "0007d"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
+          }
+        ]
+      },
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "prerequisites": [
+        {
+          "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
+          "check": "crm_call_without_contact"
+        },
+        {
+          "item": "Aircall-HubSpot call link so the effective start is the telephony call's",
+          "check": "telephony_call_unlinked"
+        },
+        {
+          "item": "Lead deals carry a contact (speed to lead needs the contact's calls)",
+          "check": "deal_without_contact"
+        },
+        {
+          "item": "Country on the deal or its primary contact, so business time has a market",
+          "check": "market_not_in_catalog"
+        },
+        {
+          "item": "No test deals in the live pipeline",
+          "check": null
+        }
+      ],
+      "docs": [
+        "features.md paragraph 4 (Speed to lead)",
+        "definitions.md, Speed to lead (As built today)",
+        "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "source_deleted_at",
+            "pipeline_id",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "is_closed",
+            "source_id",
+            "connection_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal creation, property change, association change, deletion) -> ingest service POST /hubspot/<key> -> budgeted read-back -> cma.ingest_upsert_crm_records(); missed or failed events re-read by Cloud Run job ingest-sweep; everything modified in the last 26 h re-read by ingest-reconcile; history by ingest-backfill from intake.start_date",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook association changes -> ingest read-back -> cma.ingest_upsert_crm_records()/associations",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_call",
+          "columns": [
+            "direction",
+            "occurred_at",
+            "source_deleted_at",
+            "outcome_ref",
+            "owner_ref",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (call engagement events) -> ingest service POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_calls(); sweep/reconcile/backfill as for crm_record",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.call_link",
+          "columns": [
+            "crm_call_id",
+            "telephony_call_id",
+            "unlinked_at"
+          ],
+          "owner": "CMA",
+          "fed_by": "the ingest sweep's cma.link_calls(now() - 2 h) pairs telephony calls with CRM calls by the keyed number hash and a 120-second window",
+          "cadence": "every minute (ingest-sweep, docs/ingest/deploy.sh); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.telephony_call",
+          "columns": [
+            "started_at",
+            "answered_at",
+            "source_deleted_at"
+          ],
+          "owner": "Aircall",
+          "fed_by": "Aircall webhook (call.created/answered/ended/tagged/untagged/archived) -> ingest service POST /aircall/<key> -> read-back GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); nightly ingest-reconcile re-lists the look-back's calls",
+          "cadence": "webhook read-back within seconds (the Aircall webhook subscription is created by docs/ingest scripts; its delivery is per event); ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh); Cloud Scheduler itself is outside the repo"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "label"
+          ],
+          "owner": "CMA",
+          "fed_by": "pipeline catalog refreshed by the source's read-back/sweep; is_counted and is_lead set by a person on Configuration -> Sources (cma.set_pipeline_counted / set_pipeline_lead)",
+          "cadence": "catalog with each read-back; flags on demand (configuration)"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "country",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook contact events and on-demand contact reads -> cma.ingest_upsert_crm_contacts(); country slots per 0008m",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant configuration (Configuration -> Markets); market aliases in cma.market_alias",
+          "cadence": "on demand (configuration)"
+        }
+      ],
+      "filters": [
+        "tenant: cma.current_tenant_id() passed explicitly to cma.speed_to_lead_of, under row-level security; the SQL function checks reports.view or performance.team again (CMA06)",
+        "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
+        "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
+        "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
+        "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
+      ],
+      "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
+      "status": [
+        "verified"
+      ],
+      "key": "speed_to_lead.goal_status",
+      "tile": "Within target, Before the cutoff next working day",
+      "title": {
+        "en": "Goal status",
+        "nl": "Doelstatus"
+      },
+      "definition": "Under each of the two shares, once the tenant set a goal: whether the share is below the goal or at or above it, in words.",
+      "formula": "goalTone(pct, goal): none without a goal or without a share; 'below' when pct < goal ('Below goal (80%)', Error #B8433C); 'met' when pct >= goal ('At or above goal (80%)', Success text #1D7A4F). The tile stays white (Pulse4all-Style 7.7)",
+      "unit": "text",
+      "grain": [
+        "period"
+      ],
+      "verify_sql": null,
+      "notes": "No query: the goal is the setting's value, the share the tile's (verify_sql of speed_to_lead.within_target_pct and before_next_noon_pct). Empty goals (the default) show no line."
+    },
+    {
+      "surface": "report",
+      "page": "/reports/speed-to-lead",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.pre_window_minutes",
+          "default": "0",
+          "pulse4all": "0 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.target_minutes",
+          "default": "60",
+          "pulse4all": "60 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.goal_within_target_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.goal_before_cutoff_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.speed_to_lead_of",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008zc"
+          },
+          {
+            "object": "cma.lead_deals_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.speed_to_lead_groups_from",
+            "migration": "0009zu"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
+          }
+        ]
+      },
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "prerequisites": [
+        {
+          "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
+          "check": "crm_call_without_contact"
+        },
+        {
+          "item": "Aircall-HubSpot call link so the effective start is the telephony call's",
+          "check": "telephony_call_unlinked"
+        },
+        {
+          "item": "Lead deals carry a contact (speed to lead needs the contact's calls)",
+          "check": "deal_without_contact"
+        },
+        {
+          "item": "Country on the deal or its primary contact, so business time has a market",
+          "check": "market_not_in_catalog"
+        },
+        {
+          "item": "No test deals in the live pipeline",
+          "check": null
+        }
+      ],
+      "docs": [
+        "features.md paragraph 4 (Speed to lead)",
+        "definitions.md, Speed to lead (As built today)",
+        "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "source_deleted_at",
+            "pipeline_id",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "is_closed",
+            "source_id",
+            "connection_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal creation, property change, association change, deletion) -> ingest service POST /hubspot/<key> -> budgeted read-back -> cma.ingest_upsert_crm_records(); missed or failed events re-read by Cloud Run job ingest-sweep; everything modified in the last 26 h re-read by ingest-reconcile; history by ingest-backfill from intake.start_date",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook association changes -> ingest read-back -> cma.ingest_upsert_crm_records()/associations",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_call",
+          "columns": [
+            "direction",
+            "occurred_at",
+            "source_deleted_at",
+            "outcome_ref",
+            "owner_ref",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (call engagement events) -> ingest service POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_calls(); sweep/reconcile/backfill as for crm_record",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.call_link",
+          "columns": [
+            "crm_call_id",
+            "telephony_call_id",
+            "unlinked_at"
+          ],
+          "owner": "CMA",
+          "fed_by": "the ingest sweep's cma.link_calls(now() - 2 h) pairs telephony calls with CRM calls by the keyed number hash and a 120-second window",
+          "cadence": "every minute (ingest-sweep, docs/ingest/deploy.sh); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.telephony_call",
+          "columns": [
+            "started_at",
+            "answered_at",
+            "source_deleted_at"
+          ],
+          "owner": "Aircall",
+          "fed_by": "Aircall webhook (call.created/answered/ended/tagged/untagged/archived) -> ingest service POST /aircall/<key> -> read-back GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); nightly ingest-reconcile re-lists the look-back's calls",
+          "cadence": "webhook read-back within seconds (the Aircall webhook subscription is created by docs/ingest scripts; its delivery is per event); ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh); Cloud Scheduler itself is outside the repo"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "label"
+          ],
+          "owner": "CMA",
+          "fed_by": "pipeline catalog refreshed by the source's read-back/sweep; is_counted and is_lead set by a person on Configuration -> Sources (cma.set_pipeline_counted / set_pipeline_lead)",
+          "cadence": "catalog with each read-back; flags on demand (configuration)"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "country",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook contact events and on-demand contact reads -> cma.ingest_upsert_crm_contacts(); country slots per 0008m",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant configuration (Configuration -> Markets); market aliases in cma.market_alias",
+          "cadence": "on demand (configuration)"
+        }
+      ],
+      "filters": [
+        "tenant: cma.current_tenant_id() passed explicitly to cma.speed_to_lead_of, under row-level security; the SQL function checks reports.view or performance.team again (CMA06)",
+        "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
+        "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
+        "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
+        "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
+      ],
+      "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
+      "status": [
+        "verified"
+      ],
+      "key": "speed_to_lead.market_bars",
+      "tile": "Share of the deals whose outcome is known",
+      "title": {
+        "en": "Within target and before the cutoff, per market",
+        "nl": "Binnen de norm en vóór de grens, per markt"
+      },
+      "definition": "Per market, the deals whose outcome is known: the upper bar within or after the target, the lower one before or after the cutoff on the next working day.",
+      "formula": "per market (cma.speed_to_lead_groups_from, group market, never narrowed): bar 1 = within_target_pct and 100 - it; bar 2 = before_next_noon_pct and 100 - it (the summary's shares); a market's row sets the page's market filter",
+      "unit": "share",
+      "grain": [
+        "per_market"
+      ],
+      "verify_sql": "select r.market, round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1) as within_target_pct, round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1) as before_next_noon_pct from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r group by r.market order by r.market",
+      "notes": "Deals closed before the first call stay out of the bars and are counted in their own column."
+    },
+    {
+      "surface": "report",
+      "page": "/reports/speed-to-lead",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.pre_window_minutes",
+          "default": "0",
+          "pulse4all": "0 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.target_minutes",
+          "default": "60",
+          "pulse4all": "60 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.goal_within_target_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.goal_before_cutoff_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.goal_within_target_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.goal_before_cutoff_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.speed_to_lead_of",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008zc"
+          },
+          {
+            "object": "cma.lead_deals_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.speed_to_lead_groups_from",
+            "migration": "0009zu"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
+          }
+        ]
+      },
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "prerequisites": [
+        {
+          "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
+          "check": "crm_call_without_contact"
+        },
+        {
+          "item": "Aircall-HubSpot call link so the effective start is the telephony call's",
+          "check": "telephony_call_unlinked"
+        },
+        {
+          "item": "Lead deals carry a contact (speed to lead needs the contact's calls)",
+          "check": "deal_without_contact"
+        },
+        {
+          "item": "Country on the deal or its primary contact, so business time has a market",
+          "check": "market_not_in_catalog"
+        },
+        {
+          "item": "No test deals in the live pipeline",
+          "check": null
+        }
+      ],
+      "docs": [
+        "features.md paragraph 4 (Speed to lead)",
+        "definitions.md, Speed to lead (As built today)",
+        "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "source_deleted_at",
+            "pipeline_id",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "is_closed",
+            "source_id",
+            "connection_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal creation, property change, association change, deletion) -> ingest service POST /hubspot/<key> -> budgeted read-back -> cma.ingest_upsert_crm_records(); missed or failed events re-read by Cloud Run job ingest-sweep; everything modified in the last 26 h re-read by ingest-reconcile; history by ingest-backfill from intake.start_date",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook association changes -> ingest read-back -> cma.ingest_upsert_crm_records()/associations",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_call",
+          "columns": [
+            "direction",
+            "occurred_at",
+            "source_deleted_at",
+            "outcome_ref",
+            "owner_ref",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (call engagement events) -> ingest service POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_calls(); sweep/reconcile/backfill as for crm_record",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.call_link",
+          "columns": [
+            "crm_call_id",
+            "telephony_call_id",
+            "unlinked_at"
+          ],
+          "owner": "CMA",
+          "fed_by": "the ingest sweep's cma.link_calls(now() - 2 h) pairs telephony calls with CRM calls by the keyed number hash and a 120-second window",
+          "cadence": "every minute (ingest-sweep, docs/ingest/deploy.sh); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.telephony_call",
+          "columns": [
+            "started_at",
+            "answered_at",
+            "source_deleted_at"
+          ],
+          "owner": "Aircall",
+          "fed_by": "Aircall webhook (call.created/answered/ended/tagged/untagged/archived) -> ingest service POST /aircall/<key> -> read-back GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); nightly ingest-reconcile re-lists the look-back's calls",
+          "cadence": "webhook read-back within seconds (the Aircall webhook subscription is created by docs/ingest scripts; its delivery is per event); ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh); Cloud Scheduler itself is outside the repo"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "label"
+          ],
+          "owner": "CMA",
+          "fed_by": "pipeline catalog refreshed by the source's read-back/sweep; is_counted and is_lead set by a person on Configuration -> Sources (cma.set_pipeline_counted / set_pipeline_lead)",
+          "cadence": "catalog with each read-back; flags on demand (configuration)"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "country",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook contact events and on-demand contact reads -> cma.ingest_upsert_crm_contacts(); country slots per 0008m",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant configuration (Configuration -> Markets); market aliases in cma.market_alias",
+          "cadence": "on demand (configuration)"
+        }
+      ],
+      "filters": [
+        "tenant: cma.current_tenant_id() passed explicitly to cma.speed_to_lead_of, under row-level security; the SQL function checks reports.view or performance.team again (CMA06)",
+        "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
+        "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
+        "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
+        "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
+      ],
+      "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
+      "status": [
+        "verified"
+      ],
+      "key": "speed_to_lead.trend",
+      "tile": "Per day of creation",
+      "title": {
+        "en": "Trend of the two shares",
+        "nl": "Verloop van de twee aandelen"
+      },
+      "definition": "Within target and before the cutoff per day the deals were created (per week over 31 days), the goals dashed when set and the days without office hours shaded.",
+      "formula": "the summary's within_target_pct and before_next_noon_pct per business date (group day), per ISO week's Monday (group week) when the period is longer than 31 days; narrowed by the market filter; the shaded days: weekdays outside the markets' calendars' working days (the market's, or any market's), holidays not shaded",
+      "unit": "share",
+      "grain": [
+        "per_day",
+        "per_iso_week"
+      ],
+      "verify_sql": "select r.business_date, round(100.0 * count(*) filter (where r.within_target) / nullif(count(r.within_target), 0), 1) as within_target_pct, round(100.0 * count(*) filter (where r.before_next_noon) / nullif(count(r.before_next_noon), 0), 1) as before_next_noon_pct from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r group by r.business_date order by r.business_date",
+      "notes": "A day without deals is no point (the line joins its neighbours)."
+    },
+    {
+      "surface": "report",
+      "page": "/reports/speed-to-lead",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.pre_window_minutes",
+          "default": "0",
+          "pulse4all": "0 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.target_minutes",
+          "default": "60",
+          "pulse4all": "60 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.goal_within_target_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.goal_before_cutoff_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.speed_to_lead_of",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008zc"
+          },
+          {
+            "object": "cma.lead_deals_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.speed_to_lead_deals_from",
+            "migration": "0009zu"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
+          }
+        ]
+      },
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "prerequisites": [
+        {
+          "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
+          "check": "crm_call_without_contact"
+        },
+        {
+          "item": "Aircall-HubSpot call link so the effective start is the telephony call's",
+          "check": "telephony_call_unlinked"
+        },
+        {
+          "item": "Lead deals carry a contact (speed to lead needs the contact's calls)",
+          "check": "deal_without_contact"
+        },
+        {
+          "item": "Country on the deal or its primary contact, so business time has a market",
+          "check": "market_not_in_catalog"
+        },
+        {
+          "item": "No test deals in the live pipeline",
+          "check": null
+        }
+      ],
+      "docs": [
+        "features.md paragraph 4 (Speed to lead)",
+        "definitions.md, Speed to lead (As built today)",
+        "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "source_deleted_at",
+            "pipeline_id",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "is_closed",
+            "source_id",
+            "connection_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal creation, property change, association change, deletion) -> ingest service POST /hubspot/<key> -> budgeted read-back -> cma.ingest_upsert_crm_records(); missed or failed events re-read by Cloud Run job ingest-sweep; everything modified in the last 26 h re-read by ingest-reconcile; history by ingest-backfill from intake.start_date",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook association changes -> ingest read-back -> cma.ingest_upsert_crm_records()/associations",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_call",
+          "columns": [
+            "direction",
+            "occurred_at",
+            "source_deleted_at",
+            "outcome_ref",
+            "owner_ref",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (call engagement events) -> ingest service POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_calls(); sweep/reconcile/backfill as for crm_record",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.call_link",
+          "columns": [
+            "crm_call_id",
+            "telephony_call_id",
+            "unlinked_at"
+          ],
+          "owner": "CMA",
+          "fed_by": "the ingest sweep's cma.link_calls(now() - 2 h) pairs telephony calls with CRM calls by the keyed number hash and a 120-second window",
+          "cadence": "every minute (ingest-sweep, docs/ingest/deploy.sh); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.telephony_call",
+          "columns": [
+            "started_at",
+            "answered_at",
+            "source_deleted_at"
+          ],
+          "owner": "Aircall",
+          "fed_by": "Aircall webhook (call.created/answered/ended/tagged/untagged/archived) -> ingest service POST /aircall/<key> -> read-back GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); nightly ingest-reconcile re-lists the look-back's calls",
+          "cadence": "webhook read-back within seconds (the Aircall webhook subscription is created by docs/ingest scripts; its delivery is per event); ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh); Cloud Scheduler itself is outside the repo"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "label"
+          ],
+          "owner": "CMA",
+          "fed_by": "pipeline catalog refreshed by the source's read-back/sweep; is_counted and is_lead set by a person on Configuration -> Sources (cma.set_pipeline_counted / set_pipeline_lead)",
+          "cadence": "catalog with each read-back; flags on demand (configuration)"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "country",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook contact events and on-demand contact reads -> cma.ingest_upsert_crm_contacts(); country slots per 0008m",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant configuration (Configuration -> Markets); market aliases in cma.market_alias",
+          "cadence": "on demand (configuration)"
+        }
+      ],
+      "filters": [
+        "tenant: cma.current_tenant_id() passed explicitly to cma.speed_to_lead_of, under row-level security; the SQL function checks reports.view or performance.team again (CMA06)",
+        "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
+        "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
+        "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
+        "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
+      ],
+      "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
+      "status": [
+        "verified"
+      ],
+      "key": "speed_to_lead.deals_list.speed_or_waiting",
+      "tile": "Speed to lead / Waiting",
+      "title": {
+        "en": "Speed to lead or waiting, per deal",
+        "nl": "Snelheid tot lead of wachten, per deal"
+      },
+      "definition": "Per deal of the list: on Called the office time from the creation to the first Attempt; on Not called yet how long it has waited so far.",
+      "formula": "coalesce(business_seconds, waiting_business_seconds) of the deal's row (cma.speed_to_lead_deals_from), shown in business minutes; green within the target, red after it, muted when unknown; 'No office hours' in an unknown market",
+      "unit": "business_minutes",
+      "grain": [
+        "per_record"
+      ],
+      "verify_sql": "select r.deal_source_id, r.status, coalesce(r.business_seconds, r.waiting_business_seconds) / 60 as business_minutes from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r where r.status in ('called', 'not_called_open') order by r.created_at desc, r.deal_id",
+      "notes": "Newest created first, 50 per page; the view's count is the tab's (the figures' called or open_not_called)."
+    },
+    {
+      "surface": "report",
+      "page": "/reports/speed-to-lead",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.pre_window_minutes",
+          "default": "0",
+          "pulse4all": "0 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.target_minutes",
+          "default": "60",
+          "pulse4all": "60 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.goal_within_target_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.goal_before_cutoff_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.speed_to_lead_of",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008zc"
+          },
+          {
+            "object": "cma.lead_deals_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.speed_to_lead_deals_from",
+            "migration": "0009zu"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
+          }
+        ]
+      },
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "prerequisites": [
+        {
+          "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
+          "check": "crm_call_without_contact"
+        },
+        {
+          "item": "Aircall-HubSpot call link so the effective start is the telephony call's",
+          "check": "telephony_call_unlinked"
+        },
+        {
+          "item": "Lead deals carry a contact (speed to lead needs the contact's calls)",
+          "check": "deal_without_contact"
+        },
+        {
+          "item": "Country on the deal or its primary contact, so business time has a market",
+          "check": "market_not_in_catalog"
+        },
+        {
+          "item": "No test deals in the live pipeline",
+          "check": null
+        }
+      ],
+      "docs": [
+        "features.md paragraph 4 (Speed to lead)",
+        "definitions.md, Speed to lead (As built today)",
+        "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "source_deleted_at",
+            "pipeline_id",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "is_closed",
+            "source_id",
+            "connection_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal creation, property change, association change, deletion) -> ingest service POST /hubspot/<key> -> budgeted read-back -> cma.ingest_upsert_crm_records(); missed or failed events re-read by Cloud Run job ingest-sweep; everything modified in the last 26 h re-read by ingest-reconcile; history by ingest-backfill from intake.start_date",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook association changes -> ingest read-back -> cma.ingest_upsert_crm_records()/associations",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_call",
+          "columns": [
+            "direction",
+            "occurred_at",
+            "source_deleted_at",
+            "outcome_ref",
+            "owner_ref",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (call engagement events) -> ingest service POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_calls(); sweep/reconcile/backfill as for crm_record",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.call_link",
+          "columns": [
+            "crm_call_id",
+            "telephony_call_id",
+            "unlinked_at"
+          ],
+          "owner": "CMA",
+          "fed_by": "the ingest sweep's cma.link_calls(now() - 2 h) pairs telephony calls with CRM calls by the keyed number hash and a 120-second window",
+          "cadence": "every minute (ingest-sweep, docs/ingest/deploy.sh); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.telephony_call",
+          "columns": [
+            "started_at",
+            "answered_at",
+            "source_deleted_at"
+          ],
+          "owner": "Aircall",
+          "fed_by": "Aircall webhook (call.created/answered/ended/tagged/untagged/archived) -> ingest service POST /aircall/<key> -> read-back GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); nightly ingest-reconcile re-lists the look-back's calls",
+          "cadence": "webhook read-back within seconds (the Aircall webhook subscription is created by docs/ingest scripts; its delivery is per event); ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh); Cloud Scheduler itself is outside the repo"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "label"
+          ],
+          "owner": "CMA",
+          "fed_by": "pipeline catalog refreshed by the source's read-back/sweep; is_counted and is_lead set by a person on Configuration -> Sources (cma.set_pipeline_counted / set_pipeline_lead)",
+          "cadence": "catalog with each read-back; flags on demand (configuration)"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "country",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook contact events and on-demand contact reads -> cma.ingest_upsert_crm_contacts(); country slots per 0008m",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant configuration (Configuration -> Markets); market aliases in cma.market_alias",
+          "cadence": "on demand (configuration)"
+        }
+      ],
+      "filters": [
+        "tenant: cma.current_tenant_id() passed explicitly to cma.speed_to_lead_of, under row-level security; the SQL function checks reports.view or performance.team again (CMA06)",
+        "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
+        "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
+        "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
+        "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
+      ],
+      "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
+      "status": [
+        "verified"
+      ],
+      "key": "speed_to_lead.deals_list.attempts",
+      "tile": "Attempts",
+      "title": {
+        "en": "Attempts per deal, with the timeline and the detail",
+        "nl": "Pogingen per deal, met de tijdlijn en het detail"
+      },
+      "definition": "Per deal of the list: its Attempts so far, a timeline of its first 1.5 working days with a dot per attempt, and with Show attempts each attempt's start, time after creation, connected, talk time, conversation, tag meaning and agent.",
+      "formula": "attempts_so_far of the row; the detail is cma.deal_attempts_of's is_attempt rows for the deal's window (creation less the pre-window to window_end), the first 20 by number: started_at, business seconds after the creation (cma.business_seconds_in on the market's calendar), connected, talk seconds, conversation, the meaning keys of the linked telephony call's current tags (never the tag's text), the telephony user's person; the timeline spans 1.5 of the market's mean office days with marks at the target and the cutoff",
+      "unit": "count",
+      "grain": [
+        "per_record",
+        "per_attempt"
+      ],
+      "verify_sql": "select r.deal_source_id, r.attempts_so_far from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r where r.status = 'called' order by r.created_at desc, r.deal_id",
+      "notes": "No phone number, recording, customer name or email; staff names (the agent) are shown. 243 W10 compares the list's attempts with cma.deal_attempts_of's."
+    },
+    {
+      "surface": "report",
+      "page": "/reports/speed-to-lead",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.pre_window_minutes",
+          "default": "0",
+          "pulse4all": "0 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.target_minutes",
+          "default": "60",
+          "pulse4all": "60 (catalog default; seed 02 sets none)"
+        },
+        {
+          "key": "speed_to_lead.goal_within_target_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.goal_before_cutoff_pct",
+          "default": "",
+          "pulse4all": "empty (no goal yet; Martin gives the value)"
+        },
+        {
+          "key": "speed_to_lead.stale_business_days",
+          "default": "2",
+          "pulse4all": "2 (catalog default; seed 02 sets none)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load (server component), one read for the whole page (cma.speed_to_lead_page, addition 0009zu); while the period reaches today the page reads itself again every 60 seconds (router.refresh, paused while the tab is hidden, not again within a minute on return). Underlying tables fill by webhook read-back (seconds), sweep (minute) and reconcile (03:30)",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.speed_to_lead_page",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.speed_to_lead_of",
+            "migration": "0009zu"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008zc"
+          },
+          {
+            "object": "cma.lead_deals_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.speed_to_lead_deals_from",
+            "migration": "0009zu"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getSpeedToLeadPage"
+          }
+        ]
+      },
+      "fixture_check": "The query runs against the local volume fixture database (every db/ script to 242, the dev seed and web/verify/perf-volume-fixture.sql at 3x, 24 November 2026) for October 2026 and returns rows; 243 W6 and W10 prove the page's figures and deals list against the summary and cma.deal_attempts_of; Martin compares the value with the page in Studio.",
+      "prerequisites": [
+        {
+          "item": "Every call linked to a contact and a deal (kpis.md paragraph 11)",
+          "check": "crm_call_without_contact"
+        },
+        {
+          "item": "Aircall-HubSpot call link so the effective start is the telephony call's",
+          "check": "telephony_call_unlinked"
+        },
+        {
+          "item": "Lead deals carry a contact (speed to lead needs the contact's calls)",
+          "check": "deal_without_contact"
+        },
+        {
+          "item": "Country on the deal or its primary contact, so business time has a market",
+          "check": "market_not_in_catalog"
+        },
+        {
+          "item": "No test deals in the live pipeline",
+          "check": null
+        }
+      ],
+      "docs": [
+        "features.md paragraph 4 (Speed to lead)",
+        "definitions.md, Speed to lead (As built today)",
+        "api.md, GET /api/v1/reports/speed-to-lead/figures and /deals",
+        "decisions.md 24 Nov 2026 (the cockpit, addition 0009zu, #318)"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "source_deleted_at",
+            "pipeline_id",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "is_closed",
+            "source_id",
+            "connection_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal creation, property change, association change, deletion) -> ingest service POST /hubspot/<key> -> budgeted read-back -> cma.ingest_upsert_crm_records(); missed or failed events re-read by Cloud Run job ingest-sweep; everything modified in the last 26 h re-read by ingest-reconcile; history by ingest-backfill from intake.start_date",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook association changes -> ingest read-back -> cma.ingest_upsert_crm_records()/associations",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.crm_call",
+          "columns": [
+            "direction",
+            "occurred_at",
+            "source_deleted_at",
+            "outcome_ref",
+            "owner_ref",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (call engagement events) -> ingest service POST /hubspot/<key> -> read-back -> cma.ingest_upsert_crm_calls(); sweep/reconcile/backfill as for crm_record",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.call_link",
+          "columns": [
+            "crm_call_id",
+            "telephony_call_id",
+            "unlinked_at"
+          ],
+          "owner": "CMA",
+          "fed_by": "the ingest sweep's cma.link_calls(now() - 2 h) pairs telephony calls with CRM calls by the keyed number hash and a 120-second window",
+          "cadence": "every minute (ingest-sweep, docs/ingest/deploy.sh); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.telephony_call",
+          "columns": [
+            "started_at",
+            "answered_at",
+            "source_deleted_at"
+          ],
+          "owner": "Aircall",
+          "fed_by": "Aircall webhook (call.created/answered/ended/tagged/untagged/archived) -> ingest service POST /aircall/<key> -> read-back GET /v1/calls/{id} -> cma.ingest_upsert_telephony_calls(); nightly ingest-reconcile re-lists the look-back's calls",
+          "cadence": "webhook read-back within seconds (the Aircall webhook subscription is created by docs/ingest scripts; its delivery is per event); ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh); Cloud Scheduler itself is outside the repo"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "label"
+          ],
+          "owner": "CMA",
+          "fed_by": "pipeline catalog refreshed by the source's read-back/sweep; is_counted and is_lead set by a person on Configuration -> Sources (cma.set_pipeline_counted / set_pipeline_lead)",
+          "cadence": "catalog with each read-back; flags on demand (configuration)"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "country",
+            "source_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook contact events and on-demand contact reads -> cma.ingest_upsert_crm_contacts(); country slots per 0008m",
+          "cadence": "webhook read-back within seconds; ingest-sweep every minute, ingest-reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh, since 17 Oct 2026; docs/datamap/catalog.json still says 02:30); the live schedule is Cloud Scheduler, outside the repo"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant configuration (Configuration -> Markets); market aliases in cma.market_alias",
+          "cadence": "on demand (configuration)"
+        }
+      ],
+      "filters": [
+        "tenant: cma.current_tenant_id() passed explicitly to cma.speed_to_lead_of, under row-level security; the SQL function checks reports.view or performance.team again (CMA06)",
+        "deals only (record_type = 'deal'), not deleted (source_deleted_at is null)",
+        "counted lead pipelines only: coalesce(connection_pipeline.is_counted, true) and coalesce(is_lead, true) - a pipeline not yet reviewed counts and is a lead pipeline (data-quality check pipeline_unreviewed); Sales Pipeline - Self Serve is un-leaded in prod (Decision log 12 Oct 2026)",
+        "created on or after intake.start_date (tenant zone) and inside [:from, :to] as business dates in the tenant zone",
+        "first Attempt (since addition 0009zq): an outbound telephony call on a counted line, linked through the call link to a CRM call of the deal or its contacts (attempts.source telephony; under crm every outbound CRM call), from the creation less speed_to_lead.pre_window_minutes to the window's end, the earliest of the close, the contacts' first order and now (cma.deal_attempts_of); a CRM call without a telephony call never ends it under telephony",
+        "test deals: no filter - 'No test deals in the live pipeline' is a data prerequisite (kpis.md paragraph 11), not code; the only lever is the pipeline counted/lead switches"
+      ],
+      "time": "Business date = the deal's source_created_at in the tenant's zone (cma.report_range); business minutes counted in the deal's market's office hours (cma.business_hours of the market, else '*', holidays of the market and '*' excluded, each day placed in the market's zone); now = the query's now(); a running period simply ends at :to (no cut to time of day); max 92 days (CMA04)",
+      "status": [
+        "verified"
+      ],
+      "key": "speed_to_lead.deals_list.stale",
+      "tile": "Waiting more than <n> working days",
+      "title": {
+        "en": "Stale lead",
+        "nl": "Verouderde lead"
+      },
+      "definition": "A deal not called yet that has waited more than speed_to_lead.stale_business_days working days of its market since its creation; its row is greyed.",
+      "formula": "status = 'not_called_open' and cma.business_days_in(market calendar, created_at, now()) > speed_to_lead.stale_business_days; never in an unknown market (no calendar)",
       "unit": "flag",
       "grain": [
         "per_record"
       ],
-      "verify_sql": "with s as (\n  select t.timezone as zone, cma.setting_of(:tenant_id, 'intake.start_date')::date as start_date\n  from cma.tenant t where t.id = :tenant_id)\nselect count(*) as no_business_hours_rows\nfrom cma.crm_record d cross join s\nleft join cma.connection_pipeline p\n  on p.tenant_id = :tenant_id and p.connection_id = d.connection_id\n and p.record_type = 'deal' and p.source_pipeline_id = d.pipeline_id\ncross join lateral cma.record_market_of(:tenant_id, d.connection_id, d.market, d.contact_source_id) rm\nwhere d.tenant_id = :tenant_id and d.record_type = 'deal' and d.source_deleted_at is null\n  and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)\n  and d.source_created_at >= (s.start_date::timestamp at time zone s.zone)\n  and d.source_created_at >= ((:from)::date::timestamp at time zone s.zone)\n  and d.source_created_at < (((:to)::date + 1)::timestamp at time zone s.zone)\n  and rm.code = 'unknown' and not coalesce(d.is_closed, false)",
-      "notes": "Upper bound check: counts open deals with market 'unknown'; the shown rows are those among them without an outbound call. Matches DESIGN 4.4 / audit rule 7: a record without a market behaves as documented ('No business hours'), never a fake 0. Such deals are also excluded from the median and the two shares (null business time / null noon). The fix path is the market data: deal_contact_incomplete and market_not_in_catalog on Data quality."
+      "verify_sql": "select r.deal_source_id, r.created_at, r.market from cma.speed_to_lead_of(:tenant_id, (:from)::date::timestamp, ((:to)::date + 1)::timestamp) r where r.status = 'not_called_open' order by r.created_at desc",
+      "notes": "Moves with now(). The setting is 1 to 30 working days (cma.check_tenant_setting); 243 W8 proves it follows the setting."
     },
     {
       "key": "calls.total",

@@ -76,6 +76,7 @@ The brand book defines no error or warning colours. These derived defaults keep 
 |---|---|---|
 | Success | `#27AE6F` | Confirmations, saved states, positive counters |
 | Success surface | `#E6F6EE` | Light background behind a success message |
+| Success text | `#1D7A4F` | Success said in words on white, where `#27AE6F` lacks the 4.5:1 contrast for text (Speed to lead's goal status line; Martin, 24 November 2026) |
 | Warning | `#C98A1B` | Needs attention, non-blocking |
 | Warning surface | `#FBF1DC` | Light background behind a warning |
 | Error | `#B8433C` | Validation errors, failed actions |
