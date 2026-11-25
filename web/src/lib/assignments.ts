@@ -5,7 +5,7 @@
  * Pure and without runtime imports beyond the zone helpers of lib/corrections, so verify/roster.mjs tests it without a
  * browser or a database. Codes, markets, statuses and settings are the tenant's: nothing here knows a key.
  */
-import type { DateKey } from "./data/types";
+import type { DateKey, RosterWeek } from "./data/types";
 // With its extension, so verify/roster.mjs can run this module under Node's type stripping
 import { instantsForLocal, localParts } from "./corrections.ts";
 
@@ -60,6 +60,27 @@ export function parseAssignment(
 /** The text a block shows in the planner's typing field: CODE, or CODE-MARKET */
 export function assignmentText(b: { code: string; market: string | null }): string {
   return b.market ? `${b.code}-${b.market}` : b.code;
+}
+
+// ---- the planner's payload ------------------------------------------------------------------------
+
+/** A week's blocks as the planner's page sends them to the browser: per `${userId}:${date}`, [code, start, end, market, note] */
+export type CompactBlocks = Record<string, [string, string, string, string | null, string | null][]>;
+
+/** The planner's week without the full block rows: the type's name, kind and colour come from the catalog it carries */
+export type PlannerWeek = Omit<RosterWeek, "assignments"> & { blocks: CompactBlocks };
+
+/**
+ * The week for the planner's client components with its blocks compacted (about a tenth of the rows' size), so a full
+ * week of blocks keeps the page within its HTML budget (web/verify/perf.json)
+ */
+export function plannerWeek(week: RosterWeek): PlannerWeek {
+  const { assignments, ...rest } = week;
+  const blocks: CompactBlocks = {};
+  for (const a of assignments) {
+    (blocks[`${a.userId}:${a.date}`] ??= []).push([a.code, a.start.slice(0, 5), a.end.slice(0, 5), a.hoursMarket, a.note]);
+  }
+  return { ...rest, blocks };
 }
 
 // ---- colours (D13) --------------------------------------------------------------------------------

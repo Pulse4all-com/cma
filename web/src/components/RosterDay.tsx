@@ -18,10 +18,10 @@
 import { useMemo, useRef, useState, useTransition, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
-import type { AssignmentBlockInput, AssignmentType, RosterAssignmentsResult, RosterWeek } from "@/lib/data";
+import type { AssignmentBlockInput, AssignmentType, RosterAssignmentsResult } from "@/lib/data";
 import {
   addFigures, assignmentText, figureKey, fromMinutes, fromPlannerMinutes, paintBlocks, parseAssignment, plannedByKey, sameBlocks, slotFigures,
-  slotFloor, toMinutes, toneOf, TONE_CLASS, toPlannerMinutes, type Block, type ParseProblem,
+  slotFloor, toMinutes, toneOf, TONE_CLASS, toPlannerMinutes, type Block, type ParseProblem, type PlannerWeek,
 } from "@/lib/assignments";
 import { fmtDate, fmtMinutes } from "@/lib/time";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -41,16 +41,16 @@ async function send(path: string, body: unknown): Promise<Response> {
 export function RosterDay({
   week, date, teamArg, copy, locale, onPublishedNow,
 }: {
-  week: RosterWeek;
+  week: PlannerWeek;
   date: string;
   /** The team as the API takes it: null for Everyone */
   teamArg: string | null;
-  copy: Pick<Copy, "assignments" | "roster" | "dayEditor">;
+  copy: Pick<Copy, "assignmentsDay" | "assignments" | "dayEditor">;
   locale: Locale;
   /** A write published the week at once (D8): the page reads the header again */
   onPublishedNow: () => void;
 }) {
-  const t = copy.assignments;
+  const t = copy.assignmentsDay;
   const router = useRouter();
   const [busy, startTransition] = useTransition();
   const ctx = week.planner;
@@ -65,9 +65,9 @@ export function RosterDay({
     const shift = e?.kind === "shift" && e.start && e.end
       ? { start: toPlannerMinutes(date, e.start, p.timeZone, zone) ?? 0, end: toPlannerMinutes(date, e.end, p.timeZone, zone) ?? 0 }
       : null;
-    const blocks: Block[] = week.assignments.filter((a) => a.userId === p.userId && a.date === date).map((a) => ({
-      code: a.code, market: a.hoursMarket, note: a.note,
-      start: toPlannerMinutes(date, a.start, p.timeZone, zone) ?? 0, end: toPlannerMinutes(date, a.end, p.timeZone, zone) ?? 0,
+    const blocks: Block[] = (week.blocks[`${p.userId}:${date}`] ?? []).map(([code, start, end, market, note]) => ({
+      code, market, note,
+      start: toPlannerMinutes(date, start, p.timeZone, zone) ?? 0, end: toPlannerMinutes(date, end, p.timeZone, zone) ?? 0,
     }));
     return { person: p, entry: e, shift, blocks };
   }), [week, date, zone]);
@@ -279,11 +279,14 @@ export function RosterDay({
   const dayTotals = new Map<string, number>();
   for (const p of people) addFigures(dayTotals, plannedByKey(p.blocks, p.defaultMarket));
   const weekTotals = new Map<string, number>();
-  for (const a of week.assignments) {
-    if (a.date === date) continue;
-    const def = week.people.find((p) => p.userId === a.userId)?.defaultHoursMarket ?? null;
-    const k = figureKey(a.code, a.hoursMarket ?? def);
-    weekTotals.set(k, (weekTotals.get(k) ?? 0) + toMinutes(a.end) - toMinutes(a.start));
+  for (const [key, list] of Object.entries(week.blocks)) {
+    const [userId, d] = key.split(":");
+    if (d === date) continue;
+    const def = week.people.find((p) => p.userId === userId)?.defaultHoursMarket ?? null;
+    for (const [code, start, end, market] of list) {
+      const k = figureKey(code, market ?? def);
+      weekTotals.set(k, (weekTotals.get(k) ?? 0) + toMinutes(end) - toMinutes(start));
+    }
   }
   addFigures(weekTotals, dayTotals);
   const keyLabel = (k: string) => { const [c, m] = k.split("/"); return m ? `${c} ${m}` : `${c} · ${t.ownMarket}`; };
@@ -333,7 +336,7 @@ export function RosterDay({
           ref={grid}
           tabIndex={0}
           role="grid"
-          aria-label={`${t.viewDay} ${fmtDate(date, locale, "compact")}`}
+          aria-label={`${copy.assignments.viewDay} ${fmtDate(date, locale, "compact")}`}
           onKeyDown={onGridKey}
           onPointerUp={() => { if (drag.current) { drag.current = null; codeField.current?.focus(); } }}
           className="inline-block min-w-full select-none text-small focus:outline-2 focus:outline-p4a-lightblue"

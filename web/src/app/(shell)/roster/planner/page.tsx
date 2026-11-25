@@ -6,6 +6,7 @@ import { absenceKeywordList, plannerNeedsTeams, plannerTeam, rosterTeamArg } fro
 import { addDays, dateKeyInZone, isDateKey, startOfWeek } from "@/lib/time";
 import { resolve } from "@/app/access";
 import { pickCopy } from "@/lib/copy";
+import { plannerWeek } from "@/lib/assignments";
 
 /** Saved weeks shown for browsing: this many weeks back and ahead of the week on screen */
 const WEEKS_AROUND = 12;
@@ -66,7 +67,7 @@ export default async function RosterPlannerPage({ searchParams }: PageProps<"/ro
       {/* Keyed by the week and the team: another week or team is a new grid, never the previous one's cells under new props */}
       <RosterPlanner
         key={`${weekStart}:${team}`}
-        week={week}
+        week={plannerWeek(week)}
         weeks={weeks}
         teams={teams}
         team={team}
@@ -74,7 +75,7 @@ export default async function RosterPlannerPage({ searchParams }: PageProps<"/ro
         today={today}
         thisWeek={thisWeek}
         viewerZone={me.timeZone}
-        copy={pickCopy(copy, "dayEditor", "roster", "assignments")}
+        copy={sp.view === "day" ? pickCopy(copy, "dayEditor", "roster", "assignments", "assignmentsDay") : pickCopy(copy, "dayEditor", "roster", "assignments")}
         locale={me.locale}
         view={sp.view === "day" ? "day" : "week"}
         day={isDateKey(sp.date) ? sp.date : undefined}

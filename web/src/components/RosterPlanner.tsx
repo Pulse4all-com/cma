@@ -27,10 +27,11 @@
  * of the same week (after Publish or Copy previous week) brings the cells and the header from the database again.
  */
 import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
-import type { AbsenceType, AssignmentBlock, RosterEntry, RosterReportRow, RosterWeek, RosterWeekSummary, TeamInfo } from "@/lib/data";
-import { planCheck, toMinutes, toneOf, TONE_CLASS, type Block } from "@/lib/assignments";
+import type { AbsenceType, AssignmentBlock, RosterEntry, RosterReportRow, RosterWeekSummary, TeamInfo } from "@/lib/data";
+import { planCheck, toMinutes, toneOf, TONE_CLASS, type Block, type PlannerWeek } from "@/lib/assignments";
 import { RosterDay } from "./RosterDay";
 import {
   absenceKeywordList, cellLabel, coverageGrid, EVERYONE, headcountByDate, isoWeek, parseCell, plannedMinutesByUser, plannerSearch, plannerTeamOfHeader, rosterTeamArg, weekDays,
@@ -62,7 +63,8 @@ export function RosterPlanner({
   view = "week",
   day,
 }: {
-  week: RosterWeek;
+  /** The week with its blocks compacted (lib/assignments plannerWeek) */
+  week: PlannerWeek;
   weeks: RosterWeekSummary[];
   teams: TeamInfo[];
   /** The team on screen as the page resolved it: a team's key or "all" for Everyone (lib/roster, plannerTeam) */
@@ -72,7 +74,8 @@ export function RosterPlanner({
   today: string;
   thisWeek: string;
   viewerZone: string;
-  copy: Pick<Copy, "dayEditor" | "roster" | "assignments">;
+  /** The Day view's words (assignmentsDay) only when the page shows the Day view: the Week view's page stays lighter */
+  copy: Pick<Copy, "dayEditor" | "roster" | "assignments"> & Partial<Pick<Copy, "assignmentsDay">>;
   locale: Locale;
   /** Week (the cells) or Day (Arno's layout of one date, addition 0009zw) */
   view?: "week" | "day";
@@ -90,7 +93,7 @@ export function RosterPlanner({
   const weekStart = week.header.weekStart;
   const days = useMemo(() => weekDays(weekStart), [weekStart]);
   const keep = { team };
-  const entryMap = (w: RosterWeek) => new Map(w.entries.map((e) => [`${e.userId}:${e.date}`, e]));
+  const entryMap = (w: PlannerWeek) => new Map(w.entries.map((e) => [`${e.userId}:${e.date}`, e]));
   const [saved, setEntries] = useState<Map<string, RosterEntry>>(() => entryMap(week));
   /**
    * A cell saved shows its new value at once (night N07, decision D3): the entry, the person's planned hours, the day's
@@ -107,14 +110,8 @@ export function RosterPlanner({
   const [states, setStates] = useState<Map<string, CellState>>(new Map());
   const [header, setHeader] = useState(week.header);
   // The week's blocks per cell, for the thin bar under each cell (addition 0009zw)
-  const blockMap = (w: RosterWeek) => {
-    const m = new Map<string, AssignmentBlock[]>();
-    for (const a of w.assignments) {
-      const k = `${a.userId}:${a.date}`;
-      m.set(k, [...(m.get(k) ?? []), { assignmentId: a.assignmentId, code: a.code, start: a.start.slice(0, 5), end: a.end.slice(0, 5), hoursMarket: a.hoursMarket, note: a.note }]);
-    }
-    return m;
-  };
+  const blockMap = (w: PlannerWeek) => new Map(Object.entries(w.blocks).map(([k, list]) =>
+    [k, list.map(([code, start, end, hoursMarket, note]): AssignmentBlock => ({ assignmentId: "", code, start, end, hoursMarket, note }))]));
   const [cellBlocks, setCellBlocks] = useState(() => blockMap(week));
   // A refresh of this week and team (Publish, Copy previous week) brings a new answer: the cells and the header follow it
   const [answer, setAnswer] = useState(week);
@@ -376,20 +373,20 @@ export function RosterPlanner({
       {notice ? <Notice tone="info">{notice}</Notice> : null}
 
       <nav aria-label={ta.view} className="flex flex-wrap items-center gap-2" data-testid="roster-view">
-        <a href={weekHref} aria-current={view === "week" ? "page" : undefined}
-          className={`inline-flex h-10 items-center rounded-button border px-4 font-semibold ${view === "week" ? "border-p4a-deepblue bg-p4a-deepblue text-white" : "border-p4a-border text-p4a-deepblue hover:bg-p4a-bgblue"}`}>{ta.viewWeek}</a>
-        <a href={dayHref(shownDay)} aria-current={view === "day" ? "page" : undefined}
-          className={`inline-flex h-10 items-center rounded-button border px-4 font-semibold ${view === "day" ? "border-p4a-deepblue bg-p4a-deepblue text-white" : "border-p4a-border text-p4a-deepblue hover:bg-p4a-bgblue"}`}>{ta.viewDay}</a>
+        <Link href={weekHref} aria-current={view === "week" ? "page" : undefined}
+          className={`inline-flex h-10 items-center rounded-button border px-4 font-semibold ${view === "week" ? "border-p4a-deepblue bg-p4a-deepblue text-white" : "border-p4a-border text-p4a-deepblue hover:bg-p4a-bgblue"}`}>{ta.viewWeek}</Link>
+        <Link href={dayHref(shownDay)} aria-current={view === "day" ? "page" : undefined}
+          className={`inline-flex h-10 items-center rounded-button border px-4 font-semibold ${view === "day" ? "border-p4a-deepblue bg-p4a-deepblue text-white" : "border-p4a-border text-p4a-deepblue hover:bg-p4a-bgblue"}`}>{ta.viewDay}</Link>
         {view === "day" ? days.map((d) => (
-          <a key={d} href={dayHref(d)} aria-current={d === shownDay ? "date" : undefined}
+          <Link key={d} href={dayHref(d)} aria-current={d === shownDay ? "date" : undefined}
             className={`inline-flex h-10 items-center rounded-button px-3 text-body ${d === shownDay ? "bg-p4a-bgblue font-semibold text-p4a-deepblue" : "text-p4a-deepblue hover:underline"}`}>
             {fmtDate(d, locale, "compact")}
-          </a>
+          </Link>
         )) : null}
       </nav>
 
-      {view === "day" ? (
-        <RosterDay key={shownDay} week={week} date={shownDay} teamArg={teamArg} copy={copy} locale={locale} onPublishedNow={() => startTransition(() => router.refresh())} />
+      {view === "day" && copy.assignmentsDay ? (
+        <RosterDay key={shownDay} week={week} date={shownDay} teamArg={teamArg} copy={{ ...copy, assignmentsDay: copy.assignmentsDay }} locale={locale} onPublishedNow={() => startTransition(() => router.refresh())} />
       ) : week.people.length === 0 ? (
         <p className="text-body text-p4a-muted">{t.noPeople}</p>
       ) : (
@@ -558,7 +555,8 @@ function CellBar({ entry, blocks, typeOf }: {
   const span = Math.max(1, toMinutes(entry.end) - s);
   return (
     <div className="relative mt-1 h-1.5 overflow-hidden rounded-button bg-p4a-neutral-surface" data-testid="roster-cell-bar"
-      title={blocks.map((b) => `${b.start}–${b.end} ${b.code}${b.hoursMarket ? `-${b.hoursMarket}` : ""}`).join(", ")}>
+      // the blocks in words on hover, built then: a week of cells would otherwise carry them all in the page (perf.json)
+      onPointerEnter={(e) => { e.currentTarget.title = blocks.map((b) => `${b.start}–${b.end} ${b.code}${b.hoursMarket ? `-${b.hoursMarket}` : ""}`).join(", "); }}>
       {blocks.map((b) => {
         const type = typeOf.get(b.code);
         return <span key={`${b.start}-${b.code}`} className={`absolute inset-y-0 ${TONE_CLASS[type ? toneOf(type) : "productive"]}`}
