@@ -179,6 +179,9 @@ begin
 end
 $$;
 revoke execute on function cma.check_roster_setting() from public;
+-- (a first draft of this script named them zone_ok and cma.tenant_setting_zone_ok; gone wherever it ran)
+drop trigger if exists zone_ok on cma.tenant_setting;
+drop function if exists cma.tenant_setting_zone_ok();
 create or replace trigger check_roster_setting before insert or update on cma.tenant_setting
   for each row execute function cma.check_roster_setting();
 
