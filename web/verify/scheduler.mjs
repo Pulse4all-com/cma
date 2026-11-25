@@ -14,7 +14,8 @@
  * untouched, a second run closes nothing, the log names no person. Since addition 0008b the close
  * time is workday.auto_close_at within the workday window (no shift is planned 400 days back, and the
  * day's only event is its 09:00 start): 17:00 for Pulse4all, the business day's end for a tenant
- * without settings. Today's clock-in needs the window, so this runs between 07:00 and 22:00
+ * without settings; since addition 0009zv, where workday.auto_close_office_hours is on (Pulse4all
+ * Subscriptions), the end of that day's office hours of the agent's Default market when it has them. Today's clock-in needs the window, so this runs between 07:00 and 22:00
  * Amsterdam time; outside it the clock-in is refused and the verifier stops with one FAIL line.
  *
  * Dev only: before anything is written, the database PGCONN points to must hold the dev seed's test
@@ -132,10 +133,20 @@ expect("the job's log names the date and no person", [first.out.includes(freeDat
 
 const day = (await get(SUPERVISOR, `/api/v1/team/days/${meA.userId}/${freeDate}`)).body?.data;
 const endEvent = (day?.events ?? []).find((e) => e.kind === "end" && e.isEffective);
-// The tenant's close time on that date: workday.auto_close_at, never after the window end (0008b)
-const closeAt = sql(`select least(cma.business_day_time(x.d, x.z, cma.setting_of(x.t, 'workday.auto_close_at')::time),
-                                  cma.business_day_time(x.d, x.z, cma.setting_of(x.t, 'workday.window_end')::time)) at time zone 'UTC'
-                     from (select '${freeDate}'::date as d, '${day?.day?.timeZone ?? "UTC"}'::text as z, '${meA.tenantId}'::uuid as t) x`).replace(" ", "T") + "Z";
+// The tenant's close time on that date (no shift is planned 400 days back): with workday.auto_close_office_hours on
+// (0009zv), the end of that day's office hours of the agent's Default market when it is an active hours market with office
+// hours that day; else workday.auto_close_at; never after the window end (0008b) and never before the 09:00 start
+const closeAt = sql(`select greatest(least(coalesce(
+                              (select cma.office_hours_end_in(c.time_zone, c.weekdays, c.closes, c.holidays, x.d)
+                               from cma.app_user u
+                               join cma.business_calendar_of(x.t) c on c.market = u.default_hours_market_code
+                               join cma.market m on m.tenant_id = x.t and m.code = c.market and m.hours_market_code = m.code and m.status = 'active'
+                               where u.tenant_id = x.t and u.id = x.u and cma.setting_of(x.t, 'workday.auto_close_office_hours') = 'true'),
+                              cma.business_day_time(x.d, x.z, cma.setting_of(x.t, 'workday.auto_close_at')::time)),
+                            cma.business_day_time(x.d, x.z, cma.setting_of(x.t, 'workday.window_end')::time)),
+                            cma.business_day_time(x.d, x.z, time '09:00')) at time zone 'UTC'
+                     from (select '${freeDate}'::date as d, '${day?.day?.timeZone ?? "UTC"}'::text as z, '${meA.tenantId}'::uuid as t,
+                                  '${meA.userId}'::uuid as u) x`).replace(" ", "T") + "Z";
 expect("the forgotten day is ended at the tenant's close time", [day?.day?.status, day?.day?.endedAt ? new Date(day.day.endedAt).toISOString() : null], ["ended", new Date(closeAt).toISOString()], ["open", null]);
 expect("the end is a system event", endEvent?.source ?? null, "system", "user");
 expect("the day stays flagged for a manager", [day?.day?.needsCorrection, day?.day?.isCapped], [true, false], [false, false]);
