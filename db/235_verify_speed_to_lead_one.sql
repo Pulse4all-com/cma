@@ -14,7 +14,7 @@
 -- cma.speed_to_lead_rows_of when it exists (236 moved it there, with an open-only bound cma.open_leads_of passes as true);
 -- the checks are otherwise unchanged.
 -- Edited by 0009zu (242, brief B40b, D36): V1 expects the row type of whichever addition ran last (34 columns
--- with first_call_* up to 0009zt, 35 without them from 0009zu), and V2 finds the deal's first outbound CRM call itself
+-- with first_call_* before 0009zu, 35 without them from 0009zu), and V2 finds the deal's first outbound CRM call itself
 -- (pg_temp.v9zp_first_crm_call, 0009zq's rule), so the script passes before and after 242.
 -- Expected: V1 to V13 OK, then the verdict "PASS 0009zq". Provoked (verify.provoke true at the top): every row reads
 -- FAIL with its own id, and the verdict PROVOKED, NOT A PASS.

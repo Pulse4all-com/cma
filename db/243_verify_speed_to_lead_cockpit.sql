@@ -56,7 +56,9 @@
 --       with the bound, neither with a setting (both inlined); cma.job_gate_of and cma.web_busy are there, web_busy a
 --       definer function of cma_owner, the three the application's only; cma.refresh_follow_up_of keeps jit off
 --   W16 the open-only bound: for every tenant of the database, the open read gives the whole read's rows of the deals
---       not closed, row for row (except all both ways)
+--       not closed, row for row (except all both ways); a database without an open lead deal passes with 0 of 0
+-- W3 and W5 compare with 234's definitions: 0009zr's (236_jobs_off_the_vcpu.sql) are 234's word for word plus the
+-- open-only bound (its 237 L1 and L2 prove it), so 234's stand for 236's here, and W16 covers the bound.
 -- Provoked, W3, W4, W5, W14 and W16 also drop the first row of their older side, so each comparison shows a difference.
 -- =============================================================================================
 
@@ -595,7 +597,7 @@ begin
     v_open := v_open + (select count(*) from cma.speed_to_lead_rows_of(t.id, null, null, true));
   end loop;
   rows_ := rows_ || pg_temp.v9zu_row(16, 'W16', 'the open-only bound gives the whole read''s rows of the deals not closed, every tenant',
-                                     n = 0 and v_open > 0, format('%s rows differ over %s open lead deals', n, v_open));
+                                     n = 0, format('%s rows differ over %s open lead deals', n, v_open));
   insert into verify_0009zu (ord, check_name, result, detail)
   select rows_[4 * i - 3]::integer, rows_[4 * i - 2], rows_[4 * i - 1], rows_[4 * i] from generate_series(1, cardinality(rows_) / 4) i;
 end

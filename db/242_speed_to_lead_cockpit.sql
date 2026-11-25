@@ -5,7 +5,8 @@
 -- calendars and the attempts' source stay each tenant's settings and catalogs. Runs unchanged in every database, after
 -- 238_email_not_responding_speed.sql (0009zs), and in prod before 240 (0009zt, which waits for Yordi): its order check
 -- names 0009zs. Renumbered from 236/237 and 0009zr, which N07a took (Martin, 24 and 25 November 2026). Rerunnable,
--- forward-only, in one transaction with a lock timeout.
+-- forward-only, in one transaction with a lock timeout. After it, 234 and 236 can no longer be rerun: their
+-- cma.speed_to_lead_of and cma.speed_to_lead_rows_of return 234's row shape (return type mismatch).
 -- Run as your own IAM login: dev first, then 243_verify_speed_to_lead_cockpit.sql there (normal and provoked), then the
 -- verifies that read what this re-creates, each still PASS: 237 (N07a's, edited by this change: its copy of 234 names
 -- 234's columns and L1 compares the columns both row shapes have), 235, 41, 95 and 179, edited by this change (235: V1 takes
@@ -71,7 +72,7 @@
 --     (October, with September for the previous period: figures, markets, trend, groups, the first 50 deals) 510-560 ms,
 --     the Called tab's page 2 590-600 ms, over 92 days (and the 92 before them) 815-875 ms
 --   cma.speed_to_lead_figures 480-515 ms, cma.speed_to_lead_deals_of (called, first page) 505-550 ms (the API's)
--- Against 0009zs (N07a's open-only bound and the one definition in cma.speed_to_lead_rows_of; 25 November 2026, the same
+-- On a database at 0009zs (0009zr's open-only bound and one definition in cma.speed_to_lead_rows_of; 25 November 2026, the same
 -- method, a noisier machine): the follow-up job's cma.open_leads_of 770-890 → 340-540 ms, the summary total 670-1,050 →
 -- 410-600 ms, cma.speed_to_lead_rows 750-950 → 430-550 ms; the page 500-555 ms (the Called tab's page 2 570-700), the
 -- deals list 530-640 ms and the figures 530-560 ms, as on 24 November within the noise.
@@ -685,7 +686,8 @@ as $$
 $$;
 -- jit off, as 0008zr's reads (132): the inlined body's estimated cost passes jit_above_cost, and compiling it cost
 -- about 200 ms of each call at three times prod's volume (the follow-up job's call, with ordinality: 1,130 ms before
--- this script, 690 ms after; 242's header)
+-- this script, 690 ms after, both before 0009zr; since 0009zr cma.refresh_follow_up_of, its one caller, carries jit off
+-- itself, so this keeps the direct reads (131, the verifies) without JIT; 242's header)
 alter function cma.open_leads_of(uuid) set jit = off;
 
 -- ---------------------------------------------------------------------------------------------
