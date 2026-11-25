@@ -1,0 +1,58 @@
+Time: 6.151 ms
+Time: 0.146 ms
+              set_config              |              set_config              
+--------------------------------------+--------------------------------------
+ 01a20e63-6ce0-78fb-ac14-8552d786fb2c | 01a20e63-6d1f-76dd-a633-abd82e8d9be7
+(1 row)
+
+Time: 0.380 ms
+Time: 0.123 ms
+ count 
+-------
+   209
+(1 row)
+
+Time: 3961.957 ms (00:03.962)
+ count 
+-------
+   209
+(1 row)
+
+Time: 3987.889 ms (00:03.988)
+ email_history_start 
+---------------------
+ 2026-08-26
+(1 row)
+
+Time: 327.738 ms
+ count 
+-------
+   100
+(1 row)
+
+Time: 553.193 ms
+ count 
+-------
+   100
+(1 row)
+
+Time: 611.446 ms
+ count 
+-------
+   100
+(1 row)
+
+Time: 370.592 ms
+ count 
+-------
+    26
+(1 row)
+
+Time: 862.333 ms
+psql:/tmp/claude-0/-home-user-cma/64dd41cb-2eb0-5cc3-a951-2020ed96c5b3/scratchpad/email-time.sql:11: ERROR:  the range must run forward and cover at most 92 days
+CONTEXT:  PL/pgSQL function report_range(uuid,date,date) line 6 at RAISE
+SQL statement "SELECT cma.report_range(v_tenant, p_from, p_to)"
+PL/pgSQL function email_report_page(date,date,text,text,text,text) line 11 at PERFORM
+Time: 0.645 ms
+Time: 0.180 ms
+me: 0.174 ms
