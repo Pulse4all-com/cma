@@ -332,6 +332,8 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
    from cma.work_status where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, key$q$, 'agent', array['workday.own']),
 -- My day's plan, Actual lane, notices and Switch choices (addition 0010a)
 ('a', 'my day', 'my day', $q$select cma.my_day(null)$q$, 'agent', array['workday.own']),
+-- My day reads itself again every 30 s while it is open (addition 0010a): the same read, timed as a poll
+('a', 'polls', 'my day (poll)', $q$select cma.my_day(null)$q$, 'poll', array['workday.own']),
 ('a', 'my hours', 'my hours week', $q$select cma.my_hours('{monday}')$q$, 'agent', array['workday.own']),
 ('a', 'welcome agent', 'app links', $q$select key, label, address from cma.app_links()$q$, 'agent', array['*']),
 ('a', 'welcome agent', 'my roster today', $q$select * from cma.my_roster('{today}', '{today}')$q$, 'agent', array['roster.view']),

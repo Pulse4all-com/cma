@@ -153,7 +153,7 @@ export interface MyDayBlock {
   workArea: WorkArea | null;
   absenceKey: string | null;
   /** A work block's hours market; null for a pause and an absence */
-  market: string | null;
+  hoursMarket: string | null;
   /** hh:mm in the person's zone */
   start: string;
   end: string;
@@ -173,7 +173,7 @@ export interface ActualStretch {
   kind: "work" | "pause" | "other";
   isWorking: boolean;
   workArea: WorkArea | null;
-  market: string | null;
+  hoursMarket: string | null;
   fromAt: Instant;
   /** null while it runs */
   toAt: Instant | null;
@@ -188,9 +188,9 @@ export interface DeviationMark {
   at: Instant;
   code: string | null;
   statusName: string;
-  market: string | null;
+  hoursMarket: string | null;
   plannedCode: string | null;
-  plannedMarket: string | null;
+  plannedHoursMarket: string | null;
 }
 
 /** The Switch panel's choices (E6): work types, pauses, Other statuses, the hours markets and the person's Default market */
@@ -210,7 +210,7 @@ export interface MyDayCurrent {
   statusKey: string;
   statusName: string;
   workArea: WorkArea | null;
-  market: string | null;
+  hoursMarket: string | null;
   since: Instant;
   source: ActualStretch["source"];
 }
@@ -231,10 +231,10 @@ export interface MyDayPlan {
   current: MyDayCurrent | null;
   planNow: MyDayBlock | null;
   planNext: MyDayBlock | null;
-  notice: { at: Instant; code: string | null; name: string; kind: "work" | "pause" | null; market: string | null; until: Instant } | null;
+  notice: { at: Instant; code: string | null; name: string; kind: "work" | "pause" | null; hoursMarket: string | null; until: Instant } | null;
   offPlan: {
-    code: string | null; name: string; kind: "work" | "pause"; market: string | null; since: Instant;
-    nextAt: Instant | null; nextCode: string | null; nextName: string | null; nextKind: MyDayBlock["kind"] | null; nextMarket: string | null;
+    code: string | null; name: string; kind: "work" | "pause"; hoursMarket: string | null; since: Instant;
+    nextAt: Instant | null; nextCode: string | null; nextName: string | null; nextKind: MyDayBlock["kind"] | null; nextHoursMarket: string | null;
   } | null;
   /** Whether the tenant has assignment types at all; without, My day keeps the status buttons of before 0010a */
   usesAssignments: boolean;
@@ -249,7 +249,7 @@ export interface MyHoursWeek {
   workedSeconds: number;
   plannedMinutes: number;
   /** Worked time per assignment and market, by time; an event without an assignment under its status name */
-  rows: { code: string | null; name: string; workArea: WorkArea | null; market: string | null; seconds: number }[];
+  rows: { code: string | null; name: string; workArea: WorkArea | null; hoursMarket: string | null; seconds: number }[];
   /** Time not worked, per pause type or status */
   pauses: { code: string | null; name: string; seconds: number }[];
   days: {
@@ -258,8 +258,8 @@ export interface MyHoursWeek {
     hasTime: boolean;
     workedSeconds: number;
     segments: { code: string | null; name: string; statusName: string; kind: ActualStretch["kind"]; isWorking: boolean; workArea: WorkArea | null;
-      market: string | null; fromAt: Instant; toAt: Instant; seconds: number }[];
-    split: { code: string | null; name: string; market: string | null; seconds: number }[];
+      hoursMarket: string | null; fromAt: Instant; toAt: Instant; seconds: number }[];
+    split: { code: string | null; name: string; hoursMarket: string | null; seconds: number }[];
   }[];
 }
 
@@ -4812,7 +4812,7 @@ export interface CmaData {
    * My day's plan against actual for a date (cma.my_day, addition 0010a) with the day itself, in one transaction: null
    * workday before Clock in. workday.own (CMA06)
    */
-  getMyDay(me: Principal, date: DateKey): Promise<{ workday: Workday | null; plan: MyDayPlan }>;
+  getMyDay(me: Principal, date: DateKey): Promise<{ workday: Workday | null; plan: MyDayPlan; statusChoices: MyDayChoices | null }>;
   /** My hours for the ISO week starting on weekStart (cma.my_hours, addition 0010a, read only). workday.own (CMA06) */
   getMyHoursWeek(me: Principal, weekStart: DateKey): Promise<MyHoursWeek>;
   getHours(me: Principal, range: HoursRange): Promise<HoursSummary>;

@@ -406,7 +406,7 @@
         {
           "name": "roster_week",
           "what": "A team's roster week and its version",
-          "how": "Roster screen; a save of today's blocks in a published week publishes it (D8, addition 0009zx)"
+          "how": "Roster screen; a save of today's blocks in a published week publishes it (D8, addition 0009zx); since 0010a Publish and that publication refuse while a shift dated today or later has no block (E5), and a shift drawn for today without blocks waits for them"
         },
         {
           "name": "roster_entry",

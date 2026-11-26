@@ -1860,6 +1860,28 @@ async function readCallsNow(q: Querier, withOutbound: boolean): Promise<{ inboun
   return { inbound, outbound };
 }
 
+/** My day's choices for a tenant without assignment types (addition 0009zo): the active statuses and hours markets, one statement */
+async function myDayChoices(q: Querier): Promise<MyDayChoices> {
+  // Pay and billing flags stay out: not agent information (decision of 6 October 2026). The work area colours the
+  // status (addition 0009zn). The tenant's active hours markets (addition 0009zo, D3) in the same statement: an
+  // uncorrelated scalar subquery, read once, so My day costs no round trip more
+  const r = await q.query<{ key: string; name: string; is_working: boolean; is_productive: boolean; work_area: WorkArea | null; is_default: boolean;
+    hours_markets: { code: string; name: string }[] }>(
+    `select key, name, is_working, is_productive, work_area, is_default,
+            (select coalesce(json_agg(json_build_object('code', h.code, 'name', h.name) order by h.sort_order, h.code collate "C"), '[]'::json)
+               from cma.hours_markets() h where h.status = 'active') as hours_markets
+       from cma.work_status
+      where tenant_id = cma.current_tenant_id() and status = 'active'
+      order by sort_order, key`,
+  );
+  return {
+    statuses: r.rows.map((s) => ({
+      key: s.key, name: s.name, isWorking: s.is_working, isProductive: s.is_productive, workArea: s.work_area, isDefault: s.is_default,
+    })),
+    hoursMarkets: (r.rows[0]?.hours_markets ?? []).map((m) => ({ code: m.code, name: m.name, isActive: true })),
+  };
+}
+
 export const postgresData: CmaData = {
   async findPrincipal(identity: Identity): Promise<Principal | null> {
     // One transaction for both steps (the IT audit of 17 October 2026: identity cost two checkouts and two
@@ -2009,26 +2031,7 @@ export const postgresData: CmaData = {
   },
 
   async listMyDayChoices(me: Principal): Promise<MyDayChoices> {
-    return withTenant(ctx(me), async (q) => {
-      // Pay and billing flags stay out: not agent information (decision of 6 October 2026). The work area colours the
-      // status (addition 0009zn). The tenant's active hours markets (addition 0009zo, D3) in the same statement: an
-      // uncorrelated scalar subquery, read once, so My day costs no round trip more
-      const r = await q.query<{ key: string; name: string; is_working: boolean; is_productive: boolean; work_area: WorkArea | null; is_default: boolean;
-        hours_markets: { code: string; name: string }[] }>(
-        `select key, name, is_working, is_productive, work_area, is_default,
-                (select coalesce(json_agg(json_build_object('code', h.code, 'name', h.name) order by h.sort_order, h.code collate "C"), '[]'::json)
-                   from cma.hours_markets() h where h.status = 'active') as hours_markets
-           from cma.work_status
-          where tenant_id = cma.current_tenant_id() and status = 'active'
-          order by sort_order, key`,
-      );
-      return {
-        statuses: r.rows.map((s) => ({
-          key: s.key, name: s.name, isWorking: s.is_working, isProductive: s.is_productive, workArea: s.work_area, isDefault: s.is_default,
-        })),
-        hoursMarkets: (r.rows[0]?.hours_markets ?? []).map((m) => ({ code: m.code, name: m.name, isActive: true })),
-      };
-    });
+    return withTenant(ctx(me), (q) => myDayChoices(q));
   },
 
   async setStatus(me: Principal, change): Promise<Workday> {
@@ -2047,14 +2050,18 @@ export const postgresData: CmaData = {
     });
   },
 
-  async getMyDay(me: Principal, date: DateKey): Promise<{ workday: Workday | null; plan: MyDayPlan }> {
+  async getMyDay(me: Principal, date: DateKey): Promise<{ workday: Workday | null; plan: MyDayPlan; statusChoices: MyDayChoices | null }> {
     assertDate(date, "date");
     // One transaction, two statements (addition 0010a): the day's clock as before and cma.my_day's plan against actual,
     // whose Switch choices replace the statuses-and-markets read My day made before
     return withTenant(ctx(me), async (q) => {
       const row = (await readDay(q, "$1::date", [date]))[0];
       const r = await q.query<{ plan: MyDayPlan }>(`select cma.my_day($1::date) as plan`, [date]);
-      return { workday: row ? toWorkday(row) : null, plan: one(r.rows, "my_day").plan };
+      const plan = one(r.rows, "my_day").plan;
+      // A tenant without assignment types keeps the status buttons and the market select: their choices in the same
+      // transaction, so its My day costs one statement more and no transaction more
+      const statusChoices = plan.usesAssignments ? null : await myDayChoices(q);
+      return { workday: row ? toWorkday(row) : null, plan, statusChoices };
     });
   },
 

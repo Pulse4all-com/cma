@@ -54,9 +54,9 @@ function hms(s: number): string {
 }
 
 /** What a block or stretch is, in the notices' words: "GO · SE General Ops", "SB Short break", "Training" */
-function whatText(x: { code: string | null; name: string; kind: string; market: string | null }): string {
+function whatText(x: { code: string | null; name: string; kind: string; hoursMarket: string | null }): string {
   if (!x.code) return x.name;
-  if (x.kind === "work") return `${x.code}${x.market ? ` · ${x.market}` : ""} ${x.name}`;
+  if (x.kind === "work") return `${x.code}${x.hoursMarket ? ` · ${x.hoursMarket}` : ""} ${x.name}`;
   return `${x.code} ${x.name}`;
 }
 
@@ -96,10 +96,15 @@ export function MyDayPanel({ workday, plan, timeZone, locale, copy, againUntil =
   // ---- the page read again: at the plan's next boundary (the minute job writes the switch) and every 30 s while visible
   const router_ = useRef(router);
   useEffect(() => { router_.current = router; });
+  const lastRead = useRef(0);
+  useEffect(() => { lastRead.current = Date.now(); }, [plan]);
   useEffect(() => {
     if (!working) return;
     const refresh = () => { if (!document.hidden) startTransition(() => router_.current.refresh()); };
     const poll = setInterval(refresh, 30_000);
+    // agents work in other tabs (the telephony, the CRM): coming back reads the day again when the last read is 10 s old
+    const visible = () => { if (!document.hidden && Date.now() - lastRead.current > 10_000) refresh(); };
+    document.addEventListener("visibilitychange", visible);
     const timers: ReturnType<typeof setTimeout>[] = [];
     const at = (instant: string | null | undefined, lagMs: number) => {
       if (!instant) return;
@@ -107,9 +112,8 @@ export function MyDayPanel({ workday, plan, timeZone, locale, copy, againUntil =
       if (wait > 0 && wait < 12 * 3_600_000) timers.push(setTimeout(refresh, wait));
     };
     at(plan.planNext?.startAt, 65_000);   // the job runs once a minute
-    at(plan.notice?.until, 1_000);
-    return () => { clearInterval(poll); timers.forEach(clearTimeout); };
-  }, [working, plan.planNext?.startAt, plan.notice?.until]);
+    return () => { clearInterval(poll); timers.forEach(clearTimeout); document.removeEventListener("visibilitychange", visible); };
+  }, [working, plan.planNext?.startAt]);
 
   // ---- the lanes ------------------------------------------------------------------------------------------------
   const scheduled = useMemo(() => plan.plan.map(blockItem), [plan.plan]);
@@ -139,8 +143,8 @@ export function MyDayPanel({ workday, plan, timeZone, locale, copy, againUntil =
     const label = c.kind === "work" ? `${c.code}${c.market ? ` · ${c.market}` : ""}` : c.kind === "pause" ? `${c.code} ${c.name}` : c.name;
     startTransition(async () => {
       // At once (D3): the chip, the market and the clock as the database will count them
-      if (day) showDay(dayWithStatus(day, { key: day.statusKey ?? "", name: c.name, isWorking: c.kind !== "pause" }, Date.now(), c.kind === "work" ? c.market : null));
-      showCurrent({ code: c.code, name: c.name, kind: c.kind, statusKey: c.key ?? "", statusName: c.name, workArea: null, market: c.kind === "work" ? c.market : null,
+      if (day) showDay(dayWithStatus(day, { key: c.key ?? c.code ?? "", name: c.name, isWorking: c.kind !== "pause" }, Date.now(), c.kind === "work" ? c.market : null));
+      showCurrent({ code: c.code, name: c.name, kind: c.kind, statusKey: c.key ?? "", statusName: c.name, workArea: null, hoursMarket: c.kind === "work" ? c.market : null,
         since: new Date().toISOString(), source: "user" });
       const answer = await post(c.key ? { key: c.key } : { assignment: c.code, hoursMarket: c.kind === "work" ? c.market : null });
       if (!answer) setFailed(t.switchFailed);
@@ -154,7 +158,7 @@ export function MyDayPanel({ workday, plan, timeZone, locale, copy, againUntil =
   function backToPlan() {
     const p = plan.offPlan;
     if (!p) return;
-    doSwitch({ kind: p.kind, code: p.code, key: null, name: p.name, market: p.market });
+    doSwitch({ kind: p.kind, code: p.code, key: null, name: p.name, market: p.hoursMarket });
   }
 
   function confirmEnd() {
@@ -170,10 +174,28 @@ export function MyDayPanel({ workday, plan, timeZone, locale, copy, againUntil =
     });
   }
 
+  /** One clock-in at a time: a second Enter while the first is in flight does nothing */
+  const clockingIn = useRef(false);
   function clockIn() {
+    if (clockingIn.current) return;
+    clockingIn.current = true;
     setFailed(null);
     setStartsAt(null);
     startTransition(async () => {
+      // At once (night N07, D3): the day running from now on the block planned now (E4), the clock started unless it is a
+      // pause; the server's answer and the page's read replace it, a refusal drops it when the transition ends
+      const at = new Date().toISOString();
+      const b = plan.planNow && plan.planNow.kind !== "absence" ? plan.planNow : plan.planNext ?? plan.plan.find((x) => x.kind !== "absence") ?? null;
+      const runs = b?.kind !== "pause";
+      showDay({
+        date: plan.date, status: "working", startedAt: at, endedAt: null, statusKey: null, statusName: b?.name ?? null, statusSince: at,
+        clock: { closedSeconds: 0, runningSince: runs ? at : null }, dayEndsAt: plan.shift?.endAt ?? new Date(Date.now() + 12 * 3_600_000).toISOString(),
+        sessions: 1, sessionStartedAt: at, clockInAgain: false, canClockInAgain: false, hoursMarket: b?.kind === "work" ? b.hoursMarket : null,
+      });
+      if (b) {
+        showCurrent({ code: b.code, name: b.name, kind: b.kind === "pause" ? "pause" : "work", statusKey: "", statusName: b.name, workArea: b.workArea,
+          hoursMarket: b.kind === "work" ? b.hoursMarket : null, since: at, source: "user" });
+      }
       const res = await fetch("/api/v1/me/day/start", { method: "POST", headers: { "x-cma-request": "1" } }).catch(() => null);
       if (!res?.ok) {
         const body = res ? ((await res.json().catch(() => null)) as { error?: { message?: string } } | null) : null;
@@ -181,7 +203,9 @@ export function MyDayPanel({ workday, plan, timeZone, locale, copy, againUntil =
         if (at) setStartsAt(at);
         else setFailed(copy.welcome.clockInFailed);
       }
+      // also after a refusal: the day may have been opened in another tab; the optimistic day holds until this read lands
       router.refresh();
+      clockingIn.current = false;
     });
   }
 
@@ -214,7 +238,7 @@ export function MyDayPanel({ workday, plan, timeZone, locale, copy, againUntil =
   return (
     <Card>
       <div className="flex flex-col gap-5" data-testid="my-day">
-        {working && plan.notice ? (
+        {working && plan.notice && (now === null || now < Date.parse(plan.notice.until)) ? (
           <div role="status" className="rounded-button border border-p4a-lightblue bg-p4a-bgblue px-4 py-2.5 text-small text-p4a-body" data-testid="my-day-notice">
             {words(t.rosterSwitched, { what: strong(whatText({ ...plan.notice, kind: plan.notice.kind ?? "other" })), time: time(plan.notice.at) })}
           </div>
@@ -225,7 +249,7 @@ export function MyDayPanel({ workday, plan, timeZone, locale, copy, againUntil =
               {plan.offPlan.nextAt
                 ? words(t.plannedNowNext, {
                   what: strong(whatText(plan.offPlan)), time: time(plan.offPlan.since), next: time(plan.offPlan.nextAt),
-                  nextWhat: itemLabel({ code: plan.offPlan.nextCode, name: plan.offPlan.nextName ?? "", kind: plan.offPlan.nextKind ?? "work", market: plan.offPlan.nextMarket }),
+                  nextWhat: itemLabel({ code: plan.offPlan.nextCode, name: plan.offPlan.nextName ?? "", kind: plan.offPlan.nextKind ?? "work", market: plan.offPlan.nextHoursMarket }),
                 })
                 : words(t.plannedNow, { what: strong(whatText(plan.offPlan)), time: time(plan.offPlan.since) })}
             </span>
@@ -239,7 +263,7 @@ export function MyDayPanel({ workday, plan, timeZone, locale, copy, againUntil =
             {working && current ? (
               <>
                 {chip(current)}
-                {current.kind === "work" ? marketChip(current.market) : null}
+                {current.kind === "work" ? marketChip(current.hoursMarket) : null}
                 <span className="text-small text-p4a-muted">
                   {onPlan && plan.planNow
                     ? words(t.sinceUntil, { since: strong(time(current.since)), until: time(plan.planNow.endAt) })
@@ -249,7 +273,7 @@ export function MyDayPanel({ workday, plan, timeZone, locale, copy, againUntil =
             ) : !day && shownBlock ? (
               <>
                 {chip(shownBlock)}
-                {shownBlock.kind === "work" ? marketChip(shownBlock.market) : null}
+                {shownBlock.kind === "work" ? marketChip(shownBlock.hoursMarket) : null}
                 <span className="text-small text-p4a-muted">
                   {plan.planNow ? t.plannedNowUntil.replace("{until}", time(plan.planNow.endAt)) : t.plannedFrom.replace("{time}", time(shownBlock.startAt))}
                 </span>
@@ -300,8 +324,8 @@ export function MyDayPanel({ workday, plan, timeZone, locale, copy, againUntil =
                   <span className="text-caption text-p4a-muted">{t.actual}</span>
                   <Lane items={actual} axis={axis} testId="lane-actual">
                     {plan.marks.map((m) => (
-                      <span key={m.at} title={t.youSwitched.replace("{what}", itemLabel({ code: m.code, name: m.statusName, kind: "work", market: m.market }))
-                        .replace("{planned}", itemLabel({ code: m.plannedCode, name: "", kind: "work", market: m.plannedMarket }))}
+                      <span key={m.at} title={t.youSwitched.replace("{what}", itemLabel({ code: m.code, name: m.statusName, kind: "work", market: m.hoursMarket }))
+                        .replace("{planned}", itemLabel({ code: m.plannedCode, name: "", kind: "work", market: m.plannedHoursMarket }))}
                         aria-hidden="true" className="absolute top-[5px] z-[1] h-3.5 w-3.5 -translate-x-1/2 rounded-full border-2 border-p4a-warning bg-white"
                         style={{ left: `${lanePct(Date.parse(m.at), axis)}%` }} />
                     ))}
@@ -318,8 +342,8 @@ export function MyDayPanel({ workday, plan, timeZone, locale, copy, againUntil =
                 <span aria-hidden="true" className="inline-block h-2.5 w-2.5 rounded-full border-2 border-p4a-warning" />
                 <b className="tabular font-semibold">{time(m.at)}</b>
                 <span className="text-p4a-muted">
-                  {t.youSwitched.replace("{what}", itemLabel({ code: m.code, name: m.statusName, kind: "work", market: m.market }))
-                    .replace("{planned}", itemLabel({ code: m.plannedCode, name: "", kind: "work", market: m.plannedMarket }))}
+                  {t.youSwitched.replace("{what}", itemLabel({ code: m.code, name: m.statusName, kind: "work", market: m.hoursMarket }))
+                    .replace("{planned}", itemLabel({ code: m.plannedCode, name: "", kind: "work", market: m.plannedHoursMarket }))}
                 </span>
               </p>
             )) : null}
@@ -407,7 +431,8 @@ function SwitchPanel({ plan, chosen, onChoose, onConfirm, onClose, copy, busy }:
   const t = copy.myDay;
   const c = plan.choices;
   const markets = c.hoursMarkets;
-  const firstMarket = c.defaultMarket ?? markets[0]?.code ?? null;
+  // the person's Default market first chosen (E6); without one, the agent chooses: nothing is booked under a guess
+  const firstMarket = c.defaultMarket ?? null;
   const row = (choice: Choice, dot: string, code: string | null, name: string, market?: ReactNode) => {
     const on = chosen && chosen.kind === choice.kind && chosen.code === choice.code && chosen.key === choice.key;
     return (
@@ -432,6 +457,7 @@ function SwitchPanel({ plan, chosen, onChoose, onConfirm, onClose, copy, busy }:
         <select aria-label={t.marketFor.replace("{name}", w.name)} value={chosen?.code === w.code ? chosen.market ?? "" : firstMarket ?? ""}
           onChange={(e) => onChoose({ kind: "work", code: w.code, key: null, name: w.name, market: e.target.value || null })}
           className="mr-1 h-7 rounded-button border border-p4a-lightblue bg-white px-1.5 text-caption font-bold text-p4a-deepblue" data-testid="switch-market">
+          {(chosen?.code === w.code ? chosen.market : firstMarket) ? null : <option value="" disabled>{t.chooseHoursMarket}</option>}
           {markets.map((m) => <option key={m.code} value={m.code}>{m.code}</option>)}
         </select>))}
       {c.pause.length > 0 ? <p className="px-2.5 pb-0.5 pt-2 text-caption font-semibold text-p4a-muted">{t.groupPause}</p> : null}
@@ -439,7 +465,8 @@ function SwitchPanel({ plan, chosen, onChoose, onConfirm, onClose, copy, busy }:
       {c.other.length > 0 ? <p className="px-2.5 pb-0.5 pt-2 text-caption font-semibold text-p4a-muted">{t.groupOther}</p> : null}
       {c.other.map((o) => row({ kind: "other", code: null, key: o.key, name: o.name, market: null }, TONE_CLASS[itemTone({ kind: "other", workArea: o.workArea })], null, o.name))}
       <div className="mt-1 border-t border-p4a-border px-1 pb-1 pt-2">
-        <Button variant="primary" size="sm" className="w-full justify-center" disabled={!chosen || busy} onClick={() => chosen && onConfirm(chosen)} data-testid="my-day-switch-confirm">
+        <Button variant="primary" size="sm" className="w-full justify-center" disabled={!chosen || busy || (chosen.kind === "work" && !chosen.market)}
+          onClick={() => chosen && onConfirm(chosen)} data-testid="my-day-switch-confirm">
           {chosen ? switchLabel(t.switchTo, chosen) : t.switch}
         </Button>
       </div>

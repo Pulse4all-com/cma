@@ -20,6 +20,8 @@
 -- defined by name, since team_now answers paid_closed_seconds and paid_running_since last; nothing else changed.
 -- Edited by addition 0009zo (230_hours_market.sql, 23 November 2026): S8 expects cma_read.time_interval's ten columns
 -- followed by hours_market_code where 0009zo is recorded; nothing else changed.
+-- Edited by addition 0010a (254_roster_drives_the_day.sql, 26 November 2026): S8 expects assignment_type_id after
+-- hours_market_code where 0010a is recorded; nothing else changed.
 --   S  the addition row after 0008zr; time_interval_all's columns unchanged; workday_summary_all's and the face's
 --      columns as before, the face with sessions last; team_hours's columns with sessions last, executable by cma_app
 --      only; cma.workday_stretches_of and cma.workday_summary_of present with the caller's rights for the application;
@@ -300,7 +302,8 @@ begin
           = 'workday_id,tenant_id,user_id,business_date,timezone,status,started_at,ended_at,working_seconds,productive_seconds,paid_seconds,billable_seconds,is_capped,needs_correction,has_correction,current_status_id'
       and (select string_agg(column_name, ',' order by ordinal_position) from information_schema.columns where table_schema = 'cma_read' and table_name = 'time_interval')
           = 'tenant_id,workday_id,user_id,event_id,status_id,from_at,to_at,is_open,is_capped,seconds'
-            || case when exists (select 1 from cma.schema_migration where version = '0009zo') then ',hours_market_code' else '' end;
+            || case when exists (select 1 from cma.schema_migration where version = '0009zo') then ',hours_market_code' else '' end
+            || case when exists (select 1 from cma.schema_migration where version = '0010a') then ',assignment_type_id' else '' end;
   insert into verify_0008zs values (108, 'S8 the readers'' wrappers exist with the owner''s rights, the readers'' alone; cma_read.workday_summary and cma_read.time_interval keep their columns', case when v_ok and not v_provoke then 'ok' else 'FAIL' end, '');
 end
 $$;

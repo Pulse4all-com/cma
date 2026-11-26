@@ -62,7 +62,7 @@ export async function switchAll({ connect }) {
     try {
       await client.query("begin");
       await client.query("select set_config('app.tenant_id', '', true), set_config('app.user_id', '', true), set_config('app.actor_label', '', true)");
-      const r = await client.query("select tenant_id, action from cma.roster_switch_all()");
+      const r = await client.query("select tenant_id, switched, ended, failed from cma.roster_switch_all()");
       await client.query("commit");
       return r.rows;
     } catch (e) {
@@ -70,22 +70,15 @@ export async function switchAll({ connect }) {
       throw e;
     }
   }), { log: (severity, fields) => log("WARNING", { reason: fields.reason, error: fields.error }), fields: { step: "switch" } });
-  const per = new Map();
-  for (const r of rows) {
-    const t = per.get(r.tenant_id) ?? { switched: 0, ended: 0, failed: null };
-    if (r.action === "switched") t.switched += 1;
-    else if (r.action === "ended") t.ended += 1;
-    else if (String(r.action).startsWith("failed:")) t.failed = String(r.action).slice(7);
-    per.set(r.tenant_id, t);
-  }
+  // one row per tenant with work or a failure: counts only (the function answers no person's id)
   let switched = 0, ended = 0, failed = 0;
-  for (const [tenant_id, t] of per) {
+  for (const t of rows) {
     switched += t.switched;
     ended += t.ended;
     if (t.failed) failed += 1;
-    log(t.failed ? "ERROR" : "INFO", { tenant_id, switched: t.switched, ended: t.ended, ...(t.failed ? { error: t.failed } : {}) });
+    log(t.failed ? "ERROR" : "INFO", { tenant_id: t.tenant_id, switched: t.switched, ended: t.ended, ...(t.failed ? { error: t.failed } : {}) });
   }
-  return { tenants: per.size, switched, ended, failed };
+  return { tenants: rows.length, switched, ended, failed };
 }
 
 if (isMain(import.meta.url)) {

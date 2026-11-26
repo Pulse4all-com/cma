@@ -12,10 +12,13 @@
 -- verifies that read what this changes (below), then 02_seed_pulse4all.sql again (the settings and the two absence
 -- types), then 131_time_all.sql parts a and b (the rows 'my day' and 'my hours week' in a, 'roster switch' in b); then
 -- prod, before the merge:
--- this script, 255 and the same verifies, then 02. Main's web runs unchanged on it until the merge: cma.set_status keeps
--- its first four arguments (a 2- to 4-argument call reaches the new one through the defaults), cma.open_workday keeps its
--- signature, cma.roster_assignments keeps every earlier column (two are appended last), and a status change without an
--- assignment behaves as before 0010a in a tenant without assignment types.
+-- this script, 255 and the same verifies, then 02. Main's web keeps working on it until the merge (cma.set_status keeps
+-- its first four arguments, a 2- to 4-argument call reaching the new one through the defaults; cma.open_workday keeps its
+-- signature; cma.roster_assignments keeps every earlier column), but it meets the new rules in a tenant with assignment
+-- types, so keep the gap between prod's migration and the merge short: Publish and a change to today refuse a shift
+-- without blocks (main's planner says only that it failed), a work block without a market for a person without a Default
+-- market is refused, a cell of today drawn without blocks waits unpublished, and main's My day market select on a pause
+-- or on Training, Meeting or Coaching is refused (CMA04: they have no hours market since E1).
 --
 -- Why (Martin, 26 November 2026, brief B "Assignments for the agent (My day, Switch, My hours) and the roster follows the
 -- day"; Decision log, 26 Nov 2026, E1 to E12; the screens Arno and Kira approved that day): briefs A (#332) and #335
@@ -46,7 +49,8 @@
 --                       correction that supersedes an event and books the same status keeps that event's assignment when
 --                       the market rule still holds (so a time correction never erases it; brief C corrects the
 --                       assignment itself)
---   cma.time_event.source  gains 'roster': a status event or an end the roster wrote (E2, E9)
+--   cma.time_event.source  gains 'roster': a status event or an end the roster wrote (E2, E9); the check is re-added NOT
+--                       VALID (no scan under the lock; every existing row already holds it)
 --   cma.roster_assignment.absence_type_id
 --                       E9's absence block. A block is either an assignment or an absence, never both: assignment_type_id
 --                       loses its not null and check roster_assignment_one_kind holds (assignment_type_id is null) <>
@@ -67,8 +71,9 @@
 --                                       Actual lane and the split, the planned minutes (E11: read only)
 --     cma.roster_switch_due(at)         workday.roster_switch: E2, E8 and E9 for the current tenant, idempotent per
 --                                       person and boundary; source 'roster'
---     cma.roster_switch_all(at)         SECURITY DEFINER, cma_app only, refused inside a request (a tenant or user set):
---                                       one statement for all tenants, each served as its own Scheduler user
+--     cma.roster_switch_all(at)         SECURITY DEFINER (search path pg_catalog, cma, pg_temp), cma_app only, refused
+--                                       inside a request (a tenant or user set): one statement for all tenants, each
+--                                       served as its own Scheduler user; answers counts per tenant, no person's id
 --
 -- What it changes (each from its latest earlier definition, named on the line above its create)
 --   cma.check_roster_setting()           the two new settings
@@ -118,12 +123,24 @@
 --                                        assignment_type_id, S3 takes set_status's 5-argument signature; its behaviour
 --                                        checks (a tenant without assignment types) are unchanged and pass
 --   27_verify_configuration.sql          edited by this change: verify.job_permissions gains workday.roster_switch
+--   135_verify_hours_reads.sql           edited by this change: S8 expects assignment_type_id after hours_market_code in
+--                                        cma_read.time_interval where 0010a is recorded
 --   25_verify_roster.sql, 199_verify_roster_planned.sql, 07_verify_time_model.sql, 10_verify_corrections.sql,
---   47_verify_workday_window.sql, 127_verify_workday_sessions.sql, 163_verify_remove_day.sql,
---   245_verify_auto_close_office_hours.sql
---                                        unchanged: their tenants have no assignment types, so E5 refuses nothing there and
---                                        a status alone keeps 0009zo's market rule; 127's and 163's patterns of
---                                        open_workday's definition hold
+--   14_verify_tenant_settings.sql, 16_verify_team_status_time.sql, 18_verify_clock_in_app_links.sql, 20_verify_team_now.sql,
+--   43_verify_messaging.sql, 45_verify_assignment_alerts.sql, 47_verify_workday_window.sql, 51_verify_legacy_time_import.sql,
+--   111_verify_import_status_reuse.sql, 127_verify_workday_sessions.sql, 163_verify_remove_day.sql,
+--   201_verify_live_paid_today.sql, 229_verify_work_area.sql, 245_verify_auto_close_office_hours.sql,
+--   123_verify_flash.sql, 169_verify_pledge_lists.sql, 173_verify_active_customers.sql, 175_verify_active_refresh_quiet.sql,
+--   179_verify_job_reads.sql, 185_verify_active_device_bands.sql, 237_verify_jobs_off_the_vcpu.sql
+--                                        unchanged: they read set_status or open_workday (directly or through
+--                                        correct_workday, correct_time_event and remove_workday, whose events pass the new
+--                                        trigger untouched without an assignment), cma_read.time_event, or the scheduler's
+--                                        permissions (create_tenant calls ensure_scheduler_user); their tenants have no
+--                                        assignment types, so E5 refuses nothing there and a status alone keeps 0009zo's
+--                                        market rule; 127's and 163's patterns of open_workday's definition hold
+-- The planner's other reads take absence blocks without a change: save_standard_week, roster_slot_coverage,
+-- roster_planned_hours and roster_copy_week_report join the assignment type, so an absence block is never saved into the
+-- Standard week, copied, or counted as planned or working (E9).
 -- 131_time_all.sql: three rows: 'my day' and 'my hours week' in part a (class agent), 'roster switch' in part b (the minute
 -- job per tenant as its scheduler, against the poll budget, beside the jobs' gate).
 --
@@ -1273,13 +1290,16 @@ end
 $$;
 
 -- One statement for all tenants (E2): every tenant with an active Scheduler user, each served as that user in its own
--- context (app.tenant_id, app.user_id, actor label scheduler:roster), so row-level filters, the permission and the audit
+-- context (app.tenant_id, app.user_id, actor label scheduler:roster), so the tenant filters, the permission and the audit
 -- trail name the tenant's Scheduler as for the other jobs. One tenant's failure never stops the others: its row says
--- failed:<SQLSTATE>. SECURITY DEFINER (the owner reads every tenant's Scheduler user), executable by cma_app, and refused
--- inside a request: a tenant or user already set is CMA06, so only a job's connection (jobs/roster-switch.mjs) runs it
-create or replace function cma.roster_switch_all(p_at timestamptz default now())
-returns table (tenant_id uuid, workday_id uuid, user_id uuid, action text, occurred_at timestamptz)
-language plpgsql security definer set search_path = pg_catalog, public rows 50
+-- failed:<SQLSTATE>. Answers counts per tenant only (no person or workday id leaves the function). SECURITY DEFINER (the
+-- owner reads every tenant's Scheduler user) with the house's search path, pg_temp last, executable by cma_app, and
+-- refused inside a request: a tenant or user already set is CMA06, so only a job's connection (jobs/roster-switch.mjs)
+-- runs it
+drop function if exists cma.roster_switch_all(timestamptz);   -- a rerun over a draft with another result type
+create function cma.roster_switch_all(p_at timestamptz default now())
+returns table (tenant_id uuid, switched integer, ended integer, failed text)
+language plpgsql security definer set search_path = pg_catalog, cma, pg_temp rows 10
 as $$
 #variable_conflict use_column
 declare
@@ -1300,9 +1320,12 @@ begin
     perform set_config('app.actor_label', 'scheduler:roster', true);
     begin
       return query
-        select t.tenant_id, r.workday_id, r.user_id, r.action, r.occurred_at from cma.roster_switch_due(p_at) r;
+        select t.tenant_id, (count(*) filter (where r.action = 'switched'))::integer, (count(*) filter (where r.action = 'ended'))::integer,
+               null::text
+        from cma.roster_switch_due(p_at) r
+        having count(*) > 0;
     exception when others then
-      tenant_id := t.tenant_id; workday_id := null; user_id := null; action := 'failed:' || sqlstate; occurred_at := null;
+      tenant_id := t.tenant_id; switched := 0; ended := 0; failed := sqlstate;
       return next;
     end;
   end loop;
@@ -1318,7 +1341,7 @@ $$;
 -- My day of the acting user for a date (default today in their zone), as one JSON document beside the day's clock:
 --   shift        the published entry's kind, times and absence name (none without a published entry)
 --   plan         the published blocks (the Scheduled lane): code, name, kind, isExtra, workArea, absenceKey, market,
---                start and end (local hh:mm) and their instants
+--                start and end (local hh:mm) and their instants (the JSON keys say hoursMarket, never market)
 --   actual       the day's stretches (the Actual lane): code (none without an assignment), name, statusKey, statusName,
 --                kind, isWorking, workArea, market, fromAt, toAt (none while open), source and deviates (another
 --                assignment or market than the block in force at its start)
@@ -1382,7 +1405,7 @@ begin
 
   select coalesce(jsonb_agg(jsonb_build_object(
            'code', p.code, 'name', p.name, 'kind', p.kind, 'isExtra', p.is_extra, 'workArea', p.work_area,
-           'absenceKey', p.absence_key, 'market', p.hours_market_code,
+           'absenceKey', p.absence_key, 'hoursMarket', p.hours_market_code,
            'start', to_char(p.start_time, 'HH24:MI'),
            'end', case when p.end_time = '24:00'::time then '24:00' else to_char(p.end_time, 'HH24:MI') end,
            'startAt', p.starts_at, 'endAt', p.ends_at, 'assignmentTypeId', p.assignment_type_id) order by p.starts_at), '[]'::jsonb)
@@ -1404,12 +1427,12 @@ begin
     select coalesce(jsonb_agg(jsonb_build_object(
              'code', a.code, 'name', coalesce(a.name, a.status_name), 'statusKey', a.status_key, 'statusName', a.status_name,
              'kind', coalesce(a.type_kind, case when a.is_working then 'other' else 'pause' end),
-             'isWorking', a.is_working, 'workArea', a.work_area, 'market', a.hours_market_code,
+             'isWorking', a.is_working, 'workArea', a.work_area, 'hoursMarket', a.hours_market_code,
              'fromAt', a.from_at, 'toAt', a.to_at, 'open', a.is_open,
              'source', a.source, 'deviates', a.deviates) order by a.from_at), '[]'::jsonb),
            coalesce(jsonb_agg(jsonb_build_object(
-             'at', a.from_at, 'code', a.code, 'statusName', a.status_name, 'market', a.hours_market_code,
-             'plannedCode', a.planned_code, 'plannedMarket', a.planned_market) order by a.from_at)
+             'at', a.from_at, 'code', a.code, 'statusName', a.status_name, 'hoursMarket', a.hours_market_code,
+             'plannedCode', a.planned_code, 'plannedHoursMarket', a.planned_market) order by a.from_at)
              filter (where a.source = 'user' and a.event_kind = 'status' and a.deviates), '[]'::jsonb)
       into v_actual, v_marks
     from cma.workday_actual_of(w.id) a;
@@ -1425,22 +1448,22 @@ begin
       v_current := jsonb_build_object('code', v_et.code, 'name', coalesce(v_et.name, v_es.name),
                                       'kind', coalesce(v_et.kind, case when v_es.is_working then 'other' else 'pause' end),
                                       'statusKey', v_es.key, 'statusName', v_es.name, 'workArea', v_es.work_area,
-                                      'market', e.hours_market_code, 'since', e.occurred_at, 'source', e.source,
+                                      'hoursMarket', e.hours_market_code, 'since', e.occurred_at, 'source', e.source,
                                       'assignmentTypeId', e.assignment_type_id);
       -- E3: the notice of a roster switch, while it is the latest event and younger than the setting
       if e.source = 'roster' and e.kind = 'status' and e.occurred_at > now() - make_interval(mins => v_minutes) then
         v_notice := jsonb_build_object('at', e.occurred_at, 'code', v_et.code, 'name', coalesce(v_et.name, v_es.name),
-                                       'kind', v_et.kind, 'market', e.hours_market_code,
+                                       'kind', v_et.kind, 'hoursMarket', e.hours_market_code,
                                        'until', e.occurred_at + make_interval(mins => v_minutes));
       end if;
       -- E7: off plan against the work or pause block in force now
       if v_now is not null and v_now->>'kind' in ('work', 'pause')
          and ((v_now->>'assignmentTypeId')::uuid is distinct from e.assignment_type_id
-              or (v_now->>'market') is distinct from e.hours_market_code) then
+              or (v_now->>'hoursMarket') is distinct from e.hours_market_code) then
         v_off := jsonb_build_object('code', v_now->>'code', 'name', v_now->>'name', 'kind', v_now->>'kind',
-                                    'market', v_now->>'market', 'since', v_now->'startAt',
+                                    'hoursMarket', v_now->>'hoursMarket', 'since', v_now->'startAt',
                                     'nextAt', v_next->'startAt', 'nextCode', v_next->>'code', 'nextName', v_next->>'name',
-                                    'nextKind', v_next->>'kind', 'nextMarket', v_next->>'market');
+                                    'nextKind', v_next->>'kind', 'nextHoursMarket', v_next->>'hoursMarket');
       end if;
     end if;
   end if;
@@ -1517,12 +1540,12 @@ begin
     cross join lateral cma.workday_actual_of(wd.workday_id) a
     where wd.workday_id is not null
   ),
+  -- one read of the plan per date (the blocks counted and the work minutes summed together)
   planned as (
     select coalesce(sum(
-             case when x.kind = 'shift' and not exists (select 1 from cma.roster_plan_of(v_user, dd.d) p0)
+             case when x.kind = 'shift' and pl.n = 0
                   then cma.roster_block_minutes(x.end_time) - cma.roster_block_minutes(x.start_time)
-                  else (select coalesce(sum(cma.roster_block_minutes(p.end_time) - cma.roster_block_minutes(p.start_time)), 0)
-                        from cma.roster_plan_of(v_user, dd.d) p where p.kind = 'work')
+                  else pl.work_minutes
              end), 0)::integer as minutes
     from days dd
     cross join lateral (
@@ -1530,6 +1553,11 @@ begin
       where e.user_id = v_user and e.business_date = dd.d
       order by e.published_at desc limit 1
     ) x
+    cross join lateral (
+      select count(*) as n,
+             coalesce(sum(cma.roster_block_minutes(p.end_time) - cma.roster_block_minutes(p.start_time)) filter (where p.kind = 'work'), 0) as work_minutes
+      from cma.roster_plan_of(v_user, dd.d) p
+    ) pl
   ),
   per_day as (
     select dd.d,
@@ -1540,11 +1568,11 @@ begin
              'segments', coalesce((select jsonb_agg(jsonb_build_object(
                                      'code', s.code, 'name', coalesce(s.name, s.status_name), 'statusName', s.status_name,
                                      'kind', coalesce(s.type_kind, case when s.is_working then 'other' else 'pause' end),
-                                     'isWorking', s.is_working, 'workArea', s.work_area, 'market', s.hours_market_code,
+                                     'isWorking', s.is_working, 'workArea', s.work_area, 'hoursMarket', s.hours_market_code,
                                      'fromAt', s.from_at, 'toAt', coalesce(s.to_at, s.from_at + make_interval(secs => s.seconds)),
                                      'seconds', s.seconds) order by s.from_at)
                                    from seg s where s.d = dd.d), '[]'::jsonb),
-             'split', coalesce((select jsonb_agg(jsonb_build_object('code', g.code, 'name', g.label, 'market', g.market, 'seconds', g.secs)
+             'split', coalesce((select jsonb_agg(jsonb_build_object('code', g.code, 'name', g.label, 'hoursMarket', g.market, 'seconds', g.secs)
                                                  order by g.first_at)
                                 from (select s.code, s.label, s.hours_market_code as market, sum(s.seconds) as secs, min(s.from_at) as first_at
                                       from seg s where s.d = dd.d and s.is_working
@@ -1557,7 +1585,7 @@ begin
            'workedSeconds', coalesce((select sum(s.seconds) from seg s where s.is_working), 0),
            'plannedMinutes', (select minutes from planned),
            'rows', coalesce((select jsonb_agg(jsonb_build_object('code', g.code, 'name', g.name, 'workArea', g.work_area,
-                                                                 'market', g.market, 'seconds', g.secs)
+                                                                 'hoursMarket', g.market, 'seconds', g.secs)
                                               order by g.secs desc, g.label collate "C", g.market collate "C")
                              from (select s.code, s.label, max(coalesce(s.name, s.status_name)) as name, max(s.work_area) as work_area,
                                           s.hours_market_code as market, sum(s.seconds) as secs
@@ -1874,8 +1902,8 @@ create or replace view cma_read.time_interval as
   cross join lateral cma.workday_stretches_reader_of(w.tenant_id, w.id, d.day_end) x
   where cma_read.reader_sees(w.tenant_id);
 
--- The source check holds for every existing row (no row has 'roster' yet): validated under a lighter lock than the add
-alter table cma.time_event validate constraint time_event_source_check;
+-- The source check stays NOT VALID: every existing row holds it (no row had 'roster'), every new row is checked, and a
+-- validation here would scan time_event while this transaction holds its ACCESS EXCLUSIVE lock (each clock action waits)
 
 -- ---------------------------------------------------------------------------------------------
 -- 11. Record the addition

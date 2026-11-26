@@ -50,15 +50,15 @@ export default async function MyHoursPage({ searchParams }: PageProps<"/hours">)
           {week.rows.length > 0 ? (
             <ul aria-label={t.weekRows} className="mt-4 flex flex-col gap-2" data-testid="my-hours-rows">
               {week.rows.map((x) => {
-                const item: LaneItem = { code: x.code, name: x.name, kind: x.code ? "work" : "other", workArea: x.workArea, market: x.market, from: 0, to: 0 };
+                const item: LaneItem = { code: x.code, name: x.name, kind: x.code ? "work" : "other", workArea: x.workArea, market: x.hoursMarket, from: 0, to: 0 };
                 return (
-                  <li key={`${x.code ?? x.name}/${x.market ?? ""}`} className="grid grid-cols-[minmax(0,220px)_48px_80px_minmax(0,1fr)] items-center gap-3 text-small">
+                  <li key={`${x.code ?? x.name}/${x.hoursMarket ?? ""}`} className="grid grid-cols-[minmax(0,220px)_48px_80px_minmax(0,1fr)] items-center gap-3 text-small">
                     <span className="flex items-center gap-2 truncate">
                       <span aria-hidden="true" className={`inline-block h-2 w-2 shrink-0 rounded-full ${TONE_CLASS[itemTone(item)]}`} />
                       {x.code ? <b className="w-9 shrink-0 font-semibold">{x.code}</b> : null}
                       <span className="truncate">{x.name}</span>
                     </span>
-                    <span>{x.market ? <span className="rounded-button bg-p4a-neutral-surface px-2 py-0.5 text-caption font-semibold">{x.market}</span> : null}</span>
+                    <span>{x.hoursMarket ? <span className="rounded-button bg-p4a-neutral-surface px-2 py-0.5 text-caption font-semibold">{x.hoursMarket}</span> : null}</span>
                     <span className="tabular text-right">{hoursMinutes(x.seconds)}</span>
                     <span className="h-2 overflow-hidden rounded-button bg-p4a-neutral-surface" aria-hidden="true">
                       <span className={`block h-2 ${TONE_CLASS[itemTone(item)]}`} style={{ width: `${(x.seconds / most) * 100}%` }} />
@@ -87,7 +87,7 @@ export default async function MyHoursPage({ searchParams }: PageProps<"/hours">)
           <ol className="flex flex-col divide-y divide-p4a-border" data-testid="my-hours-days">
             {week.days.map((d) => {
               const items: LaneItem[] = d.segments.map((g) => ({
-                code: g.code, name: g.name, kind: g.kind, workArea: g.workArea, market: g.market, from: Date.parse(g.fromAt), to: Date.parse(g.toAt),
+                code: g.code, name: g.name, kind: g.kind, workArea: g.workArea, market: g.hoursMarket, from: Date.parse(g.fromAt), to: Date.parse(g.toAt),
               }));
               const axis = laneAxis([], items, null);
               return (
@@ -109,7 +109,7 @@ export default async function MyHoursPage({ searchParams }: PageProps<"/hours">)
                         })}
                       </span>
                       <span className="text-caption text-p4a-muted" data-testid="my-hours-split">
-                        {d.split.map((x) => `${x.code ?? x.name}${x.market ? ` ${x.market}` : ""} ${hoursMinutes(x.seconds)}`).join(" · ")}
+                        {d.split.map((x) => `${x.code ?? x.name}${x.hoursMarket ? ` ${x.hoursMarket}` : ""} ${hoursMinutes(x.seconds)}`).join(" · ")}
                       </span>
                     </span>
                   ) : (

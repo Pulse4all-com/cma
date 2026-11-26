@@ -19,7 +19,7 @@
 -- Checks
 --   S1  the addition 0010a recorded once, after 0009zz
 --   S2  the columns, constraints and trigger: time_event.assignment_type_id with its key, kind check and trigger, the source
---       roster in a validated check; roster_assignment.absence_type_id with its key, assignment_type_id nullable, the one
+--       roster in the source check (left NOT VALID: no scan under the migration's lock); roster_assignment.absence_type_id with its key, assignment_type_id nullable, the one
 --       kind and the absence's missing market as checks; the readers' views end with the new columns
 --   S3  the functions: the owner's, the application's only, the caller's rights except roster_switch_all (definer with a
 --       fixed search path), the reads stable, set_status's five arguments (the four-argument one gone), the trigger
@@ -46,7 +46,11 @@
 --   B9  my_hours: A's week per assignment and market, the pauses apart, the split of today and the planned minutes; the
 --       job for all tenants refuses a request's context (CMA06) and, outside one, serves each tenant for a minute in 2000
 --       and leaves no tenant set
---   R1  per active tenant: no work block without a market whose person has an active Default market (E10's backfill)
+--   B10 the job's own path: cma.roster_switch_all, as the job calls it (cma_app, no tenant or user set), switches H at
+--       Q-15 under the Scheduler (audited scheduler:roster) and clears the context; skipped when another tenant has an open
+--       workday now, so the call never writes or locks anything outside the throwaway tenant
+--   R1  per active tenant: no work block written before 0010a without a market whose person has had the same active
+--       Default market since (E10's backfill)
 --   R2  per active tenant: every event with an assignment keeps E1's rule (the type's status; a market on work, none on a
 --       pause)
 --   R3  per active tenant, this week and next: roster_published_blocks_json = 252's definition for every block that is not
@@ -198,7 +202,7 @@ begin
       exists (select 1 from pg_constraint k where k.conrelid = 'cma.time_event'::regclass and k.conname = 'time_event_assignment_kind'
               and k.contype = 'c' and pg_get_constraintdef(k.oid) ~ 'assignment_type_id IS NULL'),
       exists (select 1 from pg_trigger g where g.tgrelid = 'cma.time_event'::regclass and g.tgname = 'time_event_assignment_ok' and g.tgenabled = 'O'),
-      coalesce((select k.convalidated::text || ' ' || (pg_get_constraintdef(k.oid) ~ 'roster')::text from pg_constraint k
+      coalesce((select (pg_get_constraintdef(k.oid) ~ 'roster')::text from pg_constraint k
                 where k.conrelid = 'cma.time_event'::regclass and k.conname = 'time_event_source_check'), 'missing'),
       coalesce((select ic.data_type || ' ' || ic.is_nullable from information_schema.columns ic
                 where ic.table_schema = 'cma' and ic.table_name = 'roster_assignment' and ic.column_name = 'absence_type_id'), 'missing'),
@@ -213,7 +217,7 @@ begin
                                                   order by ic.ordinal_position desc limit 1), 'missing'), ', ' order by v.o)
        from (values (1, 'cma_read', 'time_event'), (2, 'cma_read', 'time_interval'), (3, 'cma_read', 'roster_assignment'),
                     (4, 'cma_read', 'roster_published_assignment'), (5, 'cma', 'roster_published_assignment')) v(o, s, n))),
-    'time_event uuid YES, key t, kind t, trigger t, source true true; roster_assignment uuid YES, type nullable YES, key t, one kind t, absence no market t; '
+    'time_event uuid YES, key t, kind t, trigger t, source true; roster_assignment uuid YES, type nullable YES, key t, one kind t, absence no market t; '
       || 'views time_event=assignment_type_id, time_interval=assignment_type_id, roster_assignment=absence_type_id, '
       || 'roster_published_assignment=absence_type_id, roster_published_assignment=absence_type_id');
 
@@ -248,7 +252,7 @@ begin
       v_bad := v_bad || v_fn || ' not stable; ';
     end if;
   end loop;
-  if not coalesce((select 'search_path=pg_catalog, public' = any (p.proconfig) from pg_proc p
+  if not coalesce((select 'search_path=pg_catalog, cma, pg_temp' = any (p.proconfig) from pg_proc p
                    where p.oid = to_regprocedure('cma.roster_switch_all(timestamptz)')), false) then
     v_bad := v_bad || 'roster_switch_all without its fixed search path; ';
   end if;
@@ -290,14 +294,14 @@ declare
   v_t     uuid;
   v_week  uuid;
   v_next  uuid;
-  v_mgr uuid; v_sch uuid; v_a uuid; v_b uuid; v_c uuid; v_e uuid; v_f uuid; v_adm uuid;
-  wa uuid; wb uuid; wc uuid; we uuid;
+  v_mgr uuid; v_sch uuid; v_a uuid; v_b uuid; v_c uuid; v_e uuid; v_f uuid; v_hp uuid; v_adm uuid;
+  wa uuid; wb uuid; wc uuid; we uuid; wh uuid;
   v_j     jsonb;
   v_text  text;
   v_err   text;
   v_t1    timestamptz;
   v_t2    timestamptz;
-  v_b1 text; v_b2 text; v_b3 text; v_b4 text; v_b5 text; v_b6 text; v_b7 text; v_b8 text; v_b9 text;
+  v_b1 text; v_b2 text; v_b3 text; v_b4 text; v_b5 text; v_b6 text; v_b7 text; v_b8 text; v_b9 text; v_b10 text;
   ev      cma.time_event;
 begin
   v_zone  := case when v_h = 0 then 'Etc/GMT' when v_h > 0 then 'Etc/GMT-' || v_h else 'Etc/GMT+' || (-v_h) end;
@@ -321,9 +325,10 @@ begin
     insert into cma.app_user (tenant_id, email, display_name, timezone, default_hours_market_code) values (v_t, 'c@example.invalid', 'c', v_zone, 'NL') returning id into v_c;
     insert into cma.app_user (tenant_id, email, display_name, timezone, default_hours_market_code) values (v_t, 'e@example.invalid', 'e', v_zone, 'DE') returning id into v_e;
     insert into cma.app_user (tenant_id, email, display_name, timezone) values (v_t, 'f@example.invalid', 'f', v_zone) returning id into v_f;
+    insert into cma.app_user (tenant_id, email, display_name, timezone, default_hours_market_code) values (v_t, 'h@example.invalid', 'h', v_zone, 'SE') returning id into v_hp;
     insert into cma.user_role (tenant_id, user_id, role_id)
     select v_t, x.uid, ar.id
-    from (values (v_adm, 'admin'), (v_mgr, 'manager'), (v_a, 'agent'), (v_b, 'agent'), (v_c, 'agent'), (v_e, 'agent'), (v_f, 'agent')) as x(uid, role_key)
+    from (values (v_adm, 'admin'), (v_mgr, 'manager'), (v_a, 'agent'), (v_b, 'agent'), (v_c, 'agent'), (v_e, 'agent'), (v_f, 'agent'), (v_hp, 'agent')) as x(uid, role_key)
     join cma.app_role ar on ar.tenant_id = v_t and ar.key = x.role_key;
     insert into cma.work_status (tenant_id, key, name, is_working, is_productive, is_paid, is_billable, is_default, sort_order, work_area) values
       (v_t, 'v_sales', 'Verify sales', true, true, true, true, false, 11, 'sales'),
@@ -391,8 +396,8 @@ begin
     v_b3 := 'Q-30 ' || coalesce(v_text, 'nothing');
     perform set_config('app.user_id', v_a::text, true);
     v_j := cma.my_day(null);
-    select v_b3 || '; marks ' || coalesce(string_agg(pg_temp.v0010a_rel((m->>'at')::timestamptz) || ' ' || (m->>'code') || ' ' || (m->>'market')
-                                                     || ' (planned ' || (m->>'plannedCode') || ' ' || (m->>'plannedMarket') || ')', ', '), 'none')
+    select v_b3 || '; marks ' || coalesce(string_agg(pg_temp.v0010a_rel((m->>'at')::timestamptz) || ' ' || (m->>'code') || ' ' || (m->>'hoursMarket')
+                                                     || ' (planned ' || (m->>'plannedCode') || ' ' || (m->>'plannedHoursMarket') || ')', ', '), 'none')
       into v_b3 from jsonb_array_elements(v_j->'marks') m;
     select v_b3 || '; deviating stretches ' || string_agg(x->>'code', ',') into v_b3
     from jsonb_array_elements(v_j->'actual') x where (x->>'deviates')::boolean;
@@ -405,20 +410,20 @@ begin
     perform set_config('app.user_id', v_a::text, true);
     v_j := cma.my_day(null);
     v_b4 := format('notice %s %s %s %s; current %s %s %s; off plan %s',
-      pg_temp.v0010a_rel((v_j->'notice'->>'at')::timestamptz), v_j->'notice'->>'code', v_j->'notice'->>'market',
+      pg_temp.v0010a_rel((v_j->'notice'->>'at')::timestamptz), v_j->'notice'->>'code', v_j->'notice'->>'hoursMarket',
       pg_temp.v0010a_rel((v_j->'notice'->>'until')::timestamptz),
-      v_j->'current'->>'code', v_j->'current'->>'market', v_j->'current'->>'source', coalesce(v_j->>'offPlan', 'none'));
+      v_j->'current'->>'code', v_j->'current'->>'hoursMarket', v_j->'current'->>'source', coalesce(v_j->>'offPlan', 'none'));
     v_t1 := v_qtz + (now() - v_qtz) / 3;
     v_t2 := v_qtz + (now() - v_qtz) * 2 / 3;
     perform cma.set_status(wa, null, v_t1, 'SE', 'CC');
     v_j := cma.my_day(null);
     v_b4 := v_b4 || format('; after Switch: notice %s; off plan %s %s %s since %s, next %s %s at %s',
-      coalesce(v_j->>'notice', 'none'), v_j->'offPlan'->>'code', v_j->'offPlan'->>'market', v_j->'offPlan'->>'name',
-      pg_temp.v0010a_rel((v_j->'offPlan'->>'since')::timestamptz), v_j->'offPlan'->>'nextCode', coalesce(v_j->'offPlan'->>'nextMarket', '-'),
+      coalesce(v_j->>'notice', 'none'), v_j->'offPlan'->>'code', v_j->'offPlan'->>'hoursMarket', v_j->'offPlan'->>'name',
+      pg_temp.v0010a_rel((v_j->'offPlan'->>'since')::timestamptz), v_j->'offPlan'->>'nextCode', coalesce(v_j->'offPlan'->>'nextHoursMarket', '-'),
       pg_temp.v0010a_rel((v_j->'offPlan'->>'nextAt')::timestamptz));
-    perform cma.set_status(wa, null, v_t2, v_j->'offPlan'->>'market', v_j->'offPlan'->>'code');
+    perform cma.set_status(wa, null, v_t2, v_j->'offPlan'->>'hoursMarket', v_j->'offPlan'->>'code');
     v_j := cma.my_day(null);
-    v_b4 := v_b4 || format('; Back to plan: off plan %s, current %s %s', coalesce(v_j->>'offPlan', 'none'), v_j->'current'->>'code', v_j->'current'->>'market');
+    v_b4 := v_b4 || format('; Back to plan: off plan %s, current %s %s', coalesce(v_j->>'offPlan', 'none'), v_j->'current'->>'code', v_j->'current'->>'hoursMarket');
     ev := cma.set_status(wa, null, now(), 'DE', 'GO');
     v_b4 := v_b4 || format('; again books nothing %s', pg_temp.v0010a_rel(ev.occurred_at) = pg_temp.v0010a_rel(v_t2));
 
@@ -516,16 +521,49 @@ begin
     -- B9: my_hours and the job for all tenants
     v_j := cma.my_hours(v_ws);
     select format('rows %s; pauses %s; today split %s; planned %s; worked = rows %s',
-      (select string_agg(coalesce(r->>'code', r->>'name') || ' ' || coalesce(r->>'market', '-'), ', '
-                         order by coalesce(r->>'code', r->>'name') collate "C", r->>'market' collate "C")
+      (select string_agg(coalesce(r->>'code', r->>'name') || ' ' || coalesce(r->>'hoursMarket', '-'), ', '
+                         order by coalesce(r->>'code', r->>'name') collate "C", r->>'hoursMarket' collate "C")
        from jsonb_array_elements(v_j->'rows') r),
       (select string_agg(coalesce(r->>'code', r->>'name'), ', ' order by coalesce(r->>'code', r->>'name') collate "C") from jsonb_array_elements(v_j->'pauses') r),
-      (select string_agg(coalesce(s->>'code', s->>'name') || ' ' || coalesce(s->>'market', '-'), ', ')
+      (select string_agg(coalesce(s->>'code', s->>'name') || ' ' || coalesce(s->>'hoursMarket', '-'), ', ')
        from jsonb_array_elements(v_j->'days') d cross join lateral jsonb_array_elements(d->'split') s where (d->>'isToday')::boolean),
       v_j->>'plannedMinutes',
       (v_j->>'workedSeconds')::bigint = (select sum((r->>'seconds')::bigint) from jsonb_array_elements(v_j->'rows') r))
       into v_b9;
     v_b9 := v_b9 || format('; all tenants inside a request %s', pg_temp.v0010a_try('select count(*) from cma.roster_switch_all(now())'));
+
+    -- B10: the job's own path, cma.roster_switch_all as a job runs it (cma_app, no tenant or user set): H clocked in at
+    -- Q-50 on GO·SE, the pause SB starts at Q-15; only when no other tenant has an open workday now, so the call (rolled
+    -- back with the rest) writes nothing anywhere else and locks no one's day
+    perform set_config('role', 'cma_owner', true);
+    if exists (select 1 from cma.workday w where w.tenant_id <> v_t and w.status = 'open') then
+      v_b10 := 'skip: another tenant has an open workday now';
+    else
+      perform set_config('app.user_id', v_mgr::text, true);
+      insert into cma.roster_entry (tenant_id, roster_week_id, user_id, business_date, kind, start_time, end_time)
+      values (v_t, v_week, v_hp, v_day, 'shift', (v_q - interval '60 minutes')::time, (v_q + interval '60 minutes')::time);
+      insert into cma.roster_assignment (tenant_id, roster_week_id, user_id, business_date, assignment_type_id, start_time, end_time, hours_market_code)
+      select v_t, v_week, v_hp, v_day, t.id, (v_q + x.s * interval '1 minute')::time, (v_q + x.e * interval '1 minute')::time, x.m
+      from (values ('GO', -60, -15, 'SE'), ('SB', -15, 15, null), ('GO', 15, 60, 'SE')) x(code, s, e, m)
+      join cma.assignment_type t on t.tenant_id = v_t and t.code = x.code;
+      update cma.roster_week set version = 2, published_at = clock_timestamp() where tenant_id = v_t and id = v_week;
+      perform set_config('role', 'cma_app', true);
+      perform set_config('app.user_id', v_hp::text, true);
+      wh := (cma.open_workday(v_qtz - interval '50 minutes')).id;
+      perform set_config('app.tenant_id', '', true);
+      perform set_config('app.user_id', '', true);
+      select string_agg(r.switched || '/' || r.ended || coalesce('/' || r.failed, ''), ', ') into v_text
+      from cma.roster_switch_all(now()) r where r.tenant_id = v_t;
+      v_b10 := 'job ' || coalesce(v_text, 'nothing') || format('; context left %s', coalesce(nullif(current_setting('app.tenant_id', true), ''), 'none'));
+      perform set_config('app.tenant_id', v_t::text, true);
+      perform set_config('app.user_id', v_hp::text, true);
+      v_b10 := v_b10 || '; ' || pg_temp.v0010a_events(wh);
+      perform set_config('role', 'cma_owner', true);
+      select v_b10 || '; audited as ' || coalesce((select u.display_name from cma.audit_log l join cma.app_user u on u.tenant_id = l.tenant_id and u.id = l.actor_user_id
+                                                   where l.tenant_id = v_t and l.table_name = 'time_event' and l.actor_label = 'scheduler:roster'
+                                                   order by l.changed_at desc limit 1), 'nobody')
+        into v_b10;
+    end if;
 
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
@@ -539,7 +577,7 @@ begin
   perform set_config('app.user_id', '', true);
   -- the job for all tenants, outside a request, for a minute in 2000: no workday is due, nothing is written
   begin
-    select coalesce(string_agg(distinct r.action, ', '), 'nothing') into v_text
+    select coalesce(string_agg(r.tenant_id::text || ' ' || coalesce(r.failed, r.switched || '/' || r.ended), ', '), 'nothing') into v_text
     from cma.roster_switch_all('2000-01-03 12:00+00') r;
     v_b9 := v_b9 || format('; outside a request %s, tenant left %s', v_text, coalesce(nullif(current_setting('app.tenant_id', true), ''), 'none'));
   exception when others then
@@ -571,6 +609,12 @@ begin
           || 'planner: absence with a market CMA04, both kinds CMA04, unknown absence CMA02, F without a Default market CMA04; '
           || 'stored GO 09:00-13:00 NL, sick 13:00-17:00 -; planner reads work GO -, absence - sick; coverage at 14:00 GO=1; '
           || 'the agent sees work GO NL, absence sick -');
+  if v_b10 like 'skip%' then
+    insert into pg_temp.verify_0010a values (20, 'B10 the job''s own path: roster_switch_all as the job runs it', case when pg_temp.v0010a_p('B10') then 'FAIL' else 'skip' end, v_b10);
+  else
+    perform pg_temp.v0010a_row(20, 'B10', 'the job''s own path: roster_switch_all as the job runs it, one switch, audited as the Scheduler, the context cleared',
+      v_b10, 'job 1/0; context left none; Q-50 GO SE user, Q-15 SB - roster; audited as Scheduler');
+  end if;
   perform pg_temp.v0010a_row(19, 'B9', 'My hours per assignment and market; the job for all tenants only outside a request',
     v_b9, 'rows CC SE, GO DE, GO SE, MC SE, SL SE, Training -; pauses SB; today split MC SE, SL SE, GO SE, CC SE, GO DE, Training -; planned 315; worked = rows t; '
           || 'all tenants inside a request CMA06; outside a request nothing, tenant left none');
@@ -592,12 +636,19 @@ begin
   for t in select id, slug from cma.tenant where status = 'active' order by slug collate "C" loop
     v_any := true;
     perform set_config('app.tenant_id', t.id::text, true);
-    -- R1
+    -- R1: the blocks 0010a's backfill saw (written before it), of people whose Default market is an active hours market and
+    -- has not changed since 0010a (a person given one only later, or a later Copy week for a person without one, is no
+    -- defect of the backfill)
     select count(*) into v_n1
     from cma.roster_assignment a
     join cma.assignment_type ty on ty.tenant_id = a.tenant_id and ty.id = a.assignment_type_id
     join cma.app_user u on u.tenant_id = a.tenant_id and u.id = a.user_id
-    where a.tenant_id = t.id and ty.kind = 'work' and a.hours_market_code is null and cma.is_hours_market(u.default_hours_market_code);
+    where a.tenant_id = t.id and ty.kind = 'work' and a.hours_market_code is null and cma.is_hours_market(u.default_hours_market_code)
+      and a.recorded_at < (select m.applied_at from cma.schema_migration m where m.version = '0010a')
+      and not exists (select 1 from cma.audit_log l
+                      where l.tenant_id = t.id and l.table_name = 'app_user' and l.row_id = a.user_id::text
+                        and l.changed_at >= (select m.applied_at from cma.schema_migration m where m.version = '0010a')
+                        and (l.old_row ->> 'default_hours_market_code') is distinct from (l.new_row ->> 'default_hours_market_code'));
     perform pg_temp.v0010a_row(30, 'R1', t.slug || ': no work block without a market whose person has a Default market',
       v_n1::text, case when pg_temp.v0010a_p('R1') then (v_n1 + 1)::text else '0' end);
     -- R2
@@ -676,6 +727,8 @@ from (select ord, check_name, result, detail from pg_temp.verify_0010a
       select 1000000, 'verdict',
              case when current_setting('verify.provoke') <> 'false' then 'PROVOKED, NOT A PASS'
                   when exists (select 1 from pg_temp.verify_0010a where result = 'FAIL') then 'FAIL'
+                  -- the behaviour block ran (a block that does not compile leaves no B row and must not read PASS)
+                  when not exists (select 1 from pg_temp.verify_0010a where check_name like 'B9 %') then 'FAIL'
                   when not exists (select 1 from pg_temp.verify_0010a where result = 'PASS') then 'FAIL'
                   else 'PASS' end,
              format('255_verify_roster_drives_the_day: %s PASS, %s FAIL, %s skip', (select count(*) from pg_temp.verify_0010a where result = 'PASS'),

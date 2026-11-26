@@ -341,8 +341,8 @@ expect("My day's words and colours: GO · SE, SB, a name without a code; plan an
     itemTone({ kind: "work", workArea: "sales" }) === toneOf({ kind: "work", workArea: "sales", isExtra: false, statusIsProductive: true }), itemTone({ kind: "absence", workArea: null }),
     switchLabel("Switch to", { kind: "work", code: "GO", name: "General Ops", market: "SE" }), switchLabel("Switch to", { kind: "pause", code: "SB", name: "Short break", market: null }),
     switchLabel("Switch to", { kind: "other", code: null, name: "Training", market: null }), hoursMinutes(4 * 3600 + 5 * 60), hoursMinutes(30 * 60)],
-  ["GO · SE", "SB", "Training", "CC · Courtesy calls", true, "absence", "Switch to GO · SE", "Switch to SB Short break", "Switch to Training", "4h 05m", "0h 30m"],
-  ["GO-SE", "SB · null", "null", "CC", false, "pause", "Switch to GO", "Switch to SB", "Switch to training", "4:05", "30m"]);
+  ["GO · SE", "SB", "Training", "CC · Courtesy calls", true, "absence", "Switch to GO · SE", "Switch to SB Short break", "Switch to Training", "4h 05m", "30m"],
+  ["GO-SE", "SB · null", "null", "CC", false, "pause", "Switch to GO", "Switch to SB", "Switch to training", "4:05", "0h 30m"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

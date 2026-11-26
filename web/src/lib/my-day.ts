@@ -51,13 +51,13 @@ export function itemTone(x: Pick<LaneItem, "kind" | "workArea" | "isExtra">): To
 }
 
 export function blockItem(b: MyDayBlock): LaneItem {
-  return { code: b.code, name: b.name, kind: b.kind, isExtra: b.isExtra, workArea: b.workArea, market: b.market, from: Date.parse(b.startAt), to: Date.parse(b.endAt) };
+  return { code: b.code, name: b.name, kind: b.kind, isExtra: b.isExtra, workArea: b.workArea, market: b.hoursMarket, from: Date.parse(b.startAt), to: Date.parse(b.endAt) };
 }
 
 /** A stretch as a lane item; a running one up to now */
 export function stretchItem(a: ActualStretch, nowMs: number): LaneItem {
   return {
-    code: a.code, name: a.name, kind: a.kind, workArea: a.workArea, market: a.market, from: Date.parse(a.fromAt),
+    code: a.code, name: a.name, kind: a.kind, workArea: a.workArea, market: a.hoursMarket, from: Date.parse(a.fromAt),
     to: a.toAt ? Date.parse(a.toAt) : nowMs, deviates: a.deviates,
   };
 }
@@ -123,8 +123,10 @@ export function switchLabel(prefix: string, choice: { kind: "work" | "pause" | "
   return `${prefix} ${choice.name}`;
 }
 
-/** Seconds as "4h 05m" (My hours' figures) */
+/** Seconds as the house's minutes, "4h 05m" or "30m" (lib/time's fmtMinutes, so My hours reads as Team hours) */
 export function hoursMinutes(seconds: number): string {
-  const m = Math.floor(Math.max(0, seconds) / 60);
-  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+  const minutes = Math.floor(Math.max(0, seconds) / 60);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h === 0 ? `${m}m` : `${h}h ${String(m).padStart(2, "0")}m`;
 }

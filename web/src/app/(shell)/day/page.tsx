@@ -30,7 +30,7 @@ export default async function MyDayPage() {
 
   const today = dateKeyInZone(new Date(), me.timeZone);
   // The day and its plan against actual in one transaction (addition 0010a); the Switch choices come with the plan
-  const { workday, plan } = await data().getMyDay(me, today);
+  const { workday, plan, statusChoices } = await data().getMyDay(me, today);
 
   if (plan.usesAssignments) {
     return (
@@ -57,8 +57,8 @@ export default async function MyDayPage() {
     );
   }
 
-  // A tenant without assignment types: the status buttons and the market select (0009zo)
-  const { statuses, hoursMarkets } = await data().listMyDayChoices(me);
+  // A tenant without assignment types: the status buttons and the market select (0009zo), read in getMyDay's transaction
+  const { statuses, hoursMarkets } = statusChoices ?? { statuses: [], hoursMarkets: [] };
   const defaultStatus = statuses.find((s) => s.isDefault);
 
   return (

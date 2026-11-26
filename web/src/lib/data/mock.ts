@@ -1834,7 +1834,7 @@ function mockPlanOf(me: Principal, date: DateKey): MyDayBlock[] {
     return {
       // E10: a work block names its market (the fixture's older blocks without one: the person's Default market, else the first)
       code: kind === "absence" ? null : b.code, name: absence?.name ?? t?.name ?? b.code ?? "", kind, isExtra: t?.isExtra ?? false,
-      workArea: t?.workArea ?? null, absenceKey: b.absenceKey ?? null, market: kind === "work" ? b.market ?? own : null, start: b.start, end: b.end,
+      workArea: t?.workArea ?? null, absenceKey: b.absenceKey ?? null, hoursMarket: kind === "work" ? b.market ?? own : null, start: b.start, end: b.end,
       startAt: new Date(localMs(date, b.start, me.timeZone)).toISOString(), endAt: new Date(localMs(date, b.end, me.timeZone)).toISOString(),
     };
   });
@@ -1850,10 +1850,10 @@ function mockBooking(block: MyDayBlock, inForce: string | null): { code: string;
   const t = mockAssignmentTypes().find((x) => x.code === block.code);
   if (!t || block.kind === "absence") return null;
   if (t.kind === "pause") return t.statusKey ? { code: t.code, statusKey: t.statusKey, market: null } : null;
-  if (!block.market) return null;
+  if (!block.hoursMarket) return null;
   const working = MOCK_STATUSES.find((s) => s.key === inForce && s.isWorking);
   const statusKey = t.isExtra ? working?.key ?? mockStartStatus().key : t.statusKey;
-  return statusKey ? { code: t.code, statusKey, market: block.market } : null;
+  return statusKey ? { code: t.code, statusKey, market: block.hoursMarket } : null;
 }
 
 /** E4: the block of the moment (not an absence), before the first block the first, after the last the last */
@@ -1937,8 +1937,8 @@ function mockActualOf(me: Principal, w: Workday, plan: MyDayBlock[], now: Instan
     out.push({
       code: e.code, name: t?.name ?? status.name, statusKey: status.key, statusName: status.name,
       kind: t ? t.kind : status.isWorking ? "other" : "pause", isWorking: status.isWorking, workArea: t?.workArea ?? status.workArea,
-      market: e.market, fromAt: e.at, toAt: next ? next.at : null, open: !next, source: e.source,
-      deviates: !!p && (p.code !== e.code || p.market !== e.market),
+      hoursMarket: e.market, fromAt: e.at, toAt: next ? next.at : null, open: !next, source: e.source,
+      deviates: !!p && (p.code !== e.code || p.hoursMarket !== e.market),
     });
   });
   if (out.length > 0 && out[out.length - 1]!.open && w.status === "ended") out[out.length - 1]!.open = false;
@@ -3731,11 +3731,11 @@ export const mockData: CmaData = {
     const last = w?.status === "working" ? actual.at(-1) ?? null : null;
     const minutes = Number(mockSetting("roster.switch_notice_minutes")) || 0;
     const notice = last && last.source === "roster" && ms - Date.parse(last.fromAt) < minutes * 60_000
-      ? { at: last.fromAt, code: last.code, name: last.name, kind: last.kind === "other" ? null : last.kind, market: last.market, until: new Date(Date.parse(last.fromAt) + minutes * 60_000).toISOString() }
+      ? { at: last.fromAt, code: last.code, name: last.name, kind: last.kind === "other" ? null : last.kind, hoursMarket: last.hoursMarket, until: new Date(Date.parse(last.fromAt) + minutes * 60_000).toISOString() }
       : null;
-    const offPlan = last && planNow && planNow.kind !== "absence" && (planNow.code !== last.code || planNow.market !== last.market)
-      ? { code: planNow.code, name: planNow.name, kind: planNow.kind as "work" | "pause", market: planNow.market, since: planNow.startAt,
-          nextAt: planNext?.startAt ?? null, nextCode: planNext?.code ?? null, nextName: planNext?.name ?? null, nextKind: planNext?.kind ?? null, nextMarket: planNext?.market ?? null }
+    const offPlan = last && planNow && planNow.kind !== "absence" && (planNow.code !== last.code || planNow.hoursMarket !== last.hoursMarket)
+      ? { code: planNow.code, name: planNow.name, kind: planNow.kind as "work" | "pause", hoursMarket: planNow.hoursMarket, since: planNow.startAt,
+          nextAt: planNext?.startAt ?? null, nextCode: planNext?.code ?? null, nextName: planNext?.name ?? null, nextKind: planNext?.kind ?? null, nextHoursMarket: planNext?.hoursMarket ?? null }
       : null;
     const shiftEntry = found?.entry ?? null;
     const myDay: MyDayPlan = {
@@ -3748,15 +3748,16 @@ export const mockData: CmaData = {
       plan, actual,
       marks: actual.filter((a) => a.source === "user" && a.deviates && a !== actual[0]).map((a) => {
         const p = plan.find((b) => b.kind !== "absence" && Date.parse(b.startAt) <= Date.parse(a.fromAt) && Date.parse(a.fromAt) < Date.parse(b.endAt));
-        return { at: a.fromAt, code: a.code, statusName: a.statusName, market: a.market, plannedCode: p?.code ?? null, plannedMarket: p?.market ?? null };
+        return { at: a.fromAt, code: a.code, statusName: a.statusName, hoursMarket: a.hoursMarket, plannedCode: p?.code ?? null, plannedHoursMarket: p?.hoursMarket ?? null };
       }),
       current: last ? { code: last.code, name: last.name, kind: last.kind, statusKey: last.statusKey, statusName: last.statusName, workArea: last.workArea,
-        market: last.market, since: last.fromAt, source: last.source } : null,
+        hoursMarket: last.hoursMarket, since: last.fromAt, source: last.source } : null,
       planNow, planNext, notice, offPlan,
       usesAssignments: mockAssignmentTypes().some((t) => t.isActive),
       choices: mockSwitchChoices(me, date),
     };
-    return { workday: w ? ownDay(me, w, now) : null, plan: myDay };
+    return { workday: w ? ownDay(me, w, now) : null, plan: myDay,
+      statusChoices: myDay.usesAssignments ? null : { statuses: MOCK_STATUSES, hoursMarkets: mockHoursMarkets(me).filter((m) => m.isActive) } };
   },
 
   async getMyHoursWeek(me, weekStart) {
@@ -3779,7 +3780,7 @@ export const mockData: CmaData = {
       const segments = actual.map((a) => {
         const to = a.toAt ?? (w?.status === "working" ? now : w?.endedAt ?? now);
         const seconds = Math.max(0, Math.floor((Date.parse(to) - Date.parse(a.fromAt)) / 1000));
-        return { code: a.code, name: a.name, statusName: a.statusName, kind: a.kind, isWorking: a.isWorking, workArea: a.workArea, market: a.market, fromAt: a.fromAt, toAt: to, seconds };
+        return { code: a.code, name: a.name, statusName: a.statusName, kind: a.kind, isWorking: a.isWorking, workArea: a.workArea, hoursMarket: a.hoursMarket, fromAt: a.fromAt, toAt: to, seconds };
       });
       const split = new Map<string, MyHoursWeek["days"][number]["split"][number]>();
       let dayWorked = 0;
@@ -3787,9 +3788,9 @@ export const mockData: CmaData = {
         const label = g.code ?? g.name;
         if (g.isWorking) {
           dayWorked += g.seconds;
-          const k = `${label}/${g.market ?? ""}`;
-          split.set(k, { code: g.code, name: label, market: g.market, seconds: (split.get(k)?.seconds ?? 0) + g.seconds });
-          rows.set(k, { code: g.code, name: g.name, workArea: g.workArea, market: g.market, seconds: (rows.get(k)?.seconds ?? 0) + g.seconds });
+          const k = `${label}/${g.hoursMarket ?? ""}`;
+          split.set(k, { code: g.code, name: label, hoursMarket: g.hoursMarket, seconds: (split.get(k)?.seconds ?? 0) + g.seconds });
+          rows.set(k, { code: g.code, name: g.name, workArea: g.workArea, hoursMarket: g.hoursMarket, seconds: (rows.get(k)?.seconds ?? 0) + g.seconds });
         } else {
           pauses.set(label, { code: g.code, name: g.name, seconds: (pauses.get(label)?.seconds ?? 0) + g.seconds });
         }
