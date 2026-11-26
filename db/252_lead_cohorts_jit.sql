@@ -4,7 +4,11 @@
 -- Universal: no customer, tenant or vendor specifics; a function setting only. Runs unchanged in every database, after
 -- 120_lead_cohorts.sql (0008zm), the only addition it needs. Rerunnable, forward-only, in one transaction with a lock
 -- timeout. Run as your own IAM login: dev first, then 253_verify_lead_cohorts_jit.sql there (normal, then provoked), then
--- 121_verify_lead_cohorts.sql (dev only; still PASS, not edited). Prod the same after the merge, without 121.
+-- 121_verify_lead_cohorts.sql (dev only; still PASS, not edited), then 131_time_all.sql part b for the row 'lead
+-- cohorts' (its overview budget, 500 ms, may still FAIL: about 1.1 s at three times prod's volume locally; the timeout
+-- is what this addition removes). Prod the same after the merge, without 121; 253's E1 runs 120's definition with JIT
+-- there, the read the application cancelled, so run 253 at a quiet moment. The proof in prod is the request log's dbMs
+-- for /reports/lead-cohorts, 15,036 to 15,043.5 ms before.
 --
 -- Why (Martin, 26 November 2026): Reports -> Sales -> Lead cohorts shows "This page could not be loaded" in prod. The
 -- request log has every navigation at dbMs 15,036 to 15,043.5 (25 and 26 November): the application's statement timeout

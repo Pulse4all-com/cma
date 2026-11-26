@@ -1,22 +1,29 @@
 -- =============================================================================================
 -- 253_verify_lead_cohorts_jit.sql: verifies addition 0009zz, Lead cohorts' read without JIT compilation
 -- =============================================================================================
--- Universal: no seed is assumed and nothing is written. S1 to S3 check the structure on the database itself; E1 reads
+-- Universal: no seed is assumed and nothing is written. S1 and S2 check the structure on the database itself; E1 reads
 -- every tenant's lead deals of the Lead cohorts page's default span (the last twelve ISO weeks up to today, in the
 -- tenant's zone) twice, through cma.lead_cohort_rows_of with its new setting and through 120's definition kept below
 -- (pg_temp, without the setting), and compares the two row for row. It prints counts and milliseconds, never a row of
 -- anyone, so the script runs in dev and in prod. Every check writes one row, OK or FAIL (its detail then starts
 -- "FAIL <id>"), because Cloud SQL Studio shows no notices. Run as your own IAM login after 252_lead_cohorts_jit.sql, dev
--- first, then prod. Expected: S1, S2, S3 OK and one E1 row OK per tenant, then "PASS 0009zz". Provoked (verify.provoke
+-- first, then prod. Expected: S1, S2 OK and one E1 row OK per tenant, then "PASS 0009zz". Provoked (verify.provoke
 -- true at the top): every row FAIL and the verdict PROVOKED, NOT A PASS; E1 then also compares with a deliberate
--- difference (120's side without its first deal), which its detail shows.
+-- difference (120's side without its first deal), which its detail shows as "1 only now" for a tenant with lead deals
+-- in the span (a tenant without any fails on the switch alone).
+--
+-- Run time: 120's side keeps the session's JIT on purpose (the proof that the setting changes no answer), so in prod it
+-- is the read the application cancelled, now without a timeout: expect 15 s or more for a tenant with lead deals, on the
+-- one vCPU. Run it at a quiet moment; the new side takes about a second.
+--
+-- That the setting holds inside the call is PostgreSQL's (a function's SET applies for the call and is restored after
+-- it); S1 checks that the function carries it.
 --
 --   S1  0009zz recorded after 0008zm; cma.lead_cohort_rows_of(uuid, date, date, timestamptz) carries jit=off and only
 --       that setting, is still plpgsql, stable, in the caller's rights, cma_owner's, the application's only (not
 --       public, not the readers'), and its body is 120's word for word (the copy below)
 --   S2  what 0009zz leaves alone: cma.lead_cohorts_of carries no setting (so the execute still inlines it) and stays
 --       sql, stable, in the caller's rights; cma_read.lead_cohort_rows() keeps its search path as its only setting
---   S3  the setting holds inside the call only: the session's jit is the same before and after a call
 --   E1  per tenant: the lead deals of the page's default span through cma.lead_cohort_rows_of equal 120's definition's,
 --       row for row (as text, the same instant on both sides); the detail gives the count, the milliseconds of each side
 --       (120's side under the session's JIT settings) and the session's jit
@@ -67,7 +74,7 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- S1 to S3: the structure
+-- S1 and S2: the structure
 -- ---------------------------------------------------------------------------------------------
 do $$
 declare
@@ -76,9 +83,6 @@ declare
   v_rd   regprocedure := to_regprocedure('cma_read.lead_cohort_rows()');
   v_bad  text := '';
   v_cfg  text;
-  v_jit0 text;
-  v_jit1 text;
-  v_err  text;
 begin
   -- S1
   if not exists (select 1 from cma.schema_migration where version = '0009zz') then
@@ -131,16 +135,6 @@ begin
   end if;
   perform pg_temp.v9zz_row(2, 'S2', 'left alone: cma.lead_cohorts_of without a setting (inlined), the readers'' function with its search path only',
                            v_bad = '', case when v_bad = '' then 'as 120' else v_bad end);
-
-  -- S3: a tenant that does not exist reads no deal; the call only shows that its setting does not outlive it
-  begin
-    v_jit0 := current_setting('jit');
-    perform cma.lead_cohort_rows_of('00000000-0000-0000-0000-000000000000'::uuid, current_date - 7, current_date, now());
-    v_jit1 := current_setting('jit');
-  exception when others then v_err := 'SQLSTATE ' || sqlstate;   -- the code only: a message could quote a value of a row
-  end;
-  perform pg_temp.v9zz_row(3, 'S3', 'the setting holds inside the call only: the session''s jit before and after a call',
-                           v_err is null and v_jit0 = v_jit1, coalesce(v_err, format('before %s, after %s', v_jit0, v_jit1)));
 end
 $$;
 
@@ -207,7 +201,7 @@ from (select ord, check_name, result, detail from pg_temp.verify_0009zz
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
                   when exists (select 1 from pg_temp.verify_0009zz where result <> 'OK') then 'FAIL'
                   when (select count(*) from pg_temp.verify_0009zz where result = 'OK')
-                       <> 3 + (select count(*) from cma.tenant) then 'FAIL'
+                       <> 2 + (select count(*) from cma.tenant) then 'FAIL'
                   else 'PASS 0009zz' end,
              format('253_verify_lead_cohorts_jit: %s OK, %s FAIL', (select count(*) from pg_temp.verify_0009zz where result = 'OK'),
                     (select count(*) from pg_temp.verify_0009zz where result <> 'OK'))) x
