@@ -3793,7 +3793,7 @@ with e as (select e.user_id, e.business_date, e.start_time, e.end_time from cma.
 
 **Fixture check** Ran on the local database (migrations to 0009zz, the dev seed and a hand-planned Team NL week of 30 November 2026 with blocks and a lunch), 26 November 2026: Agent One 2325 minutes (38h 45m), Test Supervisor 1980 (33h 00m), Team NL 4305 minutes (71h 45m), equal to the page; Martin compares the value with the page in Studio.
 
-**Documented in** api.md, Roster planner, print view and My schedule (0005); data-model/0001-0005b.md, Roster (0005); features.md §2; decisions.md, 26 Nov 2026, Planned counts the work assignments
+**Documented in** api.md, Roster planner, print view and My schedule (0005); data-model/0001-0005b.md, Roster (0005); features.md §2; decisions.md, 26 Nov 2026, D12 updated: Planned per person
 
 **Notes**
 
@@ -3844,7 +3844,7 @@ select sum(planned_minutes) from (with e as (select e.user_id, e.business_date, 
 
 **Fixture check** Ran on the local database (migrations to 0009zz, the dev seed and a hand-planned Team NL week of 30 November 2026 with blocks and a lunch), 26 November 2026: the week's total of Team NL 4305 minutes (71h 45m), equal to the page; Martin compares the value with the page in Studio.
 
-**Documented in** decisions.md, 26 Nov 2026, the Planned hours meter; features.md §2
+**Documented in** decisions.md, 26 Nov 2026, A Planned hours meter sits above the grid; features.md §2
 
 **Notes**
 

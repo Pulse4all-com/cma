@@ -3658,7 +3658,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Field | Value |
 |---|---|
 | Term | Hours market (nl: Urenmarkt), the market under which time is registered and billed |
-| Key | SQL `cma.roster_assignment.hours_market_code` (the plan's block; null is Own market), `cma.time_event.hours_market_code` (nullable, an hours market of the tenant), `cma.market.hours_market_code` (the mapping; not null, its own code by default), `cma_read.time_event.hours_market_code`, `cma_read.market.hours_market_code` and `cma_read.time_interval.hours_market_code` (each last); `cma.hours_markets()`, `cma.resolve_hours_market`, `cma.clock_in_hours_market`; API `hoursMarket` (`code`, `name`, `isActive` in `GET /api/v1/me/hours-markets`), `hoursMarketCode` on a market; copy `myDay.hoursMarket`, `dayEditor.hoursMarket`, `live.hoursMarket`, `exports.hoursMarket`, `configMarkets.hoursMarket` |
+| Key | SQL `cma.roster_assignment.hours_market_code` (the plan's block; null is Own market, except a pause, which has no Hours market), `cma.time_event.hours_market_code` (nullable, an hours market of the tenant), `cma.market.hours_market_code` (the mapping; not null, its own code by default), `cma_read.time_event.hours_market_code`, `cma_read.market.hours_market_code` and `cma_read.time_interval.hours_market_code` (each last); `cma.hours_markets()`, `cma.resolve_hours_market`, `cma.clock_in_hours_market`; API `hoursMarket` (`code`, `name`, `isActive` in `GET /api/v1/me/hours-markets`), `hoursMarketCode` on a market; copy `myDay.hoursMarket`, `dayEditor.hoursMarket`, `live.hoursMarket`, `exports.hoursMarket`, `configMarkets.hoursMarket` |
 | Definition | A market of the tenant that maps to itself and under which time is booked and billed. A tenant maps each market to an hours market in Configuration → Markets (Pulse4all: BE → NL, AT → DE; every other market maps to itself). The mapping is configuration, never code: no migration or seed names a tenant's market. Every start and status event carries the hours market it was booked under (pauses included, so nobody has to think about when it applies; only a status with a work area needs one for billing), and a status interval carries the hours market of the event that opened it. |
 | Source | The CMA: `cma.time_event`, written by the agent on My day (`cma.set_status`), by clock-in (opening a day: the person's Default market, else the market of the person's last day, else none; clocking in again: the day's own market first) and by a manager's correction (Correct day's Hours market column) |
 | Counts / does not count | A dimension of the time figures, never a figure: worked, paid, billable and productive time do not change, and a status with time under two markets on one day is two rows whose sums equal the one before. Time without a market is counted under No market, never dropped. A market that is no hours market is not offered on My day or as a Default market |
@@ -3668,7 +3668,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Market" for it: Market keeps its meaning, the country (the deal's, the line's, the customer's); "billing market" or "country" for an hours market; "activity" or "work type" for the work area; for an hours market an Assignment's market is called `hoursMarket` in the API, never "market" |
 | Status | Decided |
-| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "Hours market (nl Urenmarkt) is …" and the rows that follow it, and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo); 25 November 2026 (Martin, D11), docs/decisions.md, 25 Nov 2026, "From brief B the CMA sets the agent's activity from the plan …" (this PR, addition 0009zx), which reverses "My day has no activity choice" |
+| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "Hours market (nl Urenmarkt) is …" and the rows that follow it, and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo); 25 November 2026 (Martin, D11), docs/decisions.md, 25 Nov 2026, "From brief B the CMA sets the agent's activity from the plan …" (this PR, addition 0009zx), which reverses "My day has no activity choice"; 26 November 2026 (Martin), docs/decisions.md, 26 Nov 2026, "A pause block has no Hours market …" (this PR, addition 0009zz) |
 | Used by | No catalog key: no metric reads it. Pages: Time → Roster (an Assignment's market), My schedule, My day, Correct day (Team hours), People, the Live board, Configuration → Markets; `GET /api/v1/me/hours-markets`, `POST /api/v1/me/status`, `GET /api/v1/me/day`, `GET /api/v1/team/now`, `GET /api/v1/live/board`, `GET /api/v1/team/days/{userId}/{date}`, `POST .../corrections`, `GET` and `PUT /api/v1/configuration/markets`, `GET /api/v1/team/status-time`, `GET /api/v1/team/exports/hours` and `/status-changes` |
 | As built today | `230` (columns, foreign keys to a market of the same tenant, the kind check on `time_event`, triggers for the mapping rules serialised per tenant, the functions and reads) and `231` (verify); the rules hold in the tables, so a direct write cannot break them. `cma.open_workday` keeps its one-argument signature (an explicit market at clock-in is a market change right after). The capture is built; the billing statement is not (backlog CMA-137). Matches the definition |
 
@@ -3696,8 +3696,8 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Field | Value |
 |---|---|
 | Term | No market (nl: Geen markt), the label of time without an Hours market |
-| Key | `hours_market_code` null on `cma.time_event`, `cma_read.time_interval` and the reads built on them; `hoursMarket` null in the API; a null element of `hoursMarkets` on a day of the hours export; copy `myDay.noMarket`, `dayEditor.noMarket`, `live.noMarket`, `exports.noMarket` |
-| Definition | The label shown where an event or a stretch has no Hours market, for example before anyone chose one on a day of a person without a Default market. Such time is counted under the label, never dropped. |
+| Key | `hours_market_code` null on `cma.time_event`, `cma_read.time_interval` and the reads built on them; `hoursMarket` null in the API; a null element of `hoursMarkets` on a day of the hours export; copy `myDay.noMarket`, `dayEditor.noMarket`, `live.noMarket`, `exports.noMarket`, `assignmentsDay.noMarket`, `assignmentsDay.pauseNoMarket`, `assignments.meterNoMarket` |
+| Definition | The label shown where an event or a stretch has no Hours market, for example before anyone chose one on a day of a person without a Default market. Such time is counted under the label, never dropped. In the planner it is also the label of a pause block ("No market: a pause", nl "Geen markt: een pauze"), which has no Hours market, and of a person without a Default market. |
 | Source | The CMA: a start or status event booked without a market, and every stretch it opens |
 | Counts / does not count | Counts all time without a market in worked, paid, billable and productive time as any other time; it is its own row in a split per market. A day's end and a void carry no market and are not time under No market |
 | Unit and display | The words "No market" (nl "Geen markt"), in the Hours market select, the Hours market column of Correct day, the Live board's table and the CSVs' last columns; the hours CSV's cell lists the day's markets in order and "No market" for time without one, joined by " + " |
@@ -3706,8 +3706,8 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Unknown market", "Other" or "None" for it; an empty cell where a label is shown; a stretch without a market is never left out of a sum |
 | Status | Decided |
-| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "People gets a Default market per person …" and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo) |
-| Used by | No catalog key. My day, Correct day, the Live board, the Team hours and status-changes CSVs |
+| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "People gets a Default market per person …" and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo); 26 November 2026 (Martin), docs/decisions.md, 26 Nov 2026, "A pause block has no Hours market …" (this PR, addition 0009zz) |
+| Used by | No catalog key. My day, Correct day, the Live board, the Team hours and status-changes CSVs, Time → Roster (the Day view's market dropdown, the planner's panel and meter) |
 | As built today | `web/src/lib/copy.ts` (`noMarket` in the myDay, dayEditor, live and exports groups), `web/src/lib/csv.ts` (`hoursMarketsCell`). Matches the definition |
 
 ### Office hours
@@ -3735,7 +3735,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 |---|---|
 | Term | Assignment (nl: Inzet), a planned block of one Assignment type inside a person's shift |
 | Key | SQL `cma.roster_assignment` (`cma_read.roster_assignment`), `cma.roster_published_assignment` (the published blocks), `cma.roster_assignments`, `cma.roster_set_assignments`, `cma.roster_cell`; API `assignments` (`code`, `start`, `end`, `hoursMarket`, `note`) on `GET /api/v1/roster/weeks/{monday}`, `PUT .../assignments` and `PUT .../cells`; copy groups `assignments`, `assignmentsDay` |
-| Definition | One block of one Assignment type with a start and an end inside a person's shift on one business date, and an optional Hours market (empty: the person's Default market, Own market). Within a shift the unit is the Assignment; two Assignments of one person and date never overlap (an exclusion constraint on the table), and gaps inside a shift are allowed and shown. |
+| Definition | One block of one Assignment type with a start and an end inside a person's shift on one business date, and an optional Hours market (empty: the person's Default market, Own market; a block of kind pause has none). Within a shift the unit is the Assignment; two Assignments of one person and date never overlap (an exclusion constraint on the table), and gaps inside a shift are allowed and shown. |
 | Source | The CMA: `cma.roster_assignment`, written by the planner (`cma.roster_set_assignments`, the one writer is `cma.roster_put_assignments`), Copy week and Apply standard week |
 | Counts / does not count | Counts the current version of a block, and for every reader outside the planner the version as of the week's latest publication. A shift cleared, changed to an absence or shortened ends the blocks outside it; ended versions stay as history, nothing is deleted. A person-date with a shift and no blocks is planned on the day level only |
 | Unit and display | A bar in the planner's Day view (and, as text, in the week's cell): consecutive slots of one Assignment draw as one bar with the code once, hovering shows the type's name; My schedule lists the published blocks with the Hours market's time in brackets |
@@ -3744,9 +3744,9 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None (Pulse4all plans these in Excel today) |
 | Not to use | "Activity", "task", "skill" or "shift" for it (a shift is the planned day, Rostering; a skill is a proficiency, Teams and skills); "slot" for a block (a Slot is one grid cell) |
 | Status | Decided |
-| Decided | 25 November 2026 (Martin, D1, D6, D7); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); docs/decisions.md, 25 Nov 2026, "The unit within a shift is an Assignment …" |
+| Decided | 25 November 2026 (Martin, D1, D6, D7); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); docs/decisions.md, 25 Nov 2026, "The unit within a shift is an Assignment …"; 26 November 2026 (Martin), docs/decisions.md, 26 Nov 2026, "A pause block has no Hours market …" and "The Assignment field is a dropdown …" (this PR, addition 0009zz) |
 | Used by | No catalog key: no metric reads it yet. Time → Roster (the planner, week and Day view), My schedule, `cma.roster_today` (assignments last, for the Live board of a later brief); `GET /api/v1/roster/weeks/{monday}`, `PUT /api/v1/roster/weeks/{monday}/assignments` and `/cells`, `GET /api/v1/roster/weeks/{monday}/assignments`, `GET /api/v1/me/roster` |
-| As built today | `248` (tables, triggers for the grid and the hours market, the exclusion constraint, versioning, the functions and reads) and `249` (verify). Brief B (the assignment on the time events) and brief C (plan against actual) are not built; the model needs no schema change for them. Matches the definition |
+| As built today | `248` (tables, triggers for the grid and the hours market, the exclusion constraint, versioning, the functions and reads) `252` (a pause has no Hours market) and `249`, `253` (verifies). Brief B (the assignment on the time events) and brief C (plan against actual) are not built; the model needs no schema change for them. Matches the definition |
 
 ### Assignment type
 
@@ -3790,9 +3790,9 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 
 | Field | Value |
 |---|---|
-| Term | Own market (nl: Eigen markt), an Assignment without an Hours market |
-| Key | `hours_market_code` null on `cma.roster_assignment`; API `hoursMarket` null; copy `assignmentsDay.ownMarket` |
-| Definition | The Hours market of a block left empty: the person's Default market. The planner accepts "CODE" (own market) or "CODE-MARKET" (SL-GB); the market part must be an hours market of the tenant (`cma.hours_markets()`), the alias UK is read as GB and GB is always shown. The market is part of the block, not of the code. Brief B fixes the own market at booking |
+| Term | Own market (nl: Eigen markt), an Assignment without an Hours market (a pause excluded) |
+| Key | `hours_market_code` null on `cma.roster_assignment`; API `hoursMarket` null; copy `assignmentsDay.ownMarket` (a block of kind work only) |
+| Definition | The Hours market of a block left empty: the person's Default market. The planner accepts "CODE" (own market) or "CODE-MARKET" (SL-GB); the market part must be an hours market of the tenant (`cma.hours_markets()`), the alias UK is read as GB and GB is always shown. The market is part of the block, not of the code. A block of kind pause is never in its own market: it has no Hours market at all (No market). The Day view's Hours market dropdown offers Own market as its default. Brief B fixes the own market at booking |
 | Source | The CMA: `cma.roster_assignment.hours_market_code` with `cma.app_user.default_hours_market_code` |
 | Counts / does not count | Counts under the person's Default market in Planned hours per assignment and in the slot figures; a person without a Default market counts under No market |
 | Unit and display | No label in the bar; the Hours market shows as a small label inside the bar only when it differs from the person's Default market |
@@ -3801,7 +3801,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Home market" or "market" alone for it (Market keeps its meaning, the country; the API field is `hoursMarket`) |
 | Status | Decided |
-| Decided | 25 November 2026 (Martin, D1 and D5); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx) |
+| Decided | 25 November 2026 (Martin, D1 and D5); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); 26 November 2026 (Martin), docs/decisions.md, 26 Nov 2026, "A pause block has no Hours market …" (this PR, addition 0009zz) |
 | Used by | No catalog key. Time → Roster, `PUT /api/v1/roster/weeks/{monday}/assignments`, `GET /api/v1/roster/weeks/{monday}/planned-hours` |
 | As built today | `248` (hours market check on the block) and `web/src/lib/assignments.ts` (`parseAssignment`, `MARKET_ALIASES`, `plannedByKey`). Matches the definition |
 
@@ -3906,16 +3906,16 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 |---|---|
 | Term | Working (nl: Aan het werk), the people working in a slot |
 | Key | `cma.roster_slot_coverage` (people working and people per type and hours market per slot); copy `assignmentsDay.working` |
-| Definition | Per slot of the Planner zone's day, the number of people whose Assignment in that slot is of kind work (an extra type included, a pause not), counted from published or current blocks and never stored |
+| Definition | Per slot of the Planner zone's day, the number of people whose Assignment in that slot is of kind work (an extra type included, a pause not), counted from published or current blocks and never stored. Inside someone's shift a slot with nobody working shows 0, and outside every shift it stays empty |
 | Source | The CMA: `cma.roster_assignment` with `cma.assignment_type` |
 | Counts / does not count | Counts a person once per slot; does not count a pause block, an empty slot or an absence |
-| Unit and display | A count per slot above the grid of the Day view; the same slot's people per Assignment type and Hours market |
+| Unit and display | A count per slot above the grid of the Day view (0 inside someone's shift, empty outside every shift); the same slot's people per Assignment type and Hours market |
 | Time rule | Planner zone; the planner reads current rows |
 | Scope | Per date and team, or the tenant |
 | Equivalent in the source system | None |
 | Not to use | "Online", "available" or "logged in" for it (those are the clock and the status, Clocked in) |
 | Status | Decided |
-| Decided | 25 November 2026 (Martin, D12); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx) |
+| Decided | 25 November 2026 (Martin, D12); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); 26 November 2026 (Martin), docs/decisions.md, 26 Nov 2026, "Working shows 0, not blank …" (this PR, addition 0009zz) |
 | Used by | No catalog key; `GET /api/v1/roster/days/{date}/coverage`; Time → Roster (Day view) |
 | As built today | `248` (`cma.roster_slot_coverage`) and `web/src/lib/assignments.ts` (`slotFigures`). Matches the definition |
 
@@ -3924,19 +3924,57 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Field | Value |
 |---|---|
 | Term | Planned hours per assignment (nl: Geplande uren per inzet) |
-| Key | `cma.roster_planned_hours`; API `GET /api/v1/roster/weeks/{monday}/planned-hours` (planned minutes per person, date, type and `hoursMarket`); copy `assignmentsDay.totals` |
-| Definition | Per person and day, and per week, the duration of the published or current blocks per Assignment type and Hours market, never stored. A block in its Own market counts under the person's Default market |
+| Key | `cma.roster_planned_hours`; API `GET /api/v1/roster/weeks/{monday}/planned-hours` (planned minutes per person, date, type and `hoursMarket`); copy `assignments.meter*` (the Planned hours meter's split, which replaced the Day view's former panel, `assignmentsDay.totals*`) |
+| Definition | Per person and day, and per week, the duration of the published or current blocks per Assignment type and Hours market, never stored. A block in its Own market counts under the person's Default market. A pause is read under no market (`hoursMarket` null) and apart, and is never part of Planned (roster) |
 | Source | The CMA: `cma.roster_assignment` |
-| Counts / does not count | Counts the blocks' minutes, pauses included under their own type; does not count the shift's minutes outside any block (that stays in the person's Planned hours of the week) |
-| Unit and display | Hours and minutes per type and market, per day and for the week, in the Day view's totals |
+| Counts / does not count | Counts the minutes of the work blocks (an extra type included) per type and market; a pause is listed on its own line per type under no market and adds to no total. Does not count the shift's minutes outside any block: a shift without any block counts whole in Planned (roster), as "Shifts without assignments" |
+| Unit and display | Hours and minutes per type and market, per day and for the week, in the Planned hours meter's "Per assignment" split above the grid in Week and Day view, with the pauses apart and "Shifts without assignments" as its own line |
 | Time rule | Business date in the person's zone; current rows for the planner |
 | Scope | Per week and team, or the tenant |
 | Equivalent in the source system | None |
 | Not to use | "Billable hours" or "worked hours" for it: it is a plan, and no time is booked from it |
 | Status | Decided |
-| Decided | 25 November 2026 (Martin, D12); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx) |
-| Used by | No catalog key. Time → Roster; `GET /api/v1/roster/weeks/{monday}/planned-hours` |
-| As built today | `248` (`cma.roster_planned_hours`, `cma.roster_block_minutes`) and `web/src/lib/assignments.ts` (`plannedByKey`). Matches the definition. Brief C's Plan at day start against actual (CMA-137) reads these figures; it is not built |
+| Decided | 25 November 2026 (Martin, D12); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); 26 November 2026 (Martin), docs/decisions.md, 26 Nov 2026, "D12 updated: Planned per person …" and "A Planned hours meter sits above the grid …" (this PR, addition 0009zz) |
+| Used by | Catalog key `roster.planner.planned_hours_meter`. Time → Roster (the meter); `GET /api/v1/roster/weeks/{monday}/planned-hours` |
+| As built today | `248` (`cma.roster_planned_hours`, `cma.roster_block_minutes`) and `web/src/lib/assignments.ts` (`plannedByKey`), `web/src/components/PlannedMeter.tsx` (the meter, computed in the browser from the week the planner already reads, with the same rule; `252` re-creates the function with it). Matches the definition. Brief C's Plan at day start against actual (CMA-137) reads these figures; it is not built |
+
+### Planned (roster)
+
+| Field | Value |
+|---|---|
+| Term | Planned (nl: Gepland), the hours a person is planned to work on the roster |
+| Key | Catalog keys `roster.planner.planned_minutes_per_person`, `roster.print.planned_minutes_per_person`, `my_schedule.planned_total`, `roster.planner.planned_hours_meter`; copy `assignments.meterDayLevel`, `assignments.plannedHint` |
+| Definition | Per person and business date, the duration of the work blocks of the shift (an extra type included) and never a pause; a shift without any block counts whole, because it is planned on the day level only, and an absence or an empty cell counts 0. The label of the whole-shift part in a split is "Shifts without assignments" (nl "Diensten zonder inzet"). The whole-shift rule is to confirm. |
+| Source | The CMA: `cma.roster_entry` with `cma.roster_assignment` and `cma.assignment_type` (the planner reads current rows, My schedule the published ones) |
+| Counts / does not count | Counts work blocks and a shift without blocks; does not count a pause, an absence, or the shift's minutes outside the blocks of a shift that has some. A pause stays in the Planned hours per assignment panel on its own line |
+| Unit and display | Hours and minutes: the planner's Planned column (Day and Week view), the print view, My schedule's planned total, and the Planned hours meter's total with a bar measured against the hours on shift ("72h 00m of 75h 30m on shift"; the bar's measure is to confirm) |
+| Time rule | Business date in the person's zone; the planner reads current rows, My schedule published ones. Durations are wall-clock minutes, as the shift's |
+| Scope | Per person and date, summed per week and for the roster on screen |
+| Equivalent in the source system | None |
+| Not to use | "Worked hours", "paid hours" or "billable hours" for it: it is a plan; "Planned hours" alone for it where the Planned hours per assignment split is meant |
+| Status | Decided; the whole-shift rule and the bar's measure to confirm |
+| Decided | 26 November 2026 (Martin); docs/decisions.md, 26 Nov 2026, "D12 updated: Planned per person …", "A Planned hours meter sits above the grid …" and "Definitions: Person-day (nl Persoonsdag) is a new term …" (this PR, addition 0009zz) |
+| Used by | `roster.planner.planned_minutes_per_person`, `roster.print.planned_minutes_per_person`, `my_schedule.planned_total`, `roster.planner.planned_hours_meter`; Time → Roster (Day and Week view, the print view), My schedule |
+| As built today | `252` (`cma.roster_planned_hours`), `web/src/lib/assignments.ts` (`plannedMinutes`), `web/src/components/PlannedMeter.tsx`, the print page and `/schedule`. Matches the definition |
+
+### Person-day
+
+| Field | Value |
+|---|---|
+| Term | Person-day (nl: Persoonsdag), one person on one business date of a roster |
+| Key | SQL a person-date (`user_id`, `business_date`) of `cma.roster_entry`; copy `assignments.reportCopied`, `assignments.reportApplied`, `assignments.reportSaved` |
+| Definition | The unit Copy week, Apply standard week and Save as standard week report in: "4 person-days copied" is four people's days, one row per person and date in the report. |
+| Source | The CMA: the report of `cma.roster_copy_week_report`, `cma.apply_standard_week` and `cma.save_standard_week` |
+| Counts / does not count | Counts a person once per business date; two people on one date are two person-days, and a person-date the action skipped is listed in the report with its reason, not counted as done |
+| Unit and display | "{n} person-days copied", "{n} person-days filled from the standard week", "{n} person-days saved as the standard week" (nl "persoonsdagen") |
+| Time rule | The business date in the person's zone |
+| Scope | Per action and roster week |
+| Equivalent in the source system | None |
+| Not to use | "Days" alone for it where the count is of people's days; "shift" for it (a shift is the planned day of one person, Rostering) |
+| Status | Decided |
+| Decided | 26 November 2026 (Martin); docs/decisions.md, 26 Nov 2026, "The reports of Copy week, Apply standard week and Save as standard week count person-days …" and "Definitions: Person-day (nl Persoonsdag) is a new term …" (this PR, addition 0009zz) |
+| Used by | No catalog key. Time → Roster (the report after Copy week, Apply standard week and Save as standard week); `POST /api/v1/roster/weeks/{monday}/copy`, `/standard-week` and `/apply-standard-week` |
+| As built today | `web/src/lib/copy.ts` (`reportCopied`, `reportApplied`, `reportSaved`). Matches the definition |
 
 ## Intake terms
 
