@@ -8,8 +8,9 @@
   {
     "path": "/day",
     "subject": "agent-two",
-    "tx": 3,
-    "rt": 13
+    "tx": 2,
+    "rt": 10,
+    "note": "since addition 0010a (brief B) the day and its plan against actual in one transaction (readDay and cma.my_day); the statuses-and-markets read is gone for a tenant with assignment types"
   },
   {
     "path": "/hours",
@@ -52,6 +53,20 @@
     "subject": "agent-two",
     "tx": 2,
     "rt": 9
+  },
+  {
+    "path": "/api/v1/me/day/plan",
+    "subject": "agent-two",
+    "tx": 2,
+    "rt": 10,
+    "note": "addition 0010a: the day and cma.my_day in one transaction"
+  },
+  {
+    "path": "/api/v1/me/hours/week",
+    "subject": "agent-two",
+    "tx": 2,
+    "rt": 9,
+    "note": "addition 0010a: cma.my_hours, one statement"
   },
   {
     "path": "/api/v1/me/messages?unread=1",
@@ -616,8 +631,9 @@
     "subject": "agent-two",
     "from": "/",
     "path": "/day",
-    "tx": 3,
-    "rt": 13
+    "tx": 2,
+    "rt": 10,
+    "note": "since addition 0010a (brief B) the day and its plan against actual in one transaction (readDay and cma.my_day); the statuses-and-markets read is gone for a tenant with assignment types"
   },
   {
     "kind": "prefetch",

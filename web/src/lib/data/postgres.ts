@@ -10,7 +10,7 @@ import type {
   AssignmentBlock, AssignmentType, PublishedAssignment, RosterAssignment, RosterAssignmentsResult, RosterCellResult, RosterPlannedRow, RosterPlannerContext,
   RosterReportRow, RosterSlotCoverageRow, StandardWeekDay, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
-  TeamPerson, TenantSetting, TimeEvent, Workday, WorkArea, WorkStatus, PermissionInfo, SentMessage, HoursMarket, MyDayChoices,
+  TeamPerson, TenantSetting, TimeEvent, Workday, WorkArea, WorkStatus, PermissionInfo, SentMessage, HoursMarket, MyDayChoices, MyDayPlan, MyHoursWeek, RosterPublishResult,
   CrmRecordsDay, DashboardIntake, DashboardReads, DataQualityCheck, Intake, SourceConnections, SpeedToLeadDeal, SpeedToLeadFigures, SpeedToLeadGroup, SpeedToLeadPeriodFigures, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceRead, SourceKind, SourcePipeline, SourceSettings,
   InboundFigures, InboundNow, OutboundNow, InboundService, MissedReason, LiveBoardData, DataQualityReport,
@@ -918,15 +918,17 @@ type RosterPersonDbRow = {
   default_hours_market_code?: string | null;
 };
 type RosterAssignmentDbRow = {
-  assignment_id: string; user_id: string; business_date: string; code: string; name: string; kind: "work" | "pause"; work_area: WorkArea | null;
+  assignment_id: string; user_id: string; business_date: string; code: string | null; name: string; kind: "work" | "pause" | "absence"; work_area: WorkArea | null;
   is_extra: boolean; start_time: string; end_time: string; hours_market_code: string | null; note: string | null; recorded_at: Date;
+  /** addition 0010a (E9); absent before it */
+  absence_key?: string | null; absence_name?: string | null;
 };
 type AssignmentTypeDbRow = {
   code: string; name: string; sort_order: number; status: string; kind: "work" | "pause"; status_key: string | null; status_name: string | null;
   work_area: WorkArea | null; is_extra: boolean; status_is_productive: boolean | null;
 };
 type RosterReportDbRow = { user_id: string; business_date: string; outcome: "done" | "skipped"; reason: RosterReportRow["reason"]; blocks: number; blocks_dropped: number };
-type BlockJson = { assignmentId: string; code: string; start: string; end: string; hoursMarket: string | null; note: string | null };
+type BlockJson = { assignmentId: string; code: string | null; absence?: string | null; start: string; end: string; hoursMarket: string | null; note: string | null };
 type RosterEntryDbRow = {
   entry_id: string; user_id: string; business_date: string; kind: "shift" | "absence"; start_time: string | null; end_time: string | null;
   absence_key: string | null; absence_name: string | null; note: string | null; recorded_at: Date; recorded_by_name: string;
@@ -959,7 +961,16 @@ function toReport(r: RosterReportDbRow): RosterReportRow {
   return { userId: r.user_id, date: r.business_date, outcome: r.outcome, reason: r.reason, blocks: r.blocks, blocksDropped: r.blocks_dropped };
 }
 
-const toBlock = (b: BlockJson): AssignmentBlock => ({ assignmentId: b.assignmentId, code: b.code, start: b.start, end: b.end, hoursMarket: b.hoursMarket ?? null, note: b.note ?? null });
+/** E5's refusal (addition 0010a): CMA04 with detail empty_shifts=[{userId, date}, …] from cma.roster_publish; null for any other error */
+function emptyShiftsOf(e: unknown): { userId: string; date: string }[] | null {
+  const m = e instanceof CmaDbError && e.sqlState === "CMA04" ? /^empty_shifts=(\[.*\])$/s.exec(e.pgDetail ?? "") : null;
+  if (!m) return null;
+  return (JSON.parse(m[1]!) as { userId: string; date: string }[]).map((x) => ({ userId: x.userId, date: x.date }));
+}
+
+const toBlock = (b: BlockJson): AssignmentBlock => ({
+  assignmentId: b.assignmentId, code: b.code ?? null, absence: b.absence ?? null, start: b.start, end: b.end, hoursMarket: b.hoursMarket ?? null, note: b.note ?? null,
+});
 
 /**
  * The planner's settings and catalogs in one statement (addition 0009zx): the four roster settings, the planner zone, the
@@ -1849,6 +1860,28 @@ async function readCallsNow(q: Querier, withOutbound: boolean): Promise<{ inboun
   return { inbound, outbound };
 }
 
+/** My day's choices for a tenant without assignment types (addition 0009zo): the active statuses and hours markets, one statement */
+async function myDayChoices(q: Querier): Promise<MyDayChoices> {
+  // Pay and billing flags stay out: not agent information (decision of 6 October 2026). The work area colours the
+  // status (addition 0009zn). The tenant's active hours markets (addition 0009zo, D3) in the same statement: an
+  // uncorrelated scalar subquery, read once, so My day costs no round trip more
+  const r = await q.query<{ key: string; name: string; is_working: boolean; is_productive: boolean; work_area: WorkArea | null; is_default: boolean;
+    hours_markets: { code: string; name: string }[] }>(
+    `select key, name, is_working, is_productive, work_area, is_default,
+            (select coalesce(json_agg(json_build_object('code', h.code, 'name', h.name) order by h.sort_order, h.code collate "C"), '[]'::json)
+               from cma.hours_markets() h where h.status = 'active') as hours_markets
+       from cma.work_status
+      where tenant_id = cma.current_tenant_id() and status = 'active'
+      order by sort_order, key`,
+  );
+  return {
+    statuses: r.rows.map((s) => ({
+      key: s.key, name: s.name, isWorking: s.is_working, isProductive: s.is_productive, workArea: s.work_area, isDefault: s.is_default,
+    })),
+    hoursMarkets: (r.rows[0]?.hours_markets ?? []).map((m) => ({ code: m.code, name: m.name, isActive: true })),
+  };
+}
+
 export const postgresData: CmaData = {
   async findPrincipal(identity: Identity): Promise<Principal | null> {
     // One transaction for both steps (the IT audit of 17 October 2026: identity cost two checkouts and two
@@ -1998,26 +2031,7 @@ export const postgresData: CmaData = {
   },
 
   async listMyDayChoices(me: Principal): Promise<MyDayChoices> {
-    return withTenant(ctx(me), async (q) => {
-      // Pay and billing flags stay out: not agent information (decision of 6 October 2026). The work area colours the
-      // status (addition 0009zn). The tenant's active hours markets (addition 0009zo, D3) in the same statement: an
-      // uncorrelated scalar subquery, read once, so My day costs no round trip more
-      const r = await q.query<{ key: string; name: string; is_working: boolean; is_productive: boolean; work_area: WorkArea | null; is_default: boolean;
-        hours_markets: { code: string; name: string }[] }>(
-        `select key, name, is_working, is_productive, work_area, is_default,
-                (select coalesce(json_agg(json_build_object('code', h.code, 'name', h.name) order by h.sort_order, h.code collate "C"), '[]'::json)
-                   from cma.hours_markets() h where h.status = 'active') as hours_markets
-           from cma.work_status
-          where tenant_id = cma.current_tenant_id() and status = 'active'
-          order by sort_order, key`,
-      );
-      return {
-        statuses: r.rows.map((s) => ({
-          key: s.key, name: s.name, isWorking: s.is_working, isProductive: s.is_productive, workArea: s.work_area, isDefault: s.is_default,
-        })),
-        hoursMarkets: (r.rows[0]?.hours_markets ?? []).map((m) => ({ code: m.code, name: m.name, isActive: true })),
-      };
-    });
+    return withTenant(ctx(me), (q) => myDayChoices(q));
   },
 
   async setStatus(me: Principal, change): Promise<Workday> {
@@ -2030,8 +2044,33 @@ export const postgresData: CmaData = {
       );
       const w = today.rows[0];
       if (!w) throw new CmaDbError("CMA02", "no workday today");
-      await q.query(`select 1 from cma.set_status($1, $2, now(), $3)`, [w.id, change.key, change.hoursMarket]);
+      // Switch (addition 0010a, E6): with an assignment code the type books its own status under the market (a pause none)
+      await q.query(`select 1 from cma.set_status($1, $2, now(), $3, $4)`, [w.id, change.key, change.hoursMarket, change.assignment ?? null]);
       return toWorkday(one(await readDay(q, TODAY, []), "set_status"));
+    });
+  },
+
+  async getMyDay(me: Principal, date: DateKey): Promise<{ workday: Workday | null; plan: MyDayPlan; statusChoices: MyDayChoices | null }> {
+    assertDate(date, "date");
+    // One transaction, two statements (addition 0010a): the day's clock as before and cma.my_day's plan against actual,
+    // whose Switch choices replace the statuses-and-markets read My day made before
+    return withTenant(ctx(me), async (q) => {
+      const row = (await readDay(q, "$1::date", [date]))[0];
+      const r = await q.query<{ plan: MyDayPlan }>(`select cma.my_day($1::date) as plan`, [date]);
+      const plan = one(r.rows, "my_day").plan;
+      // A tenant without assignment types keeps the status buttons and the market select: their choices in the same
+      // transaction, so its My day costs one statement more and no transaction more
+      const statusChoices = plan.usesAssignments ? null : await myDayChoices(q);
+      return { workday: row ? toWorkday(row) : null, plan, statusChoices };
+    });
+  },
+
+  async getMyHoursWeek(me: Principal, weekStart: DateKey): Promise<MyHoursWeek> {
+    assertDate(weekStart, "weekStart");
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ week: MyHoursWeek }>(`select cma.my_hours($1::date) as week`, [weekStart]);
+      const w = one(r.rows, "my_hours").week;
+      return { ...w, workedSeconds: Number(w.workedSeconds), plannedMinutes: Number(w.plannedMinutes) };
     });
   },
 
@@ -2509,8 +2548,9 @@ export const postgresData: CmaData = {
           teamKeys: p.team_keys ?? [], workTypeKeys: p.work_type_keys ?? [], defaultHoursMarket: p.default_hours_market_code ?? null,
         })),
         assignments: assignments.rows.map((a): RosterAssignment => ({
-          assignmentId: a.assignment_id, userId: a.user_id, date: a.business_date, code: a.code, name: a.name, kind: a.kind, workArea: a.work_area,
+          assignmentId: a.assignment_id, userId: a.user_id, date: a.business_date, code: a.code ?? "", name: a.name, kind: a.kind, workArea: a.work_area,
           isExtra: a.is_extra, start: a.start_time, end: a.end_time, hoursMarket: a.hours_market_code, note: a.note, recordedAt: a.recorded_at.toISOString(),
+          absenceKey: a.absence_key ?? null, absenceName: a.absence_name ?? null,
         })),
         planner,
         entries: entries.rows.map(toRosterEntry),
@@ -2554,7 +2594,7 @@ export const postgresData: CmaData = {
       const absence = cell.kind === "absence" ? cell.absenceKey : null;
       const note = cell.kind === "clear" ? null : cell.note ?? null;
       // the planner's cell write: today in a published week publishes at once (D8, cma.roster_set_cell, 0009zx)
-      const w = await q.query<{ answer: { published: boolean } }>(
+      const w = await q.query<{ answer: { published: boolean; waiting?: string } }>(
         `select cma.roster_set_cell($1::date, $2, $3::uuid, $4::date, $5, $6::time, $7::time, $8, $9, $10) as answer`,
         [weekStart, teamKey, userId, date, kind, start, end, absence, note, publishOthers]);
       // The cell as it stands, with its blocks and the blocks this write ended with the shift (cma.roster_cell, 0009zx)
@@ -2568,12 +2608,16 @@ export const postgresData: CmaData = {
         assignments: (c.assignments ?? []).map(toBlock),
         endedAssignments: c.ended_assignments,
         published: one(w.rows, "roster_set_cell").answer.published === true,
+        // E5 (addition 0010a): a shift of today without a block waits for its blocks
+        ...(one(w.rows, "roster_set_cell").answer.waiting === "no_assignments" ? { waiting: "no_assignments" as const } : {}),
       };
     });
     } catch (e) {
       // D8: today's change in a published week would also publish other changes; the planner asks first
       const m = e instanceof CmaDbError && e.sqlState === "CMA03" ? /^publish_others=(\d+)$/.exec(e.pgDetail ?? "") : null;
       if (m) return { status: "confirm", otherChanges: Number(m[1]) };
+      const empty = emptyShiftsOf(e);
+      if (empty) return { status: "refused", emptyShifts: empty };
       throw e;
     }
   },
@@ -2594,6 +2638,8 @@ export const postgresData: CmaData = {
       // D8: today's change in a published week would also publish other changes; the planner asks first
       const m = e instanceof CmaDbError && e.sqlState === "CMA03" ? /^publish_others=(\d+)$/.exec(e.pgDetail ?? "") : null;
       if (m) return { status: "confirm", otherChanges: Number(m[1]) };
+      const empty = emptyShiftsOf(e);
+      if (empty) return { status: "refused", emptyShifts: empty };
       throw e;
     }
   },
@@ -2667,12 +2713,19 @@ export const postgresData: CmaData = {
     await withTenant(ctx(me), (q) => q.query(`select cma.set_absence_carries_over($1, $2)`, [key, carriesOver]));
   },
 
-  async publishRoster(me, weekStart, teamKey): Promise<RosterWeekHeader> {
+  async publishRoster(me, weekStart, teamKey): Promise<RosterPublishResult> {
     assertDate(weekStart, "weekStart");
-    return withTenant(ctx(me), async (q) => {
-      await q.query(`select 1 from cma.roster_publish($1::date, $2)`, [weekStart, teamKey]);
-      return readRosterHeader(q, weekStart, teamKey);
-    });
+    try {
+      return await withTenant(ctx(me), async (q) => {
+        await q.query(`select 1 from cma.roster_publish($1::date, $2)`, [weekStart, teamKey]);
+        return { status: "published", header: await readRosterHeader(q, weekStart, teamKey) };
+      });
+    } catch (e) {
+      // E5 (addition 0010a): a shift dated today or later without any block refuses Publish; the detail names them
+      const empty = emptyShiftsOf(e);
+      if (empty) return { status: "refused", emptyShifts: empty };
+      throw e;
+    }
   },
 
   async copyRosterWeek(me, fromWeekStart, toWeekStart, teamKey): Promise<RosterReportRow[]> {

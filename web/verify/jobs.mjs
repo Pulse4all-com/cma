@@ -14,7 +14,9 @@
  * answering CMA03 on the retry is done, not a failure. Since addition 0009e the snapshot job refreshes the current takes
  * first: their counts ride on the same run row, a refresh that fails (one overview's code, or the call refused) fails the
  * run row with "current_take <code>" while the take still runs, and a reset in the refresh is retried with the rest of
- * the unit. Invented ids only.
+ * the unit. Since addition 0010a (brief B) the roster's minute job (jobs/roster-switch.mjs): its one statement retried once
+ * after a reset, a second reset failing the run, any other error never retried, a tenant's failure counted and logged with
+ * its code, and its log lines carrying counts and tenant ids only. Invented ids only.
  *
  *   node verify/jobs.mjs             every check must PASS
  *   node verify/jobs.mjs --provoke   every check must FAIL
@@ -27,6 +29,7 @@ import { refreshTenants as refreshActiveCustomers } from "../jobs/refresh-active
 import { closeTenants } from "../jobs/close-forgotten-workdays.mjs";
 import { gatedCounts, gatedSeverity } from "../jobs/lib/gate.mjs";
 import { parseSessionOptions, sessionPoolOptions } from "../jobs/lib/session-options.mjs";
+import { switchAll } from "../jobs/roster-switch.mjs";
 import { snapshotTenants, countsOf, currentCountsOf, pledgeCountsOf, runErrorOf, poolMax, STATEMENT_TIMEOUT_MS, TAKE_RETRY_MINUTES } from "../jobs/snapshot-flash.mjs";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -592,6 +595,57 @@ expect("gate: a gated run's counts name its wait (after a timeout, deferred, not
     [r.failed, sent(T1, /cma\.flash_current_refresh\(/), sent(T1, /cma\.flash_snapshot_take\(/), sent(T2, /cma\.flash_current_refresh\(/), fin],
     [0, 0, 1, 1, ["t1:succeeded:1:0", "t2:succeeded:0:1"]],
     [1, 1, 0, 0, []]);
+}
+
+
+// ---- The roster's minute job (addition 0010a, brief B, E2): one statement for all tenants ------------------------------
+{
+  /** A client for switchAll: answers the job's statement with rows, or fails on it as told (a reset per attempt, or an error) */
+  function switchPool(rowsOf, fails = []) {
+    const state = { connects: 0, released: [], statements: 0 };
+    const connect = async () => {
+      const n = state.connects++;
+      const client = new EventEmitter();
+      client.query = async (text) => {
+        if (/roster_switch_all/.test(text)) {
+          state.statements += 1;
+          const f = fails[n];
+          if (f === "reset") throw reset();
+          if (f === "error") throw Object.assign(new Error("not permitted"), { code: "CMA06" });
+          return { rows: rowsOf() };
+        }
+        return { rows: [] };
+      };
+      client.release = (err) => state.released.push(err ? "broken" : "ok");
+      return client;
+    };
+    return { connect, state };
+  }
+  const lines = [];
+  const realLog = console.log;
+  const quiet = async (fn) => { console.log = (l) => lines.push(String(l)); try { return await fn(); } finally { console.log = realLog; } };
+  const rows = () => [{ tenant_id: T1, switched: 3, ended: 1, failed: null }, { tenant_id: T2, switched: 0, ended: 0, failed: "57014" }];
+  let pool = switchPool(rows);
+  let r = await quiet(() => switchAll({ connect: pool.connect }));
+  expect("roster switch: one statement, the counts summed, a tenant's failure counted, its code in its line, no person id",
+    [r, pool.state.statements, lines.some((l) => l.includes('"error":"57014"')), lines.every((l) => !/user_id|workday_id/.test(l))],
+    [{ tenants: 2, switched: 3, ended: 1, failed: 1 }, 1, true, true],
+    [{ tenants: 2, switched: 4, ended: 1, failed: 0 }, 2, false, false]);
+  lines.length = 0;
+  pool = switchPool(rows, ["reset"]);
+  r = await quiet(() => switchAll({ connect: pool.connect }));
+  expect("roster switch: a reset is retried once on a fresh connection, the broken one dropped",
+    [r.switched, pool.state.statements, pool.state.released, lines.filter((l) => /connection lost, retried once/.test(l)).length],
+    [3, 2, ["broken", "ok"], 1],
+    [0, 1, ["ok"], 0]);
+  pool = switchPool(rows, ["reset", "reset"]);
+  const twice = await quiet(() => switchAll({ connect: pool.connect }).then(() => "served", (e) => codeOf(e)));
+  pool = switchPool(rows, ["error"]);
+  const other = await quiet(() => switchAll({ connect: pool.connect }).then(() => "served", (e) => codeOf(e)));
+  expect("roster switch: a second reset fails the run; any other error is never retried",
+    [twice, other, pool.state.statements],
+    ["ECONNRESET", "CMA06", 1],
+    ["served", "served", 2]);
 }
 
 // ---- Database session settings (night N07, WP5, decision D6): CMA_DB_SESSION_OPTIONS ---------------------------------

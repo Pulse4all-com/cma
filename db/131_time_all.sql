@@ -80,6 +80,11 @@
 -- makes whenever the snapshot job keeps the take fresh. Since addition 0009p that refresh is a timed row of its own
 -- against verify.max_takes_ms (six takes by default, where it was one). A take that cannot be made (a source not set up, an error)
 -- leaves the live read, timed as it is.
+-- Since addition 0010a (254_roster_drives_the_day.sql, brief B) My day reads cma.my_day beside the day ('my day' in part
+-- a, class agent: the plan, the Actual lane, the marks, the notices and the Switch choices in one statement), My hours
+-- reads cma.my_hours ('my hours week'), and part b times the roster's minute job per tenant as its scheduler ('roster
+-- switch': cma.roster_switch_due(now()), the best of three, rolled back, against verify.max_poll_ms); the job itself runs
+-- cma.roster_switch_all once a minute for every tenant, the sum of these rows.
 -- Since addition 0009zn (228_work_area.sql) the rows 'work status flags', 'statuses' and 'team status time' read work_area as
 -- the web does (the flags and the time read also whether any status has one, in the same statement), so this script runs
 -- after 228.
@@ -325,6 +330,11 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'my day', 'statuses and hours markets', $q$select key, name, is_working, is_productive, work_area, is_default,
    (select coalesce(json_agg(json_build_object('code', h.code, 'name', h.name) order by h.sort_order, h.code collate "C"), '[]'::json) from cma.hours_markets() h where h.status = 'active') as hours_markets
    from cma.work_status where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, key$q$, 'agent', array['workday.own']),
+-- My day's plan, Actual lane, notices and Switch choices (addition 0010a)
+('a', 'my day', 'my day', $q$select cma.my_day(null)$q$, 'agent', array['workday.own']),
+-- My day reads itself again every 30 s while it is open (addition 0010a): the same read, timed as a poll
+('a', 'polls', 'my day (poll)', $q$select cma.my_day(null)$q$, 'poll', array['workday.own']),
+('a', 'my hours', 'my hours week', $q$select cma.my_hours('{monday}')$q$, 'agent', array['workday.own']),
 ('a', 'welcome agent', 'app links', $q$select key, label, address from cma.app_links()$q$, 'agent', array['*']),
 ('a', 'welcome agent', 'my roster today', $q$select * from cma.my_roster('{today}', '{today}')$q$, 'agent', array['roster.view']),
 ('a', 'welcome agent', 'updates (5 messages)', $q$select (select count(*) from cma.my_messages(null, 5)), cma.my_unread_count()$q$, 'agent', array['*']),
@@ -736,6 +746,35 @@ begin
                                      when v_sched is null then 'no active scheduler user: nothing to time'
                                      else coalesce(v_ms || ' ms (best of 3) against ' || v_max || ' ms: ', '') || coalesce(v_cur::text, '') end;
         r_ms := r_ms || v_ms;
+        -- the roster's minute job (addition 0010a, E2): the tenant's open workdays due a switch now, as its scheduler, the
+        -- best of three, rolled back (a switch it writes would make the second run find nothing), against verify.max_poll_ms
+        v_ms := null; v_cur := null;
+        if to_regprocedure('cma.roster_switch_due(timestamptz)') is not null and v_sched is not null then
+          perform set_config('role', 'cma_app', true);
+          perform set_config('app.user_id', v_sched::text, true);
+          for i in 1 .. 3 loop
+            begin
+              v_mark0 := clock_timestamp();
+              v_cur := jsonb_build_object('due', (select count(*) from cma.roster_switch_due(now())));
+              v_ms := least(coalesce(v_ms, 1e9), round((extract(epoch from clock_timestamp() - v_mark0) * 1000)::numeric, 1));
+              raise exception using errcode = 'CMAOK', message = 'rollback';
+            exception
+              when sqlstate 'CMAOK' then null;
+              when others then v_cur := jsonb_build_object('error', sqlstate); v_ms := null; exit;
+            end;
+          end loop;
+          perform set_config('role', 'cma_owner', true);
+          perform set_config('app.user_id', '', true);
+        end if;
+        if to_regprocedure('cma.roster_switch_due(timestamptz)') is not null then
+          v_max := case when v_provoke then 0 else current_setting('verify.max_poll_ms')::numeric end;
+          r_name := r_name || (t.slug || ' roster switch');
+          r_result := r_result || case when v_provoke then 'FAIL' when v_sched is null then 'skip'
+                                       when v_ms is not null and v_ms < v_max then 'ok' else 'FAIL' end;
+          r_detail := r_detail || case when v_sched is null then 'no active scheduler user: nothing to time'
+                                       else coalesce(v_ms || ' ms (best of 3) against ' || v_max || ' ms: ', '') || coalesce(v_cur::text, '') end;
+          r_ms := r_ms || v_ms;
+        end if;
       end if;
       -- the subscription facts (addition 0009ze, brief B39c C.9), part b: their refresh as the tenant's scheduler, every
       -- take computed again (forced), once, against verify.max_facts_ms, rolled back at once as Active's above. Since

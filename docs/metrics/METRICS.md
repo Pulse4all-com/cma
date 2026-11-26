@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-674 figures. Statuses: verified 475 · discrepancy 16 · ambiguous 35 · prerequisite_missing 155 · cadence_unconfirmed 74.
+684 figures. Statuses: verified 485 · discrepancy 16 · ambiguous 35 · prerequisite_missing 155 · cadence_unconfirmed 74.
 
 ## Welcome
 
@@ -41853,7 +41853,7 @@ h:mm:ss of workedSeconds(clock, now, dayEndsAt) = closedSeconds + max(0, floor((
 
 **Refresh** server render plus a 1-second client tick (useSyncExternalStore); router.refresh() after a status change or clock-out
 
-**Computed in** `cma.time_interval` (0008b); `cma.business_day_end` (0008b); `WorkdayPanel` in src/components/WorkdayPanel.tsx; `workedSeconds` in src/lib/live.ts; `readDay` in src/lib/data/postgres.ts
+**Computed in** `cma.time_interval` (0008b); `cma.business_day_end` (0008b); `WorkdayPanel` in src/components/WorkdayPanel.tsx; `workedSeconds` in src/lib/live.ts; `readDay` in src/lib/data/postgres.ts; `MyDayPanel` in src/components/MyDayPanel.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -41871,7 +41871,7 @@ from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.stat
 
 **Notes**
 
-The clock and My hours count the same time by construction (both from cma.time_interval with is_working). Before the client clock starts (hydration) the closed part alone shows. The window end is read live per tenant, not per-day snapshot: see the window-retroactivity finding. The time between two sessions counts in no figure. After an end nothing runs (runningSince null) until the next clock-in.
+The clock and My hours count the same time by construction (both from cma.time_interval with is_working). Before the client clock starts (hydration) the closed part alone shows. The window end is read live per tenant, not per-day snapshot: see the window-retroactivity finding. The time between two sessions counts in no figure. After an end nothing runs (runningSince null) until the next clock-in. Since addition 0010a a tenant with assignment types shows it in MyDayPanel (the chip names the assignment and hours market), computed as before.
 
 #### `my_day.started_at`
 
@@ -41955,7 +41955,7 @@ statusKey/statusName from workday_summary.current_status_id (last effective star
 
 **Refresh** on page load; router.refresh() after a change
 
-**Computed in** `cma.workday_summary` (0008d); `cma.set_status` (0002); `WorkdayPanel` in src/components/WorkdayPanel.tsx; `agentGroupOf` in src/lib/dashboard.ts
+**Computed in** `cma.workday_summary` (0008d); `cma.set_status` (0002); `WorkdayPanel` in src/components/WorkdayPanel.tsx; `agentGroupOf` in src/lib/dashboard.ts; `MyDayPanel` in src/components/MyDayPanel.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -41969,7 +41969,7 @@ select ws.key, ws.name from cma.time_event e join cma.workday w on w.tenant_id =
 
 **Notes**
 
-No status key or name in code; the grid is the tenant's active list in its order. Pay and billing flags never reach the agent screen (listStatuses selects is_working and is_productive only).
+No status key or name in code; the grid is the tenant's active list in its order. Pay and billing flags never reach the agent screen (listStatuses selects is_working and is_productive only). Since addition 0010a a tenant with assignment types shows it in MyDayPanel (the chip names the assignment and hours market), computed as before.
 
 #### `my_day.status_since`
 
@@ -42010,7 +42010,7 @@ statusSince = max(from_at) of the day's open, non-capped interval (readDay later
 
 **Refresh** on page load; router.refresh() after a change
 
-**Computed in** `cma.time_interval` (0008b); `readDay` in src/lib/data/postgres.ts; `MyDayPage` in src/app/day/page.tsx
+**Computed in** `cma.time_interval` (0008b); `readDay` in src/lib/data/postgres.ts; `MyDayPage` in src/app/day/page.tsx; `MyDayPanel` in src/components/MyDayPanel.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -42024,7 +42024,7 @@ select max(e.occurred_at) from cma.time_event e join cma.workday w on w.tenant_i
 
 **Notes**
 
-verify_sql gives the last effective start/status time, which equals status_since while the day is open and not capped; on a capped day the page hides the label (status_since is null because the open interval is capped).
+verify_sql gives the last effective start/status time, which equals status_since while the day is open and not capped; on a capped day the page hides the label (status_since is null because the open interval is capped). Since addition 0010a a tenant with assignment types shows it in MyDayPanel (the chip names the assignment and hours market), computed as before.
 
 #### `my_day.ended_at`
 
@@ -42074,387 +42074,565 @@ select w.ended_at from cma.workday w where w.tenant_id = :tenant_id and w.user_i
 
 An ended day stays ended unless the tenant's workday.clock_in_again lets the person clock in again after their own log out, within the workday window; other resumes stay corrections (Decision log, 3 Nov 2026, #217). The card then shows the Clock in card below it (canClockInAgain).
 
+#### `my_day.scheduled`
+
+/day, returned with the data and not shown on a page · Scheduled (Gepland)
+
+The Scheduled lane: today's published blocks for the person, each with its start and end, as CODE · MARKET for work, the code for a pause and the name for an absence.
+
+**Formula as computed**
+
+```
+plan = cma.roster_plan_of(user, date): the blocks of the person's latest published shift that day, in time order (work, pause and absence blocks).
+```
+
+**Unit** time_of_day · **Grain** per_day · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.roster_entry` | user_id, business_date, kind, start_time, end_time | CMA | the planner (roster_set_cell, roster_set_entry) and Publish (roster_publish), through the published views | on publish |
+| `cma.roster_assignment` | assignment_type_id, absence_type_id, hours_market_code, start_time, end_time | CMA | the planner (roster_put_assignments), published with the week | on publish |
+| `cma.assignment_type` | code, name, kind, work_status_id, is_extra | CMA | tenant seed 02; the Assignment types configuration | on configuration change |
+
+**Filters**
+
+- tenant: RLS (cma.current_tenant_id)
+- own day only (the acting user)
+- the date in the person's zone (today by default)
+- the latest published entry for the date, when it is a shift
+
+**Time** Block times are local times on the business date in the person's zone, drawn as instants; the Now marker is the browser's clock.
+
+**Who may see it** `workday.own`
+
+**Refresh** on page load, a 30-second poll, on becoming visible after more than 10 s, and at the next block boundary plus 65 s
+
+**Computed in** `cma.my_day` (0010a); `cma.roster_plan_of` (0010a); `MyDayPanel` in src/components/MyDayPanel.tsx; `getMyDay` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_day reads both;
+-- :user_id the person (holding workday.own), :from the date (null: today in the person's zone)
+with ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)
+select b ->> 'code' as code, b ->> 'kind' as kind, b ->> 'hoursMarket' as hours_market, b ->> 'startAt' as start_at, b ->> 'endAt' as end_at
+from (select cma.my_day(:from) as j from ctx) p cross join lateral jsonb_array_elements(p.j -> 'plan') b
+```
+
+**Fixture check** Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.
+
+**Documented in** api.md, GET /api/v1/me/day/plan; decisions.md 26 Nov 2026 (E1 to E10; addition 0010a); data-model/0008.md, the roster drives the day (0010a)
+
+**Notes**
+
+Shown when the tenant uses assignment types (usesAssignments); a tenant without them keeps the status panel.
+
+#### `my_day.actual`
+
+/day, returned with the data and not shown on a page · Actual (Werkelijk)
+
+The Actual lane: the day's stretches from its time events, each with the assignment and hours market it carried, a running one up to now; a stretch that differs from the block planned at that time is marked.
+
+**Formula as computed**
+
+```
+actual = cma.workday_actual_of(workday): one stretch per effective start or status event to the next event (or now); deviates = the stretch's assignment or market differs from the block in force at its start.
+```
+
+**Unit** time_of_day · **Grain** per_day · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.time_event` | kind, status_id, assignment_type_id, hours_market_code, occurred_at, recorded_at, supersedes_event_id, source | CMA | the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep | immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly |
+| `cma.work_status` | is_working, work_area | CMA | migration seed + tenant seed 02; the Statuses screen | on configuration change |
+| `cma.assignment_type` | code, name, kind, work_status_id, is_extra | CMA | tenant seed 02; the Assignment types configuration | on configuration change |
+| `cma.roster_entry` | user_id, business_date, kind, start_time, end_time | CMA | the planner (roster_set_cell, roster_set_entry) and Publish (roster_publish), through the published views | on publish |
+| `cma.roster_assignment` | assignment_type_id, absence_type_id, hours_market_code, start_time, end_time | CMA | the planner (roster_put_assignments), published with the week | on publish |
+
+**Filters**
+
+- tenant: RLS (cma.current_tenant_id)
+- own day only (the acting user)
+- the date in the person's zone (today by default)
+
+**Time** Block times are local times on the business date in the person's zone, drawn as instants; the Now marker is the browser's clock.
+
+**Who may see it** `workday.own`
+
+**Refresh** on page load, a 30-second poll, on becoming visible after more than 10 s, and at the next block boundary plus 65 s
+
+**Computed in** `cma.my_day` (0010a); `cma.workday_actual_of` (0010a); `MyDayPanel` in src/components/MyDayPanel.tsx; `getMyDay` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_day reads both;
+-- :user_id the person (holding workday.own), :from the date (null: today in the person's zone)
+with ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)
+select a ->> 'code' as code, a ->> 'hoursMarket' as hours_market, a ->> 'fromAt' as from_at, a ->> 'toAt' as to_at, (a ->> 'deviates')::boolean as deviates
+from (select cma.my_day(:from) as j from ctx) p cross join lateral jsonb_array_elements(p.j -> 'actual') a
+```
+
+**Fixture check** Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.
+
+**Documented in** api.md, GET /api/v1/me/day/plan; decisions.md 26 Nov 2026 (E1 to E10; addition 0010a); data-model/0008.md, the roster drives the day (0010a)
+
+**Notes**
+
+The marks under the lane ("CC SE (planned GO SE)") come from the same deviates flag.
+
+#### `my_day.off_plan`
+
+/day, returned with the data and not shown on a page · Off plan (Buiten planning)
+
+Whether the person is now on another assignment or hours market than the work or pause block planned now (after their own Switch, or a Clock in that started elsewhere); with the block planned now and the next roster switch ("Planned now: GO · SE General Ops since 11:15. At 12:15 your roster switches you to GO · DE.") and the Back to plan button.
+
+**Formula as computed**
+
+```
+offPlan = an object (null when on plan): set when the open workday's latest effective event differs from the work or pause block of cma.roster_plan_of in force now in assignment or hours market; it names that block (code, hoursMarket, since) and the next one (nextAt, nextCode, nextHoursMarket).
+```
+
+**Unit** flag · **Grain** now · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.time_event` | kind, status_id, assignment_type_id, hours_market_code, occurred_at, recorded_at, supersedes_event_id, source | CMA | the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep | immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly |
+| `cma.work_status` | is_working, work_area | CMA | migration seed + tenant seed 02; the Statuses screen | on configuration change |
+| `cma.assignment_type` | code, name, kind, work_status_id, is_extra | CMA | tenant seed 02; the Assignment types configuration | on configuration change |
+| `cma.roster_entry` | user_id, business_date, kind, start_time, end_time | CMA | the planner (roster_set_cell, roster_set_entry) and Publish (roster_publish), through the published views | on publish |
+| `cma.roster_assignment` | assignment_type_id, absence_type_id, hours_market_code, start_time, end_time | CMA | the planner (roster_put_assignments), published with the week | on publish |
+
+**Filters**
+
+- tenant: RLS (cma.current_tenant_id)
+- own day only (the acting user)
+- the date in the person's zone (today by default)
+- only while a workday is open and inside the shift
+
+**Time** Block times are local times on the business date in the person's zone, drawn as instants; the Now marker is the browser's clock.
+
+**Who may see it** `workday.own`
+
+**Refresh** on page load, a 30-second poll, on becoming visible after more than 10 s, and at the next block boundary plus 65 s
+
+**Computed in** `cma.my_day` (0010a); `cma.roster_plan_of` (0010a); `MyDayPanel` in src/components/MyDayPanel.tsx; `getMyDay` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_day reads both;
+-- :user_id the person (holding workday.own), :from the date (null: today in the person's zone)
+with ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)
+select p.j -> 'offPlan' is not null as off_plan, p.j -> 'offPlan' ->> 'code' as planned_code, p.j -> 'offPlan' ->> 'hoursMarket' as planned_hours_market, p.j -> 'offPlan' ->> 'nextAt' as next_at, p.j -> 'offPlan' ->> 'nextCode' as next_code
+from (select cma.my_day(null) as j from ctx) p
+```
+
+**Fixture check** Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.
+
+**Documented in** api.md, GET /api/v1/me/day/plan; decisions.md 26 Nov 2026 (E1 to E10; addition 0010a); data-model/0008.md, the roster drives the day (0010a)
+
+**Notes**
+
+The next roster boundary always takes over again (E7); after the shift there is no roster switch (E8).
+
+#### `my_day.roster_notice`
+
+/day, returned with the data and not shown on a page · Roster switch notice (Melding roosterwissel)
+
+The notice after the roster's minute job switched the person: "Your roster switched you to SB Short break at 11:00.", shown for roster.switch_notice_minutes after the switch and gone earlier at the person's own Switch or the next roster switch.
+
+**Formula as computed**
+
+```
+notice = the open workday's latest effective event when it is a status event with source roster and occurred_at > now() - roster.switch_notice_minutes; until = occurred_at + those minutes. A later event (the person's own Switch, the next roster switch) replaces it as the latest.
+```
+
+**Unit** text · **Grain** now · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.time_event` | kind, status_id, assignment_type_id, hours_market_code, occurred_at, recorded_at, supersedes_event_id, source | CMA | the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep | immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly |
+| `cma.work_status` | is_working, work_area | CMA | migration seed + tenant seed 02; the Statuses screen | on configuration change |
+| `cma.assignment_type` | code, name, kind, work_status_id, is_extra | CMA | tenant seed 02; the Assignment types configuration | on configuration change |
+| `cma.tenant_setting` | key, value | CMA | cma.set_tenant_setting() (Configuration); seed 02 | on configuration change |
+
+**Filters**
+
+- tenant: RLS (cma.current_tenant_id)
+- own day only (the acting user)
+- the date in the person's zone (today by default)
+- only while a workday is open
+
+**Time** The browser hides the notice at its until instant by its own clock.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `roster.switch_notice_minutes` | 5 | 5 |
+
+**Who may see it** `workday.own`
+
+**Refresh** on page load, a 30-second poll, on becoming visible after more than 10 s, and at the next block boundary plus 65 s
+
+**Computed in** `cma.my_day` (0010a); `cma.roster_plan_of` (0010a); `MyDayPanel` in src/components/MyDayPanel.tsx; `getMyDay` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_day reads both;
+-- :user_id the person (holding workday.own), :from the date (null: today in the person's zone)
+with ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)
+select p.j -> 'notice' as notice from (select cma.my_day(null) as j from ctx) p
+```
+
+**Fixture check** Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.
+
+**Documented in** api.md, GET /api/v1/me/day/plan; decisions.md 26 Nov 2026 (E1 to E10; addition 0010a); data-model/0008.md, the roster drives the day (0010a)
+
+**Notes**
+
+E3 names the push service; until there is one, My day polls (decisions.md, 26 Nov 2026).
+
 ### /hours
 
-#### `my_hours.date`
+#### `my_hours.week_worked`
 
-**Date** on /hours · Date (Datum)
+/hours, returned with the data and not shown on a page · Worked this week (Deze week gewerkt)
 
-The business day of the row: one row per calendar day with a workday.
+The person's time worked in the week: every stretch in a working status, summed over the week's days and sessions. Pauses and the time between sessions are not counted.
 
 **Formula as computed**
 
 ```
-workday.business_date, the day the clock-in fell on in the day's own zone (snapshot at open); formatted long in the viewer's locale.
+workedSeconds = sum(seconds) over cma.workday_actual_of(workday) for the week's workdays where is_working; shown as "4h 05m" (lib/my-day hoursMinutes, floored to the minute).
 ```
 
-**Unit** date · **Grain** per_day · **Status** verified
+**Unit** seconds · **Grain** per_iso_week · **Status** verified
 
 **Sources**
 
 | Table | Columns | Owner | Fed by | Cadence |
 |---|---|---|---|---|
-| `cma.workday` | business_date, timezone | CMA | POST /api/v1/me/day/start → cma.open_workday() (date = occurred_at in the user's zone); Add day via cma.correct_workday(); the legacy import (0008d) | immediately on each click; import one-off |
+| `cma.time_event` | kind, status_id, assignment_type_id, hours_market_code, occurred_at, recorded_at, supersedes_event_id, source | CMA | the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep | immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly |
+| `cma.work_status` | is_working, work_area | CMA | migration seed + tenant seed 02; the Statuses screen | on configuration change |
+| `cma.assignment_type` | code, name, kind, work_status_id, is_extra | CMA | tenant seed 02; the Assignment types configuration | on configuration change |
 
 **Filters**
 
-- tenant: RLS plus app.tenant_id
-- own rows only (user_id = cma.current_user_id())
-- business_date between the period's from and to
+- tenant: RLS (cma.current_tenant_id)
+- own days only (the acting user; no user parameter)
+- the business dates of the ISO week, Monday to Sunday, in the person's zone
+- working statuses only
 
-**Time** The period (today, Mon-Sun week, calendar month, custom up to 92 days) is calendar dates in the viewer's zone; rows match on business_date, which was fixed in the day's own zone.
+**Time** Business dates in the person's own zone; a stretch's seconds as cma.workday_actual_of counts them (from one event to the next, a running stretch to now); the week from :from (a Monday).
 
 **Who may see it** `workday.own`
 
 **Refresh** on page load
 
-**Computed in** `cma.workday_summary` (0008d); `MyHoursPage` in src/app/hours/page.tsx; `getHours` in src/lib/data/postgres.ts
+**Computed in** `cma.my_hours` (0010a); `cma.workday_actual_of` (0010a); `default` in src/app/(shell)/hours/page.tsx; `getMyHoursWeek` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select w.business_date from cma.workday w where w.tenant_id = :tenant_id and w.user_id = :user_id and w.business_date between :from and :to order by w.business_date
+-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_hours reads both;
+-- :user_id the person (holding workday.own), :from the Monday of the week
+with ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)
+select (cma.my_hours(:from) ->> 'workedSeconds')::bigint as worked_seconds from ctx
 ```
 
-**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 2 row(s); Martin compares the value with the page in Studio. The query also takes the person's id (:user_id).
+**Fixture check** Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.
 
-**Documented in** api.md, GET /api/v1/me/hours; features.md §1; data-model/0001-0005b.md, Time model (0002)
+**Documented in** api.md, GET /api/v1/me/hours/week; decisions.md 26 Nov 2026 (E1, E11; addition 0010a); data-model/0008.md, the roster drives the day (0010a)
 
 **Notes**
 
-The shift belongs to the business day it started on (features.md §1); no shifts past midnight at Pulse4all (decision 7 Oct 2026). Empty state: 'No hours in this period yet'. A withdrawn imported day (no effective start) is no day (0008d) and never lists.
+Equal to the sum of the rows (my_hours.worked_per_assignment) and of the days (my_hours.day_worked) by construction.
 
-#### `my_hours.start`
+#### `my_hours.week_planned`
 
-**Start** on /hours · Start (Start)
+/hours, returned with the data and not shown on a page · Planned this week (Deze week gepland)
 
-When the day started: the first session's start.
+The person's planned time in the week from the published roster: the work blocks of each published shift (an extra block included, pauses and absence blocks not); a published shift without any block counts whole, as Planned (roster) counts it.
 
 **Formula as computed**
 
 ```
-workday_summary.started_at per day, hh:mm formatted in the viewer's current zone (me.timeZone), empty when null.
+plannedMinutes = sum over the week's dates of: shift without blocks → end - start of the shift; else sum(end - start) of cma.roster_plan_of(user, date) where kind = 'work'.
 ```
 
-**Unit** time_of_day · **Grain** per_day · **Status** discrepancy
+**Unit** minutes · **Grain** per_iso_week · **Status** verified
 
 **Sources**
 
 | Table | Columns | Owner | Fed by | Cadence |
 |---|---|---|---|---|
-| `cma.workday` | started_at | CMA | open_workday / correct_workday / the legacy import | immediately on each click; import one-off |
+| `cma.roster_entry` | user_id, business_date, kind, start_time, end_time | CMA | the planner (roster_set_cell, roster_set_entry) and Publish (roster_publish), through the published views | on publish |
+| `cma.roster_assignment` | assignment_type_id, absence_type_id, hours_market_code, start_time, end_time | CMA | the planner (roster_put_assignments), published with the week | on publish |
+| `cma.assignment_type` | code, name, kind, work_status_id, is_extra | CMA | tenant seed 02; the Assignment types configuration | on configuration change |
 
 **Filters**
 
-- tenant: RLS plus app.tenant_id
-- own rows only
-- period on business_date
+- tenant: RLS (cma.current_tenant_id)
+- own days only (the acting user; no user parameter)
+- the business dates of the ISO week, Monday to Sunday, in the person's zone
+- the latest published entry per date
+- work blocks only (pause and absence blocks excluded)
 
-**Time** Shown in the viewer's current zone, not the day's snapshot zone — see the finding on zones.
+**Time** Block times are local times on the business date in the person's zone.
 
 **Who may see it** `workday.own`
 
 **Refresh** on page load
 
-**Computed in** `cma.workday_summary` (0008d); `MyHoursPage` in src/app/hours/page.tsx; `fmtTime` in src/lib/time.ts
+**Computed in** `cma.my_hours` (0010a); `cma.roster_plan_of` (0010a); `default` in src/app/(shell)/hours/page.tsx; `getMyHoursWeek` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select w.business_date, w.started_at from cma.workday w where w.tenant_id = :tenant_id and w.user_id = :user_id and w.business_date between :from and :to order by w.business_date
+-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_hours reads both;
+-- :user_id the person (holding workday.own), :from the Monday of the week
+with ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)
+select (cma.my_hours(:from) ->> 'plannedMinutes')::integer as planned_minutes from ctx
 ```
 
-**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 2 row(s); Martin compares the value with the page in Studio. The query also takes the person's id (:user_id).
+**Fixture check** Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.
 
-**Documented in** api.md, GET /api/v1/me/hours; decisions.md 7 Oct 2026 (agents see working time plus a Pauses column, own data only)
+**Documented in** api.md, GET /api/v1/me/hours/week; decisions.md 26 Nov 2026 (E1, E11; addition 0010a); data-model/0008.md, the roster drives the day (0010a); definitions.md, Planned (roster)
 
 **Notes**
 
-Team hours and both CSVs show the same instant in the day's own snapshot zone; My hours uses the viewer's current zone. For a person whose zone never changes the clock times agree; after a zone change (personal, employer or tenant) the same day reads differently on My hours than on Team hours. See finding. A day of several sessions shows '2 sessions' next to the date; the start stays the first session's.
+Shown beside Worked as "{worked} worked of {planned} planned".
 
-#### `my_hours.end`
+#### `my_hours.worked_per_assignment`
 
-**End** on /hours · End (Einde)
+/hours, returned with the data and not shown on a page · Worked per assignment and hours market (Gewerkt per inzet en urenmarkt)
 
-When the day was clocked out (the last session's end); 'still working' while it has no end, also after a clock-in again.
+The week's worked time per assignment and hours market: one row per assignment code (or, for a working status without an assignment, the status's name) and hours market, with a bar against the largest row.
 
 **Formula as computed**
 
 ```
-workday_summary.ended_at per day, hh:mm in the viewer's zone; the muted label 'still working' when ended_at is null (open day).
+rows = group by (code or status name, hours_market_code) of sum(seconds) over the week's stretches where is_working; ordered by seconds descending.
 ```
 
-**Unit** time_of_day · **Grain** per_day · **Status** discrepancy
+**Unit** seconds · **Grain** per_iso_week, per_market · **Status** verified
 
 **Sources**
 
 | Table | Columns | Owner | Fed by | Cadence |
 |---|---|---|---|---|
-| `cma.workday` | ended_at, status | CMA | end_workday / the scheduler sweep / correct_workday / the legacy import | immediately on each click; the sweep hourly (docs/scheduler/deploy.sh); import one-off |
+| `cma.time_event` | kind, status_id, assignment_type_id, hours_market_code, occurred_at, recorded_at, supersedes_event_id, source | CMA | the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep | immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly |
+| `cma.work_status` | is_working, work_area | CMA | migration seed + tenant seed 02; the Statuses screen | on configuration change |
+| `cma.assignment_type` | code, name, kind, work_status_id, is_extra | CMA | tenant seed 02; the Assignment types configuration | on configuration change |
 
 **Filters**
 
-- tenant: RLS plus app.tenant_id
-- own rows only
-- period on business_date
+- tenant: RLS (cma.current_tenant_id)
+- own days only (the acting user; no user parameter)
+- the business dates of the ISO week, Monday to Sunday, in the person's zone
+- working statuses only
 
-**Time** Viewer's current zone (see the zones finding).
+**Time** Business dates in the person's own zone; a stretch's seconds as cma.workday_actual_of counts them (from one event to the next, a running stretch to now); the week from :from (a Monday).
 
 **Who may see it** `workday.own`
 
 **Refresh** on page load
 
-**Computed in** `cma.workday_summary` (0008d); `MyHoursPage` in src/app/hours/page.tsx
+**Computed in** `cma.my_hours` (0010a); `cma.workday_actual_of` (0010a); `default` in src/app/(shell)/hours/page.tsx; `getMyHoursWeek` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select w.business_date, w.ended_at, w.status from cma.workday w where w.tenant_id = :tenant_id and w.user_id = :user_id and w.business_date between :from and :to order by w.business_date
+-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_hours reads both;
+-- :user_id the person (holding workday.own), :from the Monday of the week
+with ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)
+select r ->> 'code' as code, r ->> 'name' as name, r ->> 'hoursMarket' as hours_market, (r ->> 'seconds')::bigint as seconds
+from (select cma.my_hours(:from) as j from ctx) p cross join lateral jsonb_array_elements(p.j -> 'rows') r
 ```
 
-**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 2 row(s); Martin compares the value with the page in Studio. The query also takes the person's id (:user_id).
+**Fixture check** Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.
 
-**Documented in** api.md, GET /api/v1/me/hours
+**Documented in** api.md, GET /api/v1/me/hours/week; decisions.md 26 Nov 2026 (E1, E11; addition 0010a); data-model/0008.md, the roster drives the day (0010a)
 
 **Notes**
 
-A forgotten clock-out of an earlier day also reads 'still working' here (the day is open past its window end until the sweep or a correction ends it), while Team hours flags it 'Not clocked out' — a mild wrong-empty-state for the agent. See finding. Once the sweep has closed it, the end shown is the system end.
+The hours market is the one the event carries (E1); Training, Meeting and Coaching show their name and no market.
 
-#### `my_hours.pauses`
+#### `my_hours.pauses_per_type`
 
-**Pauses** on /hours · Pauses (Pauzes)
+/hours, returned with the data and not shown on a page · Pauses, not worked (Pauzes, niet gewerkt)
 
-Time that day in statuses that stop the clock (break, lunch and other non-working statuses), summed over all sessions. The time between two sessions is not a pause.
+The week's time in pauses and other non-working statuses, per pause type (its code and name) or status, shown apart and not counted as worked.
 
 **Formula as computed**
 
 ```
-pause_seconds = sum(cma.time_interval.seconds) of the day's intervals whose status has is_working = false; pauseMinutes = floor(pause_seconds/60); shown as Xh YYm; only stretches in non-working statuses count, never the span minus worked. Interval seconds are capped at the day's window end like all counted time.
+pauses = group by (code or status name) of sum(seconds) over the week's stretches where not is_working.
 ```
 
-**Unit** minutes · **Grain** per_day · **Status** verified
+**Unit** seconds · **Grain** per_iso_week, per_status · **Status** verified
 
 **Sources**
 
 | Table | Columns | Owner | Fed by | Cadence |
 |---|---|---|---|---|
-| `cma.time_event` | kind, status_id, occurred_at, recorded_at, supersedes_event_id | CMA | set_status and the other write paths; corrections; the legacy import (gaps land in the batch's gap status, Pulse4all: Break) | immediately on each click; import one-off |
-| `cma.work_status` | is_working | CMA | migration seed + tenant seed 02 | on configuration change |
+| `cma.time_event` | kind, status_id, assignment_type_id, hours_market_code, occurred_at, recorded_at, supersedes_event_id, source | CMA | the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep | immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly |
+| `cma.work_status` | is_working, work_area | CMA | migration seed + tenant seed 02; the Statuses screen | on configuration change |
+| `cma.assignment_type` | code, name, kind, work_status_id, is_extra | CMA | tenant seed 02; the Assignment types configuration | on configuration change |
 
 **Filters**
 
-- tenant: RLS plus the cma.time_interval face
-- own rows only
-- statuses with is_working = false only (paid or unpaid alike: the pay flag is not agent information)
-- period on business_date
+- tenant: RLS (cma.current_tenant_id)
+- own days only (the acting user; no user parameter)
+- the business dates of the ISO week, Monday to Sunday, in the person's zone
+- non-working statuses only
 
-**Time** Same interval arithmetic as worked time: each stretch runs to the next effective event, an open one to now(), everything capped at the day's window end.
-
-**Settings**
-
-| Setting | Default | Pulse4all |
-|---|---|---|
-| `workday.window_end` | 24:00 | 22:00 |
+**Time** Business dates in the person's own zone; a stretch's seconds as cma.workday_actual_of counts them (from one event to the next, a running stretch to now); the week from :from (a Monday).
 
 **Who may see it** `workday.own`
 
 **Refresh** on page load
 
-**Computed in** `cma.time_interval` (0008b); `getHours` in src/lib/data/postgres.ts; `MyHoursPage` in src/app/hours/page.tsx
+**Computed in** `cma.my_hours` (0010a); `cma.workday_actual_of` (0010a); `default` in src/app/(shell)/hours/page.tsx; `getMyHoursWeek` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with win as (select coalesce(ts.value, s.default_value)::time as w_end from cma.setting s left join cma.tenant_setting ts on ts.tenant_id = :tenant_id and ts.key = s.key where s.key = 'workday.window_end'),
-eff as (select e.id, e.workday_id, e.kind, e.status_id, e.occurred_at, e.recorded_at from cma.time_event e where e.tenant_id = :tenant_id and e.kind in ('start','status','end') and not exists (select 1 from cma.time_event c where c.tenant_id = :tenant_id and c.supersedes_event_id = e.id)),
-iv as (select w.user_id, w.business_date, e.kind, e.status_id, e.occurred_at as from_at, lead(e.occurred_at) over (partition by e.workday_id order by e.occurred_at, e.recorded_at, e.id) as to_at, ((w.business_date + (select w_end from win)) at time zone w.timezone) as day_end from eff e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id where w.user_id = :user_id and w.business_date between :from and :to)
-select iv.business_date, floor(coalesce(sum(greatest(0, floor(extract(epoch from (least(coalesce(iv.to_at, now()), iv.day_end) - iv.from_at))))) filter (where not ws.is_working), 0) / 60)::bigint as pause_minutes
-from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.status_id where iv.kind in ('start','status') group by iv.business_date order by iv.business_date
+-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_hours reads both;
+-- :user_id the person (holding workday.own), :from the Monday of the week
+with ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)
+select r ->> 'code' as code, r ->> 'name' as name, (r ->> 'seconds')::bigint as seconds
+from (select cma.my_hours(:from) as j from ctx) p cross join lateral jsonb_array_elements(p.j -> 'pauses') r
 ```
 
-**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 2 row(s); Martin compares the value with the page in Studio. The query also takes the person's id (:user_id).
+**Fixture check** Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.
 
-**Documented in** decisions.md 7 Oct 2026 (agents see working time plus a Pauses column on My hours); api.md, GET /api/v1/me/hours
+**Documented in** api.md, GET /api/v1/me/hours/week; decisions.md 26 Nov 2026 (E1, E11; addition 0010a); data-model/0008.md, the roster drives the day (0010a)
 
 **Notes**
 
-Pauses and Duration are floored to minutes independently, so pauses + duration can fall one minute short of the clocked time. On a day of several sessions the time between sessions is in neither, so pauses + duration is shorter than the span from first start to last end by that gap. 0m shows for a day without pauses (a true zero, correct).
+A pause carries no hours market (E1).
 
-#### `my_hours.duration`
+#### `my_hours.day_worked`
 
-**Duration** on /hours · Duration (Duur)
+/hours, returned with the data and not shown on a page · Worked per day (Gewerkt per dag)
 
-Time worked that day, summed over all sessions: working statuses only, the same time the My day clock counts.
+Per day of the week, the time worked that day (working statuses, all sessions); today reads "Today, so far"; a day without time reads "No time kept".
 
 **Formula as computed**
 
 ```
-minutes = floor(workday_summary.working_seconds / 60) per day (minutesOf, postgres.ts:384). working_seconds = sum(interval seconds) where status.is_working, each interval capped at the day's window end; an open day runs to now().
+days[].workedSeconds = sum(seconds) over that date's stretches where is_working.
 ```
 
-**Unit** minutes · **Grain** per_day · **Status** verified
+**Unit** seconds · **Grain** per_day · **Status** verified
 
 **Sources**
 
 | Table | Columns | Owner | Fed by | Cadence |
 |---|---|---|---|---|
-| `cma.time_event` | kind, status_id, occurred_at, recorded_at, supersedes_event_id | CMA | the Workspace's own write paths; the scheduler sweep; the legacy import (0008d) | immediately on each click; the sweep hourly (docs/scheduler/deploy.sh); import one-off |
-| `cma.work_status` | is_working | CMA | migration seed + tenant seed 02 | on configuration change |
-| `cma.tenant_setting` | key, value | CMA | cma.set_tenant_setting(); seed 02 | on configuration change |
+| `cma.time_event` | kind, status_id, assignment_type_id, hours_market_code, occurred_at, recorded_at, supersedes_event_id, source | CMA | the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep | immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly |
+| `cma.work_status` | is_working, work_area | CMA | migration seed + tenant seed 02; the Statuses screen | on configuration change |
+| `cma.assignment_type` | code, name, kind, work_status_id, is_extra | CMA | tenant seed 02; the Assignment types configuration | on configuration change |
 
 **Filters**
 
-- tenant: RLS plus the workday_summary face
-- own rows only
-- is_working statuses only
-- period on business_date
-- time after the window end not counted
+- tenant: RLS (cma.current_tenant_id)
+- own days only (the acting user; no user parameter)
+- the business dates of the ISO week, Monday to Sunday, in the person's zone
+- working statuses only
 
-**Time** Business date in the day's own zone; period picked in the viewer's zone; counted time capped at workday.window_end.
-
-**Settings**
-
-| Setting | Default | Pulse4all |
-|---|---|---|
-| `workday.window_end` | 24:00 | 22:00 |
+**Time** Business dates in the person's own zone; a stretch's seconds as cma.workday_actual_of counts them (from one event to the next, a running stretch to now); the week from :from (a Monday).
 
 **Who may see it** `workday.own`
 
 **Refresh** on page load
 
-**Computed in** `cma.workday_summary` (0008d); `cma.time_interval` (0008b); `getHours` in src/lib/data/postgres.ts
+**Computed in** `cma.my_hours` (0010a); `cma.workday_actual_of` (0010a); `default` in src/app/(shell)/hours/page.tsx; `getMyHoursWeek` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with win as (select coalesce(ts.value, s.default_value)::time as w_end from cma.setting s left join cma.tenant_setting ts on ts.tenant_id = :tenant_id and ts.key = s.key where s.key = 'workday.window_end'),
-eff as (select e.id, e.workday_id, e.kind, e.status_id, e.occurred_at, e.recorded_at from cma.time_event e where e.tenant_id = :tenant_id and e.kind in ('start','status','end') and not exists (select 1 from cma.time_event c where c.tenant_id = :tenant_id and c.supersedes_event_id = e.id)),
-iv as (select w.user_id, w.business_date, e.kind, e.status_id, e.occurred_at as from_at, lead(e.occurred_at) over (partition by e.workday_id order by e.occurred_at, e.recorded_at, e.id) as to_at, ((w.business_date + (select w_end from win)) at time zone w.timezone) as day_end from eff e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id where w.user_id = :user_id and w.business_date between :from and :to)
-select iv.business_date, floor(coalesce(sum(greatest(0, floor(extract(epoch from (least(coalesce(iv.to_at, now()), iv.day_end) - iv.from_at))))) filter (where ws.is_working), 0) / 60)::bigint as worked_minutes
-from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.status_id where iv.kind in ('start','status') group by iv.business_date order by iv.business_date
+-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_hours reads both;
+-- :user_id the person (holding workday.own), :from the Monday of the week
+with ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)
+select d ->> 'date' as date, (d ->> 'hasTime')::boolean as has_time, (d ->> 'workedSeconds')::bigint as worked_seconds
+from (select cma.my_hours(:from) as j from ctx) p cross join lateral jsonb_array_elements(p.j -> 'days') d
 ```
 
-**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 2 row(s); Martin compares the value with the page in Studio. The query also takes the person's id (:user_id).
+**Fixture check** Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.
 
-**Documented in** api.md, GET /api/v1/me/hours; decisions.md 6-7 Oct 2026 (the clock counts is_working; agents see working time); open-decisions.md (which hours the agent's screen shows: decided, working time)
+**Documented in** api.md, GET /api/v1/me/hours/week; decisions.md 26 Nov 2026 (E1, E11; addition 0010a); data-model/0008.md, the roster drives the day (0010a)
 
 **Notes**
 
-Which hours the agent sees is decided (working time, 7 Oct 2026); switching to paid is the one line minutesOf (postgres.ts:380-386). Same flooring as Team hours' Worked column, so supervisor and agent see the same figure for the same day (ownHoursOnly copy says so). The time between two sessions counts in no figure.
+The days add up to my_hours.week_worked; the split under each day (my_hours.day_split) adds up to the day.
 
-#### `my_hours.total_duration`
+#### `my_hours.day_split`
 
-**Total** on /hours · Total (duration) (Totaal)
+/hours, returned with the data and not shown on a page · Split per assignment and hours market (Verdeling per inzet en urenmarkt)
 
-The period's total worked time: the Duration column added up.
+Per day, the Actual lane (each stretch as CODE · MARKET, a pause its code, a status without an assignment its name) and below it the worked time split per assignment and hours market, "MC SE 30m · SL SE 4h 05m".
 
 **Formula as computed**
 
 ```
-totalMinutes = sum over the period's days of floor(working_seconds/60) (each day floored first, then summed: getHours days.reduce).
+days[].segments = the date's stretches in time order; days[].split = group by (code or status name, hours_market_code) of sum(seconds) where is_working, in the order first worked.
 ```
 
-**Unit** minutes · **Grain** period · **Status** verified
+**Unit** seconds · **Grain** per_day, per_market · **Status** verified
 
 **Sources**
 
 | Table | Columns | Owner | Fed by | Cadence |
 |---|---|---|---|---|
-| `cma.time_event` | kind, status_id, occurred_at | CMA | the Workspace's own write paths; the scheduler sweep; the legacy import | immediately on each click; the sweep hourly; import one-off |
-| `cma.work_status` | is_working | CMA | migration seed + tenant seed 02 | on configuration change |
+| `cma.time_event` | kind, status_id, assignment_type_id, hours_market_code, occurred_at, recorded_at, supersedes_event_id, source | CMA | the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep | immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly |
+| `cma.work_status` | is_working, work_area | CMA | migration seed + tenant seed 02; the Statuses screen | on configuration change |
+| `cma.assignment_type` | code, name, kind, work_status_id, is_extra | CMA | tenant seed 02; the Assignment types configuration | on configuration change |
 
 **Filters**
 
-- as my_hours.duration
+- tenant: RLS (cma.current_tenant_id)
+- own days only (the acting user; no user parameter)
+- the business dates of the ISO week, Monday to Sunday, in the person's zone
+- the split: working statuses only
 
-**Time** As my_hours.duration.
-
-**Settings**
-
-| Setting | Default | Pulse4all |
-|---|---|---|
-| `workday.window_end` | 24:00 | 22:00 |
+**Time** Business dates in the person's own zone; a stretch's seconds as cma.workday_actual_of counts them (from one event to the next, a running stretch to now); the week from :from (a Monday).
 
 **Who may see it** `workday.own`
 
 **Refresh** on page load
 
-**Computed in** `cma.workday_summary` (0008d); `getHours` in src/lib/data/postgres.ts; `MyHoursPage` in src/app/hours/page.tsx
+**Computed in** `cma.my_hours` (0010a); `cma.workday_actual_of` (0010a); `default` in src/app/(shell)/hours/page.tsx; `getMyHoursWeek` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-with win as (select coalesce(ts.value, s.default_value)::time as w_end from cma.setting s left join cma.tenant_setting ts on ts.tenant_id = :tenant_id and ts.key = s.key where s.key = 'workday.window_end'),
-eff as (select e.id, e.workday_id, e.kind, e.status_id, e.occurred_at, e.recorded_at from cma.time_event e where e.tenant_id = :tenant_id and e.kind in ('start','status','end') and not exists (select 1 from cma.time_event c where c.tenant_id = :tenant_id and c.supersedes_event_id = e.id)),
-iv as (select w.user_id, w.business_date, e.kind, e.status_id, e.occurred_at as from_at, lead(e.occurred_at) over (partition by e.workday_id order by e.occurred_at, e.recorded_at, e.id) as to_at, ((w.business_date + (select w_end from win)) at time zone w.timezone) as day_end from eff e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id where w.user_id = :user_id and w.business_date between :from and :to),
-per_day as (select iv.business_date, floor(coalesce(sum(greatest(0, floor(extract(epoch from (least(coalesce(iv.to_at, now()), iv.day_end) - iv.from_at))))) filter (where ws.is_working), 0) / 60)::bigint as m from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.status_id where iv.kind in ('start','status') group by iv.business_date)
-select sum(m) as total_minutes from per_day
+-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_hours reads both;
+-- :user_id the person (holding workday.own), :from the Monday of the week
+with ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)
+select d ->> 'date' as date, s ->> 'code' as code, s ->> 'hoursMarket' as hours_market, (s ->> 'seconds')::bigint as seconds
+from (select cma.my_hours(:from) as j from ctx) p cross join lateral jsonb_array_elements(p.j -> 'days') d cross join lateral jsonb_array_elements(d -> 'split') s
 ```
 
-**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio. The query also takes the person's id (:user_id).
+**Fixture check** Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.
 
-**Documented in** api.md, GET /api/v1/me/hours
+**Documented in** api.md, GET /api/v1/me/hours/week; decisions.md 26 Nov 2026 (E1, E11; addition 0010a); data-model/0008.md, the roster drives the day (0010a)
 
 **Notes**
 
-Per-day flooring first, then the sum: the same rule as the Dashboard's Worked tile and Team hours' Total, so the three totals agree for the same person and period.
-
-#### `my_hours.total_pauses`
-
-**Total** on /hours · Total (pauses) (Totaal)
-
-The period's total pause time: the Pauses column added up.
-
-**Formula as computed**
-
-```
-sum over the days of pauseMinutes (each day floor(pause_seconds/60) first); computed in the page's tfoot (hours/page.tsx:72).
-```
-
-**Unit** minutes · **Grain** period · **Status** verified
-
-**Sources**
-
-| Table | Columns | Owner | Fed by | Cadence |
-|---|---|---|---|---|
-| `cma.time_event` | kind, status_id, occurred_at | CMA | the Workspace's own write paths; the legacy import (gap status) | immediately on each click; import one-off |
-| `cma.work_status` | is_working | CMA | migration seed + tenant seed 02 | on configuration change |
-
-**Filters**
-
-- as my_hours.pauses
-
-**Time** As my_hours.pauses.
-
-**Settings**
-
-| Setting | Default | Pulse4all |
-|---|---|---|
-| `workday.window_end` | 24:00 | 22:00 |
-
-**Who may see it** `workday.own`
-
-**Refresh** on page load
-
-**Computed in** `cma.time_interval` (0008b); `MyHoursPage` in src/app/hours/page.tsx
-
-**Verification query** (Studio, with the tenant id and the period's business dates filled in)
-
-```sql
-with win as (select coalesce(ts.value, s.default_value)::time as w_end from cma.setting s left join cma.tenant_setting ts on ts.tenant_id = :tenant_id and ts.key = s.key where s.key = 'workday.window_end'),
-eff as (select e.id, e.workday_id, e.kind, e.status_id, e.occurred_at, e.recorded_at from cma.time_event e where e.tenant_id = :tenant_id and e.kind in ('start','status','end') and not exists (select 1 from cma.time_event c where c.tenant_id = :tenant_id and c.supersedes_event_id = e.id)),
-iv as (select w.user_id, w.business_date, e.kind, e.status_id, e.occurred_at as from_at, lead(e.occurred_at) over (partition by e.workday_id order by e.occurred_at, e.recorded_at, e.id) as to_at, ((w.business_date + (select w_end from win)) at time zone w.timezone) as day_end from eff e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id where w.user_id = :user_id and w.business_date between :from and :to),
-per_day as (select iv.business_date, floor(coalesce(sum(greatest(0, floor(extract(epoch from (least(coalesce(iv.to_at, now()), iv.day_end) - iv.from_at))))) filter (where not ws.is_working), 0) / 60)::bigint as m from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.status_id where iv.kind in ('start','status') group by iv.business_date)
-select sum(m) as total_pause_minutes from per_day
-```
-
-**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio. The query also takes the person's id (:user_id).
-
-**Documented in** decisions.md 7 Oct 2026 (Pauses column)
-
-**Notes**
-
-Both totals sit in one Total row (colspan 3, then pauses, then duration).
+The split of a day adds up to my_hours.day_worked.
 
 ### /schedule
 
@@ -47772,6 +47950,388 @@ group by 1, 2 order by 1, 2
 **Notes**
 
 db/74:1037-1038 (closed branch). 'Closed' is whatever the source marks closed (is_closed from the stage's outcome); won and lost are not separated here (the Funnel report does that). A record closed inside the window but created before intake.start_date still counts as closed (the clamp applies to the event's own instant, closed_at). Since addition 0009zp no screen shows it; intake.lead_deals_closed is the column, and lead_deals_closed <= deals_closed on every row (233 R1).
+
+### /api/v1/me/hours
+
+#### `my_hours.date`
+
+**Date** on /api/v1/me/hours · Date (Datum)
+
+The business day of the row: one row per calendar day with a workday.
+
+**Formula as computed**
+
+```
+workday.business_date, the day the clock-in fell on in the day's own zone (snapshot at open); formatted long in the viewer's locale.
+```
+
+**Unit** date · **Grain** per_day · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.workday` | business_date, timezone | CMA | POST /api/v1/me/day/start → cma.open_workday() (date = occurred_at in the user's zone); Add day via cma.correct_workday(); the legacy import (0008d) | immediately on each click; import one-off |
+
+**Filters**
+
+- tenant: RLS plus app.tenant_id
+- own rows only (user_id = cma.current_user_id())
+- business_date between the period's from and to
+
+**Time** The period (today, Mon-Sun week, calendar month, custom up to 92 days) is calendar dates in the viewer's zone; rows match on business_date, which was fixed in the day's own zone.
+
+**Who may see it** `workday.own`
+
+**Refresh** on each request
+
+**Computed in** `cma.workday_summary` (0008d); `getHours` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select w.business_date from cma.workday w where w.tenant_id = :tenant_id and w.user_id = :user_id and w.business_date between :from and :to order by w.business_date
+```
+
+**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 2 row(s); Martin compares the value with the page in Studio. The query also takes the person's id (:user_id).
+
+**Documented in** api.md, GET /api/v1/me/hours; features.md §1; data-model/0001-0005b.md, Time model (0002)
+
+**Notes**
+
+The shift belongs to the business day it started on (features.md §1); no shifts past midnight at Pulse4all (decision 7 Oct 2026). Empty state: 'No hours in this period yet'. A withdrawn imported day (no effective start) is no day (0008d) and never lists. Since addition 0010a (brief B, 26 Nov 2026) the My hours page shows the person's week per assignment and hours market (my_hours.week_*, my_hours.day_*); this period figure is no longer on the page and stays on GET /api/v1/me/hours, computed as before.
+
+#### `my_hours.start`
+
+**Start** on /api/v1/me/hours · Start (Start)
+
+When the day started: the first session's start.
+
+**Formula as computed**
+
+```
+workday_summary.started_at per day, hh:mm formatted in the viewer's current zone (me.timeZone), empty when null.
+```
+
+**Unit** time_of_day · **Grain** per_day · **Status** discrepancy
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.workday` | started_at | CMA | open_workday / correct_workday / the legacy import | immediately on each click; import one-off |
+
+**Filters**
+
+- tenant: RLS plus app.tenant_id
+- own rows only
+- period on business_date
+
+**Time** Shown in the viewer's current zone, not the day's snapshot zone — see the finding on zones.
+
+**Who may see it** `workday.own`
+
+**Refresh** on each request
+
+**Computed in** `cma.workday_summary` (0008d); `fmtTime` in src/lib/time.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select w.business_date, w.started_at from cma.workday w where w.tenant_id = :tenant_id and w.user_id = :user_id and w.business_date between :from and :to order by w.business_date
+```
+
+**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 2 row(s); Martin compares the value with the page in Studio. The query also takes the person's id (:user_id).
+
+**Documented in** api.md, GET /api/v1/me/hours; decisions.md 7 Oct 2026 (agents see working time plus a Pauses column, own data only)
+
+**Notes**
+
+Team hours and both CSVs show the same instant in the day's own snapshot zone; My hours uses the viewer's current zone. For a person whose zone never changes the clock times agree; after a zone change (personal, employer or tenant) the same day reads differently on My hours than on Team hours. See finding. A day of several sessions shows '2 sessions' next to the date; the start stays the first session's. Since addition 0010a (brief B, 26 Nov 2026) the My hours page shows the person's week per assignment and hours market (my_hours.week_*, my_hours.day_*); this period figure is no longer on the page and stays on GET /api/v1/me/hours, computed as before.
+
+#### `my_hours.end`
+
+**End** on /api/v1/me/hours · End (Einde)
+
+When the day was clocked out (the last session's end); 'still working' while it has no end, also after a clock-in again.
+
+**Formula as computed**
+
+```
+workday_summary.ended_at per day, hh:mm in the viewer's zone; the muted label 'still working' when ended_at is null (open day).
+```
+
+**Unit** time_of_day · **Grain** per_day · **Status** discrepancy
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.workday` | ended_at, status | CMA | end_workday / the scheduler sweep / correct_workday / the legacy import | immediately on each click; the sweep hourly (docs/scheduler/deploy.sh); import one-off |
+
+**Filters**
+
+- tenant: RLS plus app.tenant_id
+- own rows only
+- period on business_date
+
+**Time** Viewer's current zone (see the zones finding).
+
+**Who may see it** `workday.own`
+
+**Refresh** on each request
+
+**Computed in** `cma.workday_summary` (0008d); `getHours` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select w.business_date, w.ended_at, w.status from cma.workday w where w.tenant_id = :tenant_id and w.user_id = :user_id and w.business_date between :from and :to order by w.business_date
+```
+
+**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 2 row(s); Martin compares the value with the page in Studio. The query also takes the person's id (:user_id).
+
+**Documented in** api.md, GET /api/v1/me/hours
+
+**Notes**
+
+A forgotten clock-out of an earlier day also reads 'still working' here (the day is open past its window end until the sweep or a correction ends it), while Team hours flags it 'Not clocked out' — a mild wrong-empty-state for the agent. See finding. Once the sweep has closed it, the end shown is the system end. Since addition 0010a (brief B, 26 Nov 2026) the My hours page shows the person's week per assignment and hours market (my_hours.week_*, my_hours.day_*); this period figure is no longer on the page and stays on GET /api/v1/me/hours, computed as before.
+
+#### `my_hours.pauses`
+
+**Pauses** on /api/v1/me/hours · Pauses (Pauzes)
+
+Time that day in statuses that stop the clock (break, lunch and other non-working statuses), summed over all sessions. The time between two sessions is not a pause.
+
+**Formula as computed**
+
+```
+pause_seconds = sum(cma.time_interval.seconds) of the day's intervals whose status has is_working = false; pauseMinutes = floor(pause_seconds/60); shown as Xh YYm; only stretches in non-working statuses count, never the span minus worked. Interval seconds are capped at the day's window end like all counted time.
+```
+
+**Unit** minutes · **Grain** per_day · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.time_event` | kind, status_id, occurred_at, recorded_at, supersedes_event_id | CMA | set_status and the other write paths; corrections; the legacy import (gaps land in the batch's gap status, Pulse4all: Break) | immediately on each click; import one-off |
+| `cma.work_status` | is_working | CMA | migration seed + tenant seed 02 | on configuration change |
+
+**Filters**
+
+- tenant: RLS plus the cma.time_interval face
+- own rows only
+- statuses with is_working = false only (paid or unpaid alike: the pay flag is not agent information)
+- period on business_date
+
+**Time** Same interval arithmetic as worked time: each stretch runs to the next effective event, an open one to now(), everything capped at the day's window end.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `workday.window_end` | 24:00 | 22:00 |
+
+**Who may see it** `workday.own`
+
+**Refresh** on each request
+
+**Computed in** `cma.time_interval` (0008b); `getHours` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with win as (select coalesce(ts.value, s.default_value)::time as w_end from cma.setting s left join cma.tenant_setting ts on ts.tenant_id = :tenant_id and ts.key = s.key where s.key = 'workday.window_end'),
+eff as (select e.id, e.workday_id, e.kind, e.status_id, e.occurred_at, e.recorded_at from cma.time_event e where e.tenant_id = :tenant_id and e.kind in ('start','status','end') and not exists (select 1 from cma.time_event c where c.tenant_id = :tenant_id and c.supersedes_event_id = e.id)),
+iv as (select w.user_id, w.business_date, e.kind, e.status_id, e.occurred_at as from_at, lead(e.occurred_at) over (partition by e.workday_id order by e.occurred_at, e.recorded_at, e.id) as to_at, ((w.business_date + (select w_end from win)) at time zone w.timezone) as day_end from eff e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id where w.user_id = :user_id and w.business_date between :from and :to)
+select iv.business_date, floor(coalesce(sum(greatest(0, floor(extract(epoch from (least(coalesce(iv.to_at, now()), iv.day_end) - iv.from_at))))) filter (where not ws.is_working), 0) / 60)::bigint as pause_minutes
+from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.status_id where iv.kind in ('start','status') group by iv.business_date order by iv.business_date
+```
+
+**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 2 row(s); Martin compares the value with the page in Studio. The query also takes the person's id (:user_id).
+
+**Documented in** decisions.md 7 Oct 2026 (agents see working time plus a Pauses column on My hours); api.md, GET /api/v1/me/hours
+
+**Notes**
+
+Pauses and Duration are floored to minutes independently, so pauses + duration can fall one minute short of the clocked time. On a day of several sessions the time between sessions is in neither, so pauses + duration is shorter than the span from first start to last end by that gap. 0m shows for a day without pauses (a true zero, correct). Since addition 0010a (brief B, 26 Nov 2026) the My hours page shows the person's week per assignment and hours market (my_hours.week_*, my_hours.day_*); this period figure is no longer on the page and stays on GET /api/v1/me/hours, computed as before.
+
+#### `my_hours.duration`
+
+**Duration** on /api/v1/me/hours · Duration (Duur)
+
+Time worked that day, summed over all sessions: working statuses only, the same time the My day clock counts.
+
+**Formula as computed**
+
+```
+minutes = floor(workday_summary.working_seconds / 60) per day (minutesOf, postgres.ts:384). working_seconds = sum(interval seconds) where status.is_working, each interval capped at the day's window end; an open day runs to now().
+```
+
+**Unit** minutes · **Grain** per_day · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.time_event` | kind, status_id, occurred_at, recorded_at, supersedes_event_id | CMA | the Workspace's own write paths; the scheduler sweep; the legacy import (0008d) | immediately on each click; the sweep hourly (docs/scheduler/deploy.sh); import one-off |
+| `cma.work_status` | is_working | CMA | migration seed + tenant seed 02 | on configuration change |
+| `cma.tenant_setting` | key, value | CMA | cma.set_tenant_setting(); seed 02 | on configuration change |
+
+**Filters**
+
+- tenant: RLS plus the workday_summary face
+- own rows only
+- is_working statuses only
+- period on business_date
+- time after the window end not counted
+
+**Time** Business date in the day's own zone; period picked in the viewer's zone; counted time capped at workday.window_end.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `workday.window_end` | 24:00 | 22:00 |
+
+**Who may see it** `workday.own`
+
+**Refresh** on each request
+
+**Computed in** `cma.workday_summary` (0008d); `cma.time_interval` (0008b); `getHours` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with win as (select coalesce(ts.value, s.default_value)::time as w_end from cma.setting s left join cma.tenant_setting ts on ts.tenant_id = :tenant_id and ts.key = s.key where s.key = 'workday.window_end'),
+eff as (select e.id, e.workday_id, e.kind, e.status_id, e.occurred_at, e.recorded_at from cma.time_event e where e.tenant_id = :tenant_id and e.kind in ('start','status','end') and not exists (select 1 from cma.time_event c where c.tenant_id = :tenant_id and c.supersedes_event_id = e.id)),
+iv as (select w.user_id, w.business_date, e.kind, e.status_id, e.occurred_at as from_at, lead(e.occurred_at) over (partition by e.workday_id order by e.occurred_at, e.recorded_at, e.id) as to_at, ((w.business_date + (select w_end from win)) at time zone w.timezone) as day_end from eff e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id where w.user_id = :user_id and w.business_date between :from and :to)
+select iv.business_date, floor(coalesce(sum(greatest(0, floor(extract(epoch from (least(coalesce(iv.to_at, now()), iv.day_end) - iv.from_at))))) filter (where ws.is_working), 0) / 60)::bigint as worked_minutes
+from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.status_id where iv.kind in ('start','status') group by iv.business_date order by iv.business_date
+```
+
+**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 2 row(s); Martin compares the value with the page in Studio. The query also takes the person's id (:user_id).
+
+**Documented in** api.md, GET /api/v1/me/hours; decisions.md 6-7 Oct 2026 (the clock counts is_working; agents see working time); open-decisions.md (which hours the agent's screen shows: decided, working time)
+
+**Notes**
+
+Which hours the agent sees is decided (working time, 7 Oct 2026); switching to paid is the one line minutesOf (postgres.ts:380-386). Same flooring as Team hours' Worked column, so supervisor and agent see the same figure for the same day (ownHoursOnly copy says so). The time between two sessions counts in no figure. Since addition 0010a (brief B, 26 Nov 2026) the My hours page shows the person's week per assignment and hours market (my_hours.week_*, my_hours.day_*); this period figure is no longer on the page and stays on GET /api/v1/me/hours, computed as before.
+
+#### `my_hours.total_duration`
+
+**Total** on /api/v1/me/hours · Total (duration) (Totaal)
+
+The period's total worked time: the Duration column added up.
+
+**Formula as computed**
+
+```
+totalMinutes = sum over the period's days of floor(working_seconds/60) (each day floored first, then summed: getHours days.reduce).
+```
+
+**Unit** minutes · **Grain** period · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.time_event` | kind, status_id, occurred_at | CMA | the Workspace's own write paths; the scheduler sweep; the legacy import | immediately on each click; the sweep hourly; import one-off |
+| `cma.work_status` | is_working | CMA | migration seed + tenant seed 02 | on configuration change |
+
+**Filters**
+
+- as my_hours.duration
+
+**Time** As my_hours.duration.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `workday.window_end` | 24:00 | 22:00 |
+
+**Who may see it** `workday.own`
+
+**Refresh** on each request
+
+**Computed in** `cma.workday_summary` (0008d); `getHours` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with win as (select coalesce(ts.value, s.default_value)::time as w_end from cma.setting s left join cma.tenant_setting ts on ts.tenant_id = :tenant_id and ts.key = s.key where s.key = 'workday.window_end'),
+eff as (select e.id, e.workday_id, e.kind, e.status_id, e.occurred_at, e.recorded_at from cma.time_event e where e.tenant_id = :tenant_id and e.kind in ('start','status','end') and not exists (select 1 from cma.time_event c where c.tenant_id = :tenant_id and c.supersedes_event_id = e.id)),
+iv as (select w.user_id, w.business_date, e.kind, e.status_id, e.occurred_at as from_at, lead(e.occurred_at) over (partition by e.workday_id order by e.occurred_at, e.recorded_at, e.id) as to_at, ((w.business_date + (select w_end from win)) at time zone w.timezone) as day_end from eff e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id where w.user_id = :user_id and w.business_date between :from and :to),
+per_day as (select iv.business_date, floor(coalesce(sum(greatest(0, floor(extract(epoch from (least(coalesce(iv.to_at, now()), iv.day_end) - iv.from_at))))) filter (where ws.is_working), 0) / 60)::bigint as m from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.status_id where iv.kind in ('start','status') group by iv.business_date)
+select sum(m) as total_minutes from per_day
+```
+
+**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio. The query also takes the person's id (:user_id).
+
+**Documented in** api.md, GET /api/v1/me/hours
+
+**Notes**
+
+Per-day flooring first, then the sum: the same rule as the Dashboard's Worked tile and Team hours' Total, so the three totals agree for the same person and period. Since addition 0010a (brief B, 26 Nov 2026) the My hours page shows the person's week per assignment and hours market (my_hours.week_*, my_hours.day_*); this period figure is no longer on the page and stays on GET /api/v1/me/hours, computed as before.
+
+#### `my_hours.total_pauses`
+
+**Total** on /api/v1/me/hours · Total (pauses) (Totaal)
+
+The period's total pause time: the Pauses column added up.
+
+**Formula as computed**
+
+```
+sum over the days of pauseMinutes (each day floor(pause_seconds/60) first); computed in the page's tfoot (hours/page.tsx:72).
+```
+
+**Unit** minutes · **Grain** period · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.time_event` | kind, status_id, occurred_at | CMA | the Workspace's own write paths; the legacy import (gap status) | immediately on each click; import one-off |
+| `cma.work_status` | is_working | CMA | migration seed + tenant seed 02 | on configuration change |
+
+**Filters**
+
+- as my_hours.pauses
+
+**Time** As my_hours.pauses.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `workday.window_end` | 24:00 | 22:00 |
+
+**Who may see it** `workday.own`
+
+**Refresh** on each request
+
+**Computed in** `cma.time_interval` (0008b); `getHours` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with win as (select coalesce(ts.value, s.default_value)::time as w_end from cma.setting s left join cma.tenant_setting ts on ts.tenant_id = :tenant_id and ts.key = s.key where s.key = 'workday.window_end'),
+eff as (select e.id, e.workday_id, e.kind, e.status_id, e.occurred_at, e.recorded_at from cma.time_event e where e.tenant_id = :tenant_id and e.kind in ('start','status','end') and not exists (select 1 from cma.time_event c where c.tenant_id = :tenant_id and c.supersedes_event_id = e.id)),
+iv as (select w.user_id, w.business_date, e.kind, e.status_id, e.occurred_at as from_at, lead(e.occurred_at) over (partition by e.workday_id order by e.occurred_at, e.recorded_at, e.id) as to_at, ((w.business_date + (select w_end from win)) at time zone w.timezone) as day_end from eff e join cma.workday w on w.tenant_id = :tenant_id and w.id = e.workday_id where w.user_id = :user_id and w.business_date between :from and :to),
+per_day as (select iv.business_date, floor(coalesce(sum(greatest(0, floor(extract(epoch from (least(coalesce(iv.to_at, now()), iv.day_end) - iv.from_at))))) filter (where not ws.is_working), 0) / 60)::bigint as m from iv join cma.work_status ws on ws.tenant_id = :tenant_id and ws.id = iv.status_id where iv.kind in ('start','status') group by iv.business_date)
+select sum(m) as total_pause_minutes from per_day
+```
+
+**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio. The query also takes the person's id (:user_id).
+
+**Documented in** decisions.md 7 Oct 2026 (Pauses column)
+
+**Notes**
+
+Both totals sit in one Total row (colspan 3, then pauses, then duration). Since addition 0010a (brief B, 26 Nov 2026) the My hours page shows the person's week per assignment and hours market (my_hours.week_*, my_hours.day_*); this period figure is no longer on the page and stays on GET /api/v1/me/hours, computed as before.
 
 ### /api/v1/me/day
 

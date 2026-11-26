@@ -64,6 +64,47 @@ export function assignmentText(b: { code: string; market: string | null }): stri
   return b.market ? `${b.code}-${b.market}` : b.code;
 }
 
+// ---- absence blocks (addition 0010a, E9) ------------------------------------------------------------
+
+/**
+ * An absence block (E9) travels in the planner's block lists under the absence type's key with this prefix, "@sick": a
+ * type's code is 1 to 6 of A-Z and 0-9, so the two never meet. The database keeps the two apart (roster_assignment's
+ * assignment_type_id or absence_type_id, never both); the write sends {"absence": key}
+ */
+export const ABSENCE_PREFIX = "@";
+
+export function isAbsenceCode(code: string): boolean {
+  return code.startsWith(ABSENCE_PREFIX);
+}
+
+export function absenceCode(key: string): string {
+  return `${ABSENCE_PREFIX}${key}`;
+}
+
+/** A block's code in the planner's lists: the type's code, or "@key" for an absence block (an API block has code null and absence) */
+export function blockCode(b: { code: string | null; absence?: string | null; absenceKey?: string | null }): string {
+  const key = b.absence ?? b.absenceKey ?? null;
+  return key ? absenceCode(key) : b.code ?? "";
+}
+
+/** The absence type's key of an absence block's code; null for an assignment */
+export function absenceKeyOf(code: string): string | null {
+  return isAbsenceCode(code) ? code.slice(ABSENCE_PREFIX.length) : null;
+}
+
+/**
+ * A bar's words (E10, Martin, 26 November 2026): CODE · MARKET for work (the block's market, else the person's Default
+ * market), the code alone for a pause, the absence's name for an absence block
+ */
+export function barLabel(b: Pick<Block, "code" | "market">, defaultMarket: string | null, kinds: ReadonlyMap<string, "work" | "pause">,
+  absenceName: (key: string) => string | null = () => null): string {
+  const key = absenceKeyOf(b.code);
+  if (key !== null) return absenceName(key) ?? key;
+  if (kinds.get(b.code) === "pause") return b.code;
+  const market = b.market ?? defaultMarket;
+  return market ? `${b.code} · ${market}` : b.code;
+}
+
 // ---- the planner's payload ------------------------------------------------------------------------
 
 /** A week's blocks as the planner's page sends them to the browser: per `${userId}:${date}`, [code, start, end, market, note] */
@@ -80,7 +121,9 @@ export function plannerWeek(week: RosterWeek): PlannerWeek {
   const { assignments, ...rest } = week;
   const blocks: CompactBlocks = {};
   for (const a of assignments) {
-    (blocks[`${a.userId}:${a.date}`] ??= []).push([a.code, a.start.slice(0, 5), a.end.slice(0, 5), a.hoursMarket, a.note]);
+    // an absence block (E9) under its absence key with the prefix, so the compact list keeps one shape
+    const code = a.kind === "absence" ? absenceCode(a.absenceKey ?? "") : a.code ?? "";
+    (blocks[`${a.userId}:${a.date}`] ??= []).push([code, a.start.slice(0, 5), a.end.slice(0, 5), a.hoursMarket, a.note]);
   }
   return { ...rest, blocks };
 }
@@ -259,7 +302,7 @@ export function slotFigures(people: readonly PersonBlocks[], kinds: ReadonlyMap<
     const working = new Set<string>();
     for (const p of people) {
       for (const b of p.blocks) {
-        if (b.start <= s && s < b.end) {
+        if (b.start <= s && s < b.end && !isAbsenceCode(b.code)) {
           const k = figureKey(b.code, figureMarket(b, p.defaultMarket, kinds));
           byKey.set(k, (byKey.get(k) ?? 0) + 1);
           if (kinds.get(b.code) === "work") working.add(p.userId);
@@ -275,6 +318,7 @@ export function slotFigures(people: readonly PersonBlocks[], kinds: ReadonlyMap<
 export function plannedByKey(blocks: readonly Block[], defaultMarket: string | null, kinds: ReadonlyMap<string, "work" | "pause">): Map<string, number> {
   const out = new Map<string, number>();
   for (const b of blocks) {
+    if (isAbsenceCode(b.code)) continue;   // an absence block is neither planned nor worked (E9)
     const k = figureKey(b.code, figureMarket(b, defaultMarket, kinds));
     out.set(k, (out.get(k) ?? 0) + (b.end - b.start));
   }
@@ -291,7 +335,8 @@ export function plannedMinutes(
 ): number {
   if (!shift) return 0;
   if (blocks.length === 0) return Math.max(0, shift.end - shift.start);
-  return blocks.reduce((n, b) => n + (kinds.get(b.code) === "pause" ? 0 : b.end - b.start), 0);
+  // work only: a pause never, an absence block (E9) never
+  return blocks.reduce((n, b) => n + (kinds.get(b.code) === "work" ? b.end - b.start : 0), 0);
 }
 
 /** One person-date for the Planned hours meter: its entry's shift (null without one) and its blocks */
@@ -327,6 +372,7 @@ export function plannedSummary(days: readonly PlannedDay[], kinds: ReadonlyMap<s
     out.planned += plannedMinutes(d.shift, d.blocks, kinds);
     if (d.blocks.length === 0) { out.dayLevel += Math.max(0, d.shift.end - d.shift.start); continue; }
     for (const b of d.blocks) {
+      if (isAbsenceCode(b.code)) continue;   // an absence block is neither planned nor worked (E9)
       if (kinds.get(b.code) === "pause") out.pauses.set(b.code, (out.pauses.get(b.code) ?? 0) + (b.end - b.start));
       else {
         const k = figureKey(b.code, b.market ?? d.defaultMarket);

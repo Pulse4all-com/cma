@@ -20,7 +20,7 @@ export function WeekBar({
   keep = {},
   children,
 }: {
-  pathname: "/roster/planner" | "/schedule";
+  pathname: "/roster/planner" | "/schedule" | "/hours";
   weekStart: string;
   thisWeek: string;
   copy: Pick<Copy, "roster">;

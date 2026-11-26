@@ -144,7 +144,7 @@
                 "required": ["object", "migration"],
                 "properties": {
                   "object": { "description": "Function or view name, e.g. cma.calls_overview", "type": "string", "pattern": "^(cma|cma_read)\\.[a-z0-9_]+$" },
-                  "migration": { "description": "Migration or addition number, e.g. 0008j", "type": "string", "pattern": "^000[0-9][a-z]?[a-z]?$" }
+                  "migration": { "description": "Migration or addition number, e.g. 0008j or 0010a", "type": "string", "pattern": "^00[01][0-9][a-z]?[a-z]?$" }
                 }
               }
             },

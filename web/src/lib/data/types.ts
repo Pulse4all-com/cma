@@ -135,6 +135,132 @@ export interface MyDayChoices {
 export interface StatusChange {
   key: string | null;
   hoursMarket: string | null;
+  /**
+   * Switch (addition 0010a, E6): an active assignment type's code. It books the type's own status (key stays null): a work
+   * or extra type under hoursMarket (none: the person's Default market), a pause without a market
+   */
+  assignment?: string | null;
+}
+
+/** A block of My day's Scheduled lane (cma.my_day, addition 0010a): a published block of today */
+export interface MyDayBlock {
+  /** The type's code; null for an absence block */
+  code: string | null;
+  /** The type's name, or the absence's */
+  name: string;
+  kind: "work" | "pause" | "absence";
+  isExtra: boolean;
+  workArea: WorkArea | null;
+  absenceKey: string | null;
+  /** A work block's hours market; null for a pause and an absence */
+  hoursMarket: string | null;
+  /** hh:mm in the person's zone */
+  start: string;
+  end: string;
+  startAt: Instant;
+  endAt: Instant;
+}
+
+/** A stretch of My day's and My hours' Actual lane (cma.workday_actual_of, addition 0010a) */
+export interface ActualStretch {
+  /** The assignment's code; null without one (Training, Meeting, Coaching, the fallback, history) */
+  code: string | null;
+  /** The assignment's name, else the status's */
+  name: string;
+  statusKey: string;
+  statusName: string;
+  /** work, pause, or other (a working status without an assignment) */
+  kind: "work" | "pause" | "other";
+  isWorking: boolean;
+  workArea: WorkArea | null;
+  hoursMarket: string | null;
+  fromAt: Instant;
+  /** null while it runs */
+  toAt: Instant | null;
+  open: boolean;
+  source: "user" | "system" | "correction" | "import" | "roster";
+  /** Another assignment or market than the published block in force at its start (E7) */
+  deviates: boolean;
+}
+
+/** An own Switch that deviated from the plan (E7): "11:20 You switched to CC · SE (planned: GO · SE)" */
+export interface DeviationMark {
+  at: Instant;
+  code: string | null;
+  statusName: string;
+  hoursMarket: string | null;
+  plannedCode: string | null;
+  plannedHoursMarket: string | null;
+}
+
+/** The Switch panel's choices (E6): work types, pauses, Other statuses, the hours markets and the person's Default market */
+export interface SwitchChoices {
+  work: { code: string; name: string; workArea: WorkArea | null; isExtra: boolean }[];
+  pause: { code: string; name: string }[];
+  other: { key: string; name: string; workArea: WorkArea | null }[];
+  hoursMarkets: { code: string; name: string }[];
+  defaultMarket: string | null;
+}
+
+/** What the open day is on now (cma.my_day's current) */
+export interface MyDayCurrent {
+  code: string | null;
+  name: string;
+  kind: "work" | "pause" | "other";
+  statusKey: string;
+  statusName: string;
+  workArea: WorkArea | null;
+  hoursMarket: string | null;
+  since: Instant;
+  source: ActualStretch["source"];
+}
+
+/**
+ * My day's plan against actual (cma.my_day, addition 0010a, brief B): the published shift and blocks (Scheduled), the
+ * Actual lane, the own deviating switches, the block in force now and the next, the roster switch notice (E3), Off plan
+ * (E7) and the Switch choices (E6). The day's clock stays the Workday's
+ */
+export interface MyDayPlan {
+  date: DateKey;
+  timeZone: string;
+  isToday: boolean;
+  shift: { kind: "shift" | "absence"; start: string; end: string; startAt: Instant | null; endAt: Instant | null; absenceName: string | null } | null;
+  plan: MyDayBlock[];
+  actual: ActualStretch[];
+  marks: DeviationMark[];
+  current: MyDayCurrent | null;
+  planNow: MyDayBlock | null;
+  planNext: MyDayBlock | null;
+  notice: { at: Instant; code: string | null; name: string; kind: "work" | "pause" | null; hoursMarket: string | null; until: Instant } | null;
+  offPlan: {
+    code: string | null; name: string; kind: "work" | "pause"; hoursMarket: string | null; since: Instant;
+    nextAt: Instant | null; nextCode: string | null; nextName: string | null; nextKind: MyDayBlock["kind"] | null; nextHoursMarket: string | null;
+  } | null;
+  /** Whether the tenant has assignment types at all; without, My day keeps the status buttons of before 0010a */
+  usesAssignments: boolean;
+  choices: SwitchChoices;
+}
+
+/** My hours for one ISO week (cma.my_hours, addition 0010a, E11: read only) */
+export interface MyHoursWeek {
+  weekStart: DateKey;
+  today: DateKey;
+  timeZone: string;
+  workedSeconds: number;
+  plannedMinutes: number;
+  /** Worked time per assignment and market, by time; an event without an assignment under its status name */
+  rows: { code: string | null; name: string; workArea: WorkArea | null; hoursMarket: string | null; seconds: number }[];
+  /** Time not worked, per pause type or status */
+  pauses: { code: string | null; name: string; seconds: number }[];
+  days: {
+    date: DateKey;
+    isToday: boolean;
+    hasTime: boolean;
+    workedSeconds: number;
+    segments: { code: string | null; name: string; statusName: string; kind: ActualStretch["kind"]; isWorking: boolean; workArea: WorkArea | null;
+      hoursMarket: string | null; fromAt: Instant; toAt: Instant; seconds: number }[];
+    split: { code: string | null; name: string; hoursMarket: string | null; seconds: number }[];
+  }[];
 }
 
 export interface HoursDay {
@@ -760,25 +886,32 @@ export interface RosterAssignment {
   assignmentId: string;
   userId: string;
   date: DateKey;
+  /** The type's code; "" for an absence block (addition 0010a, E9: absenceKey names it) */
   code: string;
   name: string;
-  kind: "work" | "pause";
+  kind: "work" | "pause" | "absence";
   workArea: WorkArea | null;
   isExtra: boolean;
   start: string;
   end: string;
-  /** null: own market, the person's Default market at booking (D1); always null for a pause (0009zz) */
+  /** A work block's market (since 0010a, E10, every new work block names one; null only for a block written before it); null for a pause (0009zz) and an absence */
   hoursMarket: string | null;
   note: string | null;
   recordedAt: Instant;
+  /** An absence block's absence type (E9); null for an assignment */
+  absenceKey: string | null;
+  absenceName: string | null;
 }
 
 /** A block as the planner writes it (cma.roster_set_assignments): hh:mm local in the person's zone, 24:00 allowed as an end */
 export interface AssignmentBlockInput {
+  /** The type's code; "" for an absence block */
   code: string;
+  /** An absence block's absence type key (E9); a block is either an assignment or an absence, never both */
+  absence?: string | null;
   start: string;
   end: string;
-  /** An hours market code; null is own market */
+  /** An hours market code; null: the person's Default market (E10, written into the block); none for a pause and an absence */
   hoursMarket: string | null;
   note: string | null;
 }
@@ -786,7 +919,10 @@ export interface AssignmentBlockInput {
 /** A block of a person-date after a write, as cma.roster_set_assignments and cma.roster_cell answer */
 export interface AssignmentBlock {
   assignmentId: string;
-  code: string;
+  /** The type's code; null for an absence block */
+  code: string | null;
+  /** An absence block's absence type key (E9) */
+  absence: string | null;
   start: string;
   end: string;
   hoursMarket: string | null;
@@ -799,7 +935,9 @@ export interface AssignmentBlock {
  */
 export type RosterAssignmentsResult =
   | { status: "saved"; kept: number; ended: number; added: number; published: boolean; version: number; blocks: AssignmentBlock[] }
-  | { status: "confirm"; otherChanges: number };
+  | { status: "confirm"; otherChanges: number }
+  /** E5 (addition 0010a): the at-once publication refused while a shift of the week dated today or later has no block; nothing was written */
+  | { status: "refused"; emptyShifts: { userId: string; date: DateKey }[] };
 
 /** One line of Copy week's, Save as standard week's and Apply standard week's report (D9, D10) */
 export interface RosterReportRow {
@@ -863,9 +1001,12 @@ export interface StandardWeekDay {
 
 /** A published block as the agent and the Live board see it (cma.my_roster, cma.roster_today) */
 export interface PublishedAssignment {
-  code: string;
+  /** The type's code; null for an absence block (E9) */
+  code: string | null;
   name: string;
-  kind: "work" | "pause";
+  kind: "work" | "pause" | "absence";
+  /** An absence block's absence type key (addition 0010a) */
+  absenceKey?: string | null;
   workArea: WorkArea | null;
   isExtra: boolean;
   /** hh:mm in the person's zone */
@@ -951,10 +1092,19 @@ export interface RosterCellAnswer {
   endedAssignments: number;
   /** The write was the person's today in a published week, so the week was published at once (D8) */
   published: boolean;
+  /** A shift of today without any block waits for its blocks (E5): they publish the week at once */
+  waiting?: "no_assignments";
 }
 
+/** Publish (E5): published, or refused while a shift dated today or later holds no block, naming the people and dates */
+export type RosterPublishResult =
+  | { status: "published"; header: RosterWeekHeader }
+  | { status: "refused"; emptyShifts: { userId: string; date: DateKey }[] };
+
 /** A cell write (cma.roster_set_cell): saved, or confirm when today's change would also publish other changes (D8) */
-export type RosterCellResult = RosterCellAnswer | { status: "confirm"; otherChanges: number };
+export type RosterCellResult = RosterCellAnswer | { status: "confirm"; otherChanges: number }
+  /** E5 (addition 0010a): the at-once publication refused while a shift of the week dated today or later has no block; nothing was written */
+  | { status: "refused"; emptyShifts: { userId: string; date: DateKey }[] };
 
 /** One week of the range: the state of the roster of a team (or the tenant) for that week; an unwritten week is a draft at version 0 with no entries */
 export interface RosterWeekSummary {
@@ -4658,6 +4808,13 @@ export interface CmaData {
    * booked again under the new market (D3); without a market the market in force is kept.
    */
   setStatus(me: Principal, change: StatusChange, now: Instant): Promise<Workday>;
+  /**
+   * My day's plan against actual for a date (cma.my_day, addition 0010a) with the day itself, in one transaction: null
+   * workday before Clock in. workday.own (CMA06)
+   */
+  getMyDay(me: Principal, date: DateKey): Promise<{ workday: Workday | null; plan: MyDayPlan; statusChoices: MyDayChoices | null }>;
+  /** My hours for the ISO week starting on weekStart (cma.my_hours, addition 0010a, read only). workday.own (CMA06) */
+  getMyHoursWeek(me: Principal, weekStart: DateKey): Promise<MyHoursWeek>;
   getHours(me: Principal, range: HoursRange): Promise<HoursSummary>;
   /** Hours per person per day; all people of the tenant, or one. Needs workday.team (CMA06) */
   getTeamHours(me: Principal, range: HoursRange, userId: string | null): Promise<TeamHours>;
@@ -4830,7 +4987,8 @@ export interface CmaData {
   /** Whether an absence type carries over (D10; tenant.configure) */
   setAbsenceCarriesOver(me: Principal, key: string, carriesOver: boolean): Promise<void>;
   /** Publishes the week as it stands: version + 1. Answers the header */
-  publishRoster(me: Principal, weekStart: DateKey, teamKey: string | null): Promise<RosterWeekHeader>;
+  /** Publish (E5): refused while a shift dated today or later holds no block, naming the people and dates */
+  publishRoster(me: Principal, weekStart: DateKey, teamKey: string | null): Promise<RosterPublishResult>;
   /** Copies the current cells of one week into another of the same scope with their blocks (D10); answers the report */
   copyRosterWeek(me: Principal, fromWeekStart: DateKey, toWeekStart: DateKey, teamKey: string | null): Promise<RosterReportRow[]>;
   /** The caller's own schedule, published entries only, one row per date; at most 92 days. Needs roster.view */
