@@ -18,7 +18,9 @@
  * Assignments (addition 0009zx, brief A): a Week | Day switch. Week keeps this grid, each cell with a thin bar of the
  * day's assignments in their colours (D13); Day is Arno's layout (RosterDay). The week bar adds Copy week, Apply standard
  * week and Save as standard week, each with its report (D9, D10), and Publish shows the plan check first (two warnings,
- * never blocking).
+ * never blocking). Since 26 November 2026 (Martin): the Planned hours meter above the grid in both views (PlannedMeter),
+ * Planned per person counts the work blocks and a shift without blocks whole, never a pause, and Publish reads Published
+ * and waits while nothing changed since the last publication.
  *
  * One team per page view (brief B41, D2): the page resolves the team once and keys this component by the week and
  * the team, so the select, the header, the grid, People on shift, Planned, the coverage, the saved weeks, print, copy,
@@ -32,11 +34,12 @@ import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
 import type { AbsenceType, AssignmentBlock, RosterEntry, RosterReportRow, RosterWeekSummary, TeamInfo } from "@/lib/data";
 import dynamic from "next/dynamic";
-import { pct, planCheck, toMinutes, toneOf, TONE_CLASS, type Block, type PlannerWeek } from "@/lib/assignments";
+import { pct, planCheck, plannedMinutes, plannedSummary, toMinutes, toneOf, TONE_CLASS, type Block, type PlannedDay, type PlannerWeek } from "@/lib/assignments";
+import { PlannedMeter, type MeterWords } from "./PlannedMeter";
 // The Day view's code comes with the Day view only: the Week view's page carries none of it (web/verify/perf.json)
 const RosterDay = dynamic(() => import("./RosterDay").then((m) => m.RosterDay));
 import {
-  absenceKeywordList, cellLabel, coverageGrid, EVERYONE, headcountByDate, isoWeek, parseCell, plannedMinutesByUser, plannerSearch, plannerTeamOfHeader, rosterTeamArg, weekDays,
+  absenceKeywordList, cellLabel, coverageGrid, EVERYONE, headcountByDate, isoWeek, parseCell, plannerSearch, plannerTeamOfHeader, rosterTeamArg, weekDays,
   type Cell, type CellProblem, type CoverageState,
 } from "@/lib/roster";
 import { addDays, fmtDate, fmtMinutes, fmtDateTime } from "@/lib/time";
@@ -308,7 +311,18 @@ export function RosterPlanner({
   const shownDay = day && days.includes(day) ? day : days.includes(today) ? today : weekStart;
 
   const liveEntries = [...entries.values()];
-  const planned = plannedMinutesByUser(liveEntries);
+  // Planned per person and the meter (Martin, 26 November 2026): the work blocks, a shift without blocks whole, no pause
+  const plannedDays: PlannedDay[] = liveEntries.filter((e) => week.people.some((p) => p.userId === e.userId)).map((e) => ({
+    userId: e.userId, date: e.date, defaultMarket: week.people.find((p) => p.userId === e.userId)?.defaultHoursMarket ?? null,
+    shift: e.kind === "shift" && e.start && e.end ? { start: toMinutes(e.start), end: toMinutes(e.end) } : null,
+    blocks: (cellBlocks.get(`${e.userId}:${e.date}`) ?? []).map((b) => ({ code: b.code, start: toMinutes(b.start), end: toMinutes(b.end), market: b.hoursMarket, note: b.note })),
+  }));
+  const planned = new Map<string, number>();
+  for (const d of plannedDays) planned.set(d.userId, (planned.get(d.userId) ?? 0) + plannedMinutes(d.shift, d.blocks, kinds));
+  const meterWords: MeterWords = {
+    title: ta.meterTitle, hint: ta.meterHint, week: ta.meterWeek, day: ta.meterDay, of: ta.meterOf, perAssignment: ta.meterPerAssignment,
+    dayLevel: ta.meterDayLevel, pauses: ta.meterPauses, pausesHint: ta.meterPausesHint, noMarket: ta.meterNoMarket, nothing: ta.meterNothing,
+  };
   const headcount = headcountByDate(liveEntries);
   const coverage = coverageGrid(week.coverage, days);
   const problemText: Record<string, string> = {
@@ -383,8 +397,10 @@ export function RosterPlanner({
           <Button variant="outlined" shortcut="C" data-shortcut="c" disabled={pending} onClick={() => setConfirm("copy")}>
             {t.copyPrevious}
           </Button>
-          <Button variant={header.changedSincePublish || header.status === "draft" ? "primary" : "outlined"} shortcut="U" data-shortcut="u" disabled={pending} onClick={() => setConfirm("publish")} data-testid="roster-publish">
-            {header.status === "published" ? t.publishAgain : t.publish}
+          {/* published with nothing waiting: it says so and waits until a change does (Martin, 26 November 2026) */}
+          <Button variant={header.changedSincePublish || header.status === "draft" ? "primary" : "outlined"} shortcut="U" data-shortcut="u"
+            disabled={pending || (header.status === "published" && !header.changedSincePublish)} onClick={() => setConfirm("publish")} data-testid="roster-publish">
+            {header.status !== "published" ? t.publish : header.changedSincePublish ? t.publishAgain : t.published}
           </Button>
         </div>
       </div>
@@ -404,8 +420,12 @@ export function RosterPlanner({
         )) : null}
       </nav>
 
+      {view === "week" && week.people.length > 0 ? <PlannedMeter week={plannedSummary(plannedDays, kinds)} types={week.planner.types} words={meterWords} /> : null}
+
       {view === "day" && copy.assignmentsDay ? (
-        <RosterDay key={shownDay} week={week} date={shownDay} teamArg={teamArg} copy={{ ...copy, assignmentsDay: copy.assignmentsDay }} locale={locale} onPublishedNow={() => startTransition(() => router.refresh())} />
+        <RosterDay key={shownDay} week={week} date={shownDay} teamArg={teamArg} copy={{ ...copy, assignmentsDay: copy.assignmentsDay }} meterWords={meterWords} locale={locale}
+          onPublishedNow={() => startTransition(() => router.refresh())}
+          onChanged={() => setHeader((h) => (h.status === "published" && !h.changedSincePublish ? { ...h, changedSincePublish: true } : h))} />
       ) : week.people.length === 0 ? (
         <p className="text-body text-p4a-muted">{t.noPeople}</p>
       ) : (

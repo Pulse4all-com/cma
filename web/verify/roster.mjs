@@ -25,7 +25,8 @@ import {
 } from "../src/lib/roster.ts";
 import { fmtDateRange } from "../src/lib/time.ts";
 import {
-  assignmentText, fromPlannerMinutes, joinBlocks, paintBlocks, parseAssignment, planCheck, plannedByKey, slotFigures, toneOf, toPlannerMinutes,
+  assignmentText, fromPlannerMinutes, joinBlocks, paintBlocks, parseAssignment, planCheck, plannedByKey, plannedMinutes, plannedSummary, pickerFilter,
+  pickerOrder, slotFigures, toneOf, toPlannerMinutes,
 } from "../src/lib/assignments.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -252,8 +253,45 @@ expect("D12 per slot as 249's B10 counts it (the planner's 09:00, 10:00, 13:00, 
   [36, "w1 GO/=1", "w2 GO/=1 SL/NL=1", "w1 LB/=1 SL/NL=1", "w2 SL/GB=1 X/NL=1", "w1 SL/GB=1"],
   [36, "w1 GO/=1", "w2 GO/=1 SL/NL=1", "w2 LB/=1 SL/NL=1", "w2 SL/GB=1 X/NL=1", "w1 SL/GB=1"]);
 expect("D12 per person as 249's B10's planned minutes",
-  fixture.map((p) => [...plannedByKey(p.blocks, p.defaultMarket)].sort().map(([k, v]) => `${k}=${v}`).join(" ")),
+  fixture.map((p) => [...plannedByKey(p.blocks, p.defaultMarket, kinds)].sort().map(([k, v]) => `${k}=${v}`).join(" ")),
   ["GO/=240 LB/=60 SL/GB=180", "SL/GB=180 SL/NL=240 X/NL=60"], ["GO/=240 LB/=60 SL/GB=180", "SL/GB=180 SL/NL=300"]);
+
+// ---- the follow-up of 26 November 2026 (Martin's hand check in dev, addition 0009zz) ---------------------------------
+expect("a pause has no hours market: LB-GB is refused, LB alone is taken",
+  [parseAssignment("LB-GB", types, markets), parseAssignment("lb", types, markets)],
+  [{ problem: "pauseMarket" }, { code: "LB", market: null }], [{ code: "LB", market: "GB" }, { code: "LB", market: null }]);
+// Agent One's day: a shift 09:00-16:00 with a 30-minute lunch, Default market NL
+const agentOne = [{ code: "SL", start: 540, end: 750, market: null, note: null }, { code: "LB", start: 750, end: 780, market: "GB", note: null },
+  { code: "SL", start: 780, end: 960, market: null, note: null }];
+expect("a pause counts under no market, never under the Default market",
+  [...plannedByKey(agentOne, "NL", kinds)].sort().map(([k, v]) => `${k}=${v}`).join(" "), "LB/=30 SL/NL=390", "LB/GB=30 SL/NL=390");
+expect("Planned: the work blocks (X too), never a pause; a shift without blocks whole; no shift 0",
+  [plannedMinutes({ start: 540, end: 960 }, agentOne, kinds), plannedMinutes({ start: 540, end: 960 }, [], kinds), plannedMinutes(null, agentOne, kinds),
+    plannedMinutes({ start: 540, end: 1020 }, [{ code: "X", start: 540, end: 600 }, { code: "SL", start: 600, end: 660 }], kinds)],
+  [390, 420, 0, 120], [420, 420, 0, 60]);
+const summary = plannedSummary([
+  { userId: "a1", date: "2026-11-30", defaultMarket: "NL", shift: { start: 540, end: 960 }, blocks: agentOne },
+  { userId: "a2", date: "2026-11-30", defaultMarket: null, shift: { start: 480, end: 960 }, blocks: [] },
+  { userId: "a3", date: "2026-11-30", defaultMarket: "GB", shift: null, blocks: [] },
+], kinds);
+expect("the meter: Planned = the sum of the people's Planned, against the hours on shift; split per type and market; pauses apart",
+  [summary.planned, summary.onShift, [...summary.byKey].map(([k, v]) => `${k}=${v}`).join(" "), summary.dayLevel, [...summary.pauses].map(([k, v]) => `${k}=${v}`).join(" ")],
+  [870, 900, "SL/NL=390", 480, "LB=30"], [900, 900, "SL/NL=390 LB/=30", 480, ""]);
+expect("the Assignment dropdown: work types first, then pauses, then the extra types; the retired left out",
+  pickerOrder(types.map((t, i) => ({ ...t, sortOrder: [10, 20, 30, 5, 1, 40][i] }))).map((t) => t.code), ["SL", "GO", "TR", "LB", "X"], ["X", "LB", "SL", "GO", "TR"]);
+expect("typing filters the dropdown: the codes that start with the text first, then the names that hold it",
+  [pickerFilter(types, "lu").map((t) => t.code), pickerFilter(types, "go-gb").map((t) => t.code), pickerFilter(types, "").length, pickerFilter(types, "l")[0]?.code],
+  [["LB"], ["GO"], 6, "LB"], [["LB", "SL"], ["GO"], 6, "SL"]);
+const dayView = readFileSync(new URL("../src/components/RosterDay.tsx", import.meta.url), "utf8");
+const plannerView = readFileSync(new URL("../src/components/RosterPlanner.tsx", import.meta.url), "utf8");
+expect("the grid keeps the focus after a click and a drag; Enter applies the assignment chosen",
+  [/if \(!d \|\| d\.moved\) \{ grid\.current\?\.focus\(\); return; \}/.test(dayView), /else grid\.current\?\.focus\(\);/.test(dayView),
+    /if \(e\.key === "Enter"\) \{ e\.preventDefault\(\); applyChosen\(\); return; \}/.test(dayView), /d\.moved\) \{ codeField|else codeField\.current/.test(dayView)],
+  [true, true, true, false], [false, false, false, true]);
+expect("Working shows 0 inside someone's shift; Publish reads Published and waits while nothing changed",
+  [/f\.working > 0 \|\| inAnyShift\(f\.start\) \? f\.working : ""/.test(dayView),
+    /disabled=\{pending \|\| \(header\.status === "published" && !header\.changedSincePublish\)\}/.test(plannerView)],
+  [true, true], [false, false]);
 const day = [{ code: "SL", start: 540, end: 720, market: null, note: null }, { code: "GO", start: 780, end: 1020, market: null, note: null }];
 expect("the plan check: no lunch block in a long shift and a gap; the lunch type named or any pause; a shift without blocks unchecked",
   [planCheck(shift9to17, day, 360, "LB", kinds), planCheck(shift9to17, [...day, { code: "LB", start: 720, end: 780, market: null, note: null }], 360, "LB", kinds),

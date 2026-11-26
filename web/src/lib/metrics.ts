@@ -156,6 +156,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
   ],
   "/roster/planner": [
     "roster.planner.planned_minutes_per_person",
+    "roster.planner.planned_hours_meter",
     "roster.planner.headcount_per_day",
     "roster.planner.coverage",
     "roster.planner.week_state",

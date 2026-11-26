@@ -767,7 +767,7 @@ export interface RosterAssignment {
   isExtra: boolean;
   start: string;
   end: string;
-  /** null: own market, the person's Default market at booking (D1) */
+  /** null: own market, the person's Default market at booking (D1); always null for a pause (0009zz) */
   hoursMarket: string | null;
   note: string | null;
   recordedAt: Instant;
@@ -871,7 +871,7 @@ export interface PublishedAssignment {
   /** hh:mm in the person's zone */
   start: string;
   end: string;
-  /** The block's hours market, the person's Default market when the block has none (own market) */
+  /** The block's hours market, the person's Default market when the block has none (own market); null for a pause (0009zz) */
   hoursMarket: string | null;
   ownMarket: boolean;
   /** The hours market's zone, for the time there in brackets */

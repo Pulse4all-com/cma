@@ -2,7 +2,8 @@ import Image from "next/image";
 import type { Metadata } from "next";
 import { PrintButton } from "@/components/PrintButton";
 import { data } from "@/lib/data";
-import { cellLabel, headcountByDate, isoWeek, plannedMinutesByUser, plannerNeedsTeams, plannerTeam, rosterTeamArg, weekDays } from "@/lib/roster";
+import { cellLabel, headcountByDate, isoWeek, plannerNeedsTeams, plannerTeam, rosterTeamArg, weekDays } from "@/lib/roster";
+import { plannedMinutes, toMinutes } from "@/lib/assignments";
 import { addDays, dateKeyInZone, fmtDate, fmtMinutes, isDateKey, startOfWeek } from "@/lib/time";
 import { resolve } from "../../../access";
 
@@ -39,7 +40,15 @@ export default async function RosterPrintPage({ searchParams }: PageProps<"/rost
   const week = await data().getRosterWeek(me, weekStart, rosterTeamArg(plannerTeam(sp.team, teams)));
   const days = weekDays(weekStart);
   const byKey = new Map(week.entries.map((e) => [`${e.userId}:${e.date}`, e]));
-  const planned = plannedMinutesByUser(week.entries);
+  // Planned as the planner counts it (Martin, 26 November 2026): the work blocks, a shift without blocks whole, no pause
+  const kinds = new Map(week.planner.types.map((x) => [x.code, x.kind]));
+  const planned = new Map<string, number>();
+  for (const e of week.entries) {
+    if (e.kind !== "shift" || !e.start || !e.end) continue;
+    const blocks = week.assignments.filter((a) => a.userId === e.userId && a.date === e.date)
+      .map((a) => ({ code: a.code, start: toMinutes(a.start), end: toMinutes(a.end) }));
+    planned.set(e.userId, (planned.get(e.userId) ?? 0) + plannedMinutes({ start: toMinutes(e.start), end: toMinutes(e.end) }, blocks, kinds));
+  }
   const headcount = headcountByDate(week.entries);
   const h = week.header;
   const title = `${t.printTitle} · ${h.teamName ?? t.wholeTenant} · ${t.weekOf.replace("{n}", String(isoWeek(weekStart)))}`;

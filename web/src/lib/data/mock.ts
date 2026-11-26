@@ -2458,10 +2458,12 @@ function publishedBlocksOf(me: Principal, w: MockRosterWeek, userId: string, dat
   const zones = new Map(seedIntakeConfig(me).markets.map((m) => [m.code, m.timeZone]));
   return (w.publishedBlocks?.get(`${userId}:${date}`) ?? []).map((b) => {
     const t = mockAssignmentTypes().find((x) => x.code === b.code);
-    const market = b.hoursMarket ?? own;
+    // a pause has no hours market (0009zz)
+    const pause = t?.kind === "pause";
+    const market = pause ? null : b.hoursMarket ?? own;
     return {
       code: b.code, name: t?.name ?? b.code, kind: t?.kind ?? "work", workArea: t?.workArea ?? null, isExtra: t?.isExtra ?? false,
-      start: b.start, end: b.end, hoursMarket: market, ownMarket: b.hoursMarket === null, hoursMarketZone: market ? zones.get(market) ?? null : null,
+      start: b.start, end: b.end, hoursMarket: market, ownMarket: !pause && b.hoursMarket === null, hoursMarketZone: market ? zones.get(market) ?? null : null,
     };
   });
 }
@@ -4283,6 +4285,9 @@ export const mockData: CmaData = {
       if (min(b.end) <= min(b.start) || min(b.start) % slot !== 0 || min(b.end) % slot !== 0) throw new CmaDbError("CMA04", "a block starts and ends on the grid");
       if (shift && (b.start < shift.start!.slice(0, 5) || b.end > shift.end!.slice(0, 5))) throw new CmaDbError("CMA04", "the block lies outside the shift");
       if (i > 0 && min(sorted[i - 1]!.end) > min(b.start)) throw new CmaDbError("CMA04", "the blocks overlap");
+      if (b.hoursMarket && t.kind === "pause") {
+        throw new CmaDbError("CMA04", `assignment type ${t.code} is a pause, and a pause has no hours market: plan ${t.code} without one, not ${t.code}-${b.hoursMarket}`);
+      }
       if (b.hoursMarket) assertMockHoursMarket(me, b.hoursMarket);
     }
     const before = w.blocks.get(k) ?? [];
@@ -4319,7 +4324,8 @@ export const mockData: CmaData = {
         if (d !== date) continue;
         for (const b of list) {
           if (min(b.start) > s || s >= min(b.end)) continue;
-          const market = b.hoursMarket ?? seedPeople().get(userId!)?.defaultHoursMarket ?? null;
+          const pause = mockAssignmentTypes().find((x) => x.code === b.code)?.kind === "pause";
+          const market = pause ? null : b.hoursMarket ?? seedPeople().get(userId!)?.defaultHoursMarket ?? null;
           const key = `${b.code}/${market ?? ""}`;
           counts.set(key, { code: b.code, market, people: (counts.get(key)?.people ?? 0) + 1 });
           if (mockAssignmentTypes().find((x) => x.code === b.code)?.kind === "work") working.add(userId!);
@@ -4339,9 +4345,10 @@ export const mockData: CmaData = {
     for (const [k, list] of w.blocks) {
       const [userId, date] = k.split(":") as [string, DateKey];
       for (const b of list) {
-        const market = b.hoursMarket ?? seedPeople().get(userId)?.defaultHoursMarket ?? null;
+        const kind = mockAssignmentTypes().find((x) => x.code === b.code)?.kind ?? "work";
+        const market = kind === "pause" ? null : b.hoursMarket ?? seedPeople().get(userId)?.defaultHoursMarket ?? null;
         const key = `${userId}:${date}:${b.code}:${market ?? ""}`;
-        const cur = out.get(key) ?? { userId, date, code: b.code, kind: mockAssignmentTypes().find((x) => x.code === b.code)?.kind ?? "work", hoursMarket: market, plannedMinutes: 0 };
+        const cur = out.get(key) ?? { userId, date, code: b.code, kind, hoursMarket: market, plannedMinutes: 0 };
         cur.plannedMinutes += min(b.end) - min(b.start);
         out.set(key, cur);
       }
