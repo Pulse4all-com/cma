@@ -400,8 +400,8 @@
         },
         {
           "name": "time_event",
-          "what": "Clock in, status changes, clock out, corrections; a start or status event carries the hours market it was booked under (hours_market_code, empty for no market)",
-          "how": "Every click in the Workspace, immediately, each start and status event with the hours market in force (the person's default market, else the last day's, at clock-in; the agent's choice on My day); corrections by supervisors, a correction keeping the market of the event it replaces or the market in force at its time unless the manager sets another"
+          "what": "Clock in, status changes, clock out, corrections; a start or status event carries the hours market it was booked under (hours_market_code, empty for no market) and, since 0010a, the assignment type it booked (assignment_type_id: a work type's status under a market, a pause's without one; empty for Training, Meeting, Coaching, the fallback and history); source roster for the roster's switches and its end of a day at an absence block",
+          "how": "Every click in the Workspace, immediately: Clock in on the published block of that moment (else roster.fallback_status under the Default market), Switch with the assignment and market chosen, End workday; every minute the roster job (cma.roster_switch_all) writes the next block at each boundary of today's published roster and ends a day at an absence block; corrections by supervisors, a correction keeping the market of the event it replaces or the market in force at its time unless the manager sets another, and the assignment when the status and the market rule still hold"
         },
         {
           "name": "roster_week",
@@ -420,8 +420,8 @@
         },
         {
           "name": "roster_assignment",
-          "what": "The planned blocks inside a shift: person, date, assignment type, start and end on the slot grid, an optional hours market (empty: the person's default market; a pause block written from 0009zz on has none, and every read shows a pause without one), versioned like roster_entry",
-          "how": "CMA (planner): the Roster planner's blocks, refreshed on write; a shift cleared, changed to an absence or shortened ends the blocks outside it"
+          "what": "The planned blocks inside a shift: person, date, an assignment type or (since 0010a) an absence type for an absence block (absence_type_id; a block is one or the other, never both), start and end on the slot grid, the hours market of a work block (since 0010a written in: the person's Default market when the planner chose none, and filled for the older blocks), none for a pause or an absence, versioned like roster_entry",
+          "how": "CMA (planner): the Roster planner's blocks and absence blocks, refreshed on write; a shift cleared, changed to an absence or shortened ends the blocks outside it; 0010a filled the market of older work blocks once, in place"
         },
         {
           "name": "standard_week_entry",

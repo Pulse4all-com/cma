@@ -1832,8 +1832,9 @@ function mockPlanOf(me: Principal, date: DateKey): MyDayBlock[] {
     const absence = b.absenceKey ? absences.find((a) => a.key === b.absenceKey) : undefined;
     const kind: MyDayBlock["kind"] = absence || b.absenceKey ? "absence" : t?.kind ?? "work";
     return {
+      // E10: a work block names its market (the fixture's older blocks without one: the person's Default market, else the first)
       code: kind === "absence" ? null : b.code, name: absence?.name ?? t?.name ?? b.code ?? "", kind, isExtra: t?.isExtra ?? false,
-      workArea: t?.workArea ?? null, absenceKey: b.absenceKey ?? null, market: kind === "work" ? b.market : null, start: b.start, end: b.end,
+      workArea: t?.workArea ?? null, absenceKey: b.absenceKey ?? null, market: kind === "work" ? b.market ?? own : null, start: b.start, end: b.end,
       startAt: new Date(localMs(date, b.start, me.timeZone)).toISOString(), endAt: new Date(localMs(date, b.end, me.timeZone)).toISOString(),
     };
   });
