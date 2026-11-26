@@ -6,6 +6,7 @@
     "dev": "next dev",
     "prebuild": "node scripts/documents-manifest.mjs",
     "build": "next build",
+    "postbuild": "node scripts/standalone-assets.mjs",
     "start": "node .next/standalone/server.js",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",

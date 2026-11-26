@@ -3290,7 +3290,8 @@ async function expectInstalledBaseModels() {
   if (before.statusKey !== "s") problems.push(`installed base: the Operational status select answers to ${before.statusKey}, expected S`);
   if (before.searchKey !== "f") problems.push(`installed base: the serial field answers to ${before.searchKey}, expected F`);
   if (before.options[0]?.[0] !== "" || before.options.length < 2) problems.push(`installed base: the Model select's choices ${JSON.stringify(before.options)}, expected All models first`);
-  if (before.panels !== 5) problems.push(`installed base: ${before.panels} panel links, expected 5`);
+  // six panels since addition 0009zm (#312): breakdown, subscription, debt status, records, past due, unlinked
+  if (before.panels !== 6) problems.push(`installed base: ${before.panels} panel links, expected 6`);
   if (before.rows || before.breakdown) problems.push("installed base: records or a breakdown rendered before a panel was opened");
   if (before.links > 60) problems.push(`installed base: ${before.links} links in the default view, expected a light page (no breakdown filter links)`);
   const [value, name] = before.options[1] ?? ["", ""];
@@ -3714,7 +3715,9 @@ async function expectFiltersPending() {
         }
         if (f.busy !== null && f.end === null && !busy) f.end = performance.now();
       });
-      window.__busyWatch.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["aria-busy"] });
+      // childList too: a page keyed by the choice (the roster planner's grid by week and team, #295) replaces the busy row
+      // with a new one that is not busy, which no attribute change reports
+      window.__busyWatch.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-busy"] });
     }, [row, pick.at, provoke]);
     const held = path.replace(/\?.*$/, "");
     await p.route(`**${held}?**`, async (route) => { await new Promise((r) => setTimeout(r, HOLD_MS)); await route.continue().catch(() => undefined); });
