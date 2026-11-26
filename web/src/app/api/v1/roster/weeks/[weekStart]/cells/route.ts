@@ -29,6 +29,8 @@ export async function PUT(request: Request, { params }: Params) {
       dateParam(typeof b.date === "string" ? b.date : null, "date"), cellParam(b.cell), b.publishOthers === true,
     );
     if (answer.status === "confirm") return ok({ status: "confirm", otherChanges: answer.otherChanges });
+    // E5 (addition 0010a): the at-once publication refused while a shift dated today or later has no block; nothing written
+    if (answer.status === "refused") return ok({ status: "refused", emptyShifts: answer.emptyShifts }, 409);
     return ok(answer.entry ? { ...answer.entry, assignments: answer.assignments, endedAssignments: answer.endedAssignments, published: answer.published } : null);
   });
 }

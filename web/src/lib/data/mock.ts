@@ -12,7 +12,7 @@ import type {
   LiveBoardData, DataQualityReport,
   AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MessageStat, MessageTarget, MessagesWritten, MyMessage, MyMessages, MyProfile, MyRosterDay, SentMessage, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, AssignmentBlock, AssignmentBlockInput, AssignmentType, PublishedAssignment, RosterAssignment, RosterAssignmentsResult, RosterCellResult, RosterPlannedRow, RosterReportRow, RosterSlotCoverageRow, StandardWeekDay, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
   SkillInfo, SkillInput, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow,
-  TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday, HoursMarket,
+  TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday, HoursMarket, ActualStretch, MyDayBlock, MyDayPlan, MyHoursWeek, SwitchChoices, RosterPublishResult,
   CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadAttempt, SpeedToLeadDeals, SpeedToLeadFigures, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadView,
   AlertRule, LinkedAccount, MarketConfig, MarketHoliday, OfficeHours, SourceCallOutcome, SourceConnection, SourceDetail, SourceRead, SourceForm, SourceKind,
   SourceLine, SourcePipeline, SourceStore, SourceTag,
@@ -1577,6 +1577,9 @@ const MOCK_SETTINGS: TenantSetting[] = [
   { key: "roster.lunch_after_minutes", value: "360", isDefault: true },
   { key: "roster.lunch_type_code", value: "LB", isDefault: false },
   { key: "roster.planner_timezone", value: "Europe/Madrid", isDefault: false },
+  // the roster drives the day (addition 0010a): the notice at its default, the fallback as Pulse4all's (E3, E5)
+  { key: "roster.switch_notice_minutes", value: "5", isDefault: true },
+  { key: "roster.fallback_status", value: "back_office", isDefault: false },
   { key: "export.csv.date_format", value: "dd-mm-yyyy", isDefault: false },
   { key: "export.csv.decimal_mark", value: "comma", isDefault: false },
   { key: "export.csv.duration_format", value: "decimal_hours", isDefault: true },
@@ -1691,7 +1694,11 @@ type MockState = {
   ownPauses?: Map<Key, number>;
   /** The market an own day was last booked under (addition 0009zo), kept past its end for the next clock-in (D4) */
   ownLastMarket?: Map<Key, string | null>;
+  /** An own day's events with their assignment and market (addition 0010a), the source of My day's Actual lane */
+  ownEvents?: Map<Key, MockOwnEvent[]>;
 };
+/** An own day's event as cma.time_event holds it since 0010a: kind, assignment, status, market and source */
+type MockOwnEvent = { at: Instant; kind: "start" | "status" | "end"; code: string | null; statusKey: string | null; market: string | null; source: ActualStretch["source"] };
 const g = globalThis as unknown as { __cmaMock?: MockState };
 const state: MockState = (g.__cmaMock ??= {
   store: new Map(), teamStore: new Map(), teamSeeded: false, people: null, rosters: null, config: null,
@@ -1796,6 +1803,179 @@ function ownClockInMarket(me: Principal, before: DateKey): string | null {
     .filter(([k]) => k.startsWith(mine) && k.slice(mine.length) <= before)
     .sort(([a], [b]) => (a < b ? 1 : -1))[0];
   return ok(last?.[1] ?? null);
+}
+
+// ---- the roster drives the day in the mock (addition 0010a, brief B) ------------------------------------
+// Fixture logic shaped like cma.roster_plan_of, cma.clock_in_choice, cma.roster_switch_due and cma.my_day; the database
+// proves the real rules (255_verify_roster_drives_the_day.sql). The minute job is replayed on read: every boundary passed
+// since the day's last event is booked as the job would have, so an open My day shows the roster's switches.
+
+/** Today's plan of an own day: the person's published blocks, else a fixture day (09:00 to 17:30) for anyone whose time is kept */
+function mockPlanOf(me: Principal, date: DateKey): MyDayBlock[] {
+  const types = mockAssignmentTypes();
+  const markets = mockHoursMarkets(me).filter((m) => m.isActive).map((m) => m.code);
+  const own = ownClockInMarket(me, date) ?? markets[0] ?? null;
+  const other = markets.find((m) => m !== own) ?? own;
+  const found = publishedCellFor(me.userId, date);
+  const published = found?.entry?.kind === "shift" ? publishedBlocksOf(me, found.week, me.userId, date) : null;
+  const raw: { code: string | null; absenceKey?: string | null; start: string; end: string; market: string | null }[] = published && published.length > 0
+    ? published.map((b) => ({ code: b.code, absenceKey: b.absenceKey ?? null, start: b.start, end: b.end, market: b.hoursMarket }))
+    : found?.entry ? [] : [
+      { code: "MC", start: "09:00", end: "09:30", market: own }, { code: "SL", start: "09:30", end: "11:00", market: own },
+      { code: "SB", start: "11:00", end: "11:15", market: null }, { code: "GO", start: "11:15", end: "12:15", market: own },
+      { code: "GO", start: "12:15", end: "13:00", market: other }, { code: "LB", start: "13:00", end: "13:30", market: null },
+      { code: "GO", start: "13:30", end: "15:00", market: other }, { code: "SL", start: "15:00", end: "17:30", market: own },
+    ];
+  const absences = state.config?.absences ?? MOCK_ABSENCES;
+  return raw.map((b) => {
+    const t = b.code ? types.find((x) => x.code === b.code) : undefined;
+    const absence = b.absenceKey ? absences.find((a) => a.key === b.absenceKey) : undefined;
+    const kind: MyDayBlock["kind"] = absence || b.absenceKey ? "absence" : t?.kind ?? "work";
+    return {
+      code: kind === "absence" ? null : b.code, name: absence?.name ?? t?.name ?? b.code ?? "", kind, isExtra: t?.isExtra ?? false,
+      workArea: t?.workArea ?? null, absenceKey: b.absenceKey ?? null, market: kind === "work" ? b.market : null, start: b.start, end: b.end,
+      startAt: new Date(localMs(date, b.start, me.timeZone)).toISOString(), endAt: new Date(localMs(date, b.end, me.timeZone)).toISOString(),
+    };
+  });
+}
+
+/** E5's start status: roster.fallback_status when it is an active working status, else the default status */
+function mockStartStatus(): WorkStatus {
+  return MOCK_STATUSES.find((s) => s.key === mockSetting("roster.fallback_status") && s.isWorking) ?? DEFAULT_STATUS;
+}
+
+/** What a block books (E1): the type's status and its market (a pause none); an extra type the working status in force */
+function mockBooking(block: MyDayBlock, inForce: string | null): { code: string; statusKey: string; market: string | null } | null {
+  const t = mockAssignmentTypes().find((x) => x.code === block.code);
+  if (!t || block.kind === "absence") return null;
+  if (t.kind === "pause") return t.statusKey ? { code: t.code, statusKey: t.statusKey, market: null } : null;
+  if (!block.market) return null;
+  const working = MOCK_STATUSES.find((s) => s.key === inForce && s.isWorking);
+  const statusKey = t.isExtra ? working?.key ?? mockStartStatus().key : t.statusKey;
+  return statusKey ? { code: t.code, statusKey, market: block.market } : null;
+}
+
+/** E4: the block of the moment (not an absence), before the first block the first, after the last the last */
+function mockClockInBlock(plan: MyDayBlock[], at: Instant): MyDayBlock | null {
+  const ms = Date.parse(at);
+  const work = plan.filter((b) => b.kind !== "absence");
+  return work.find((b) => Date.parse(b.startAt) <= ms && ms < Date.parse(b.endAt))
+    ?? work.find((b) => Date.parse(b.startAt) > ms) ?? work[work.length - 1] ?? null;
+}
+
+/** Books an own status event (the mock's one write path for Switch, Clock in and the roster) on the stored day */
+function mockBookOwn(k: Key, current: Workday, ev: MockOwnEvent): Workday {
+  const status = MOCK_STATUSES.find((s) => s.key === ev.statusKey) ?? DEFAULT_STATUS;
+  closePause(k, current, ev.at);
+  const closed = closeStretch(current, ev.at);
+  const updated: Workday = {
+    ...current, statusKey: status.key, statusName: status.name, statusSince: ev.at,
+    clock: { closedSeconds: closed.closedSeconds, runningSince: status.isWorking ? ev.at : null }, hoursMarket: ev.market,
+  };
+  store.set(k, updated);
+  (state.ownEvents ??= new Map()).set(k, [...(state.ownEvents.get(k) ?? []), ev]);
+  (state.ownLastMarket ??= new Map()).set(k, ev.market);
+  return updated;
+}
+
+/** The minute job replayed on read (E2, E8, E9): every block start passed since the day's last event, in order */
+function mockRosterSwitch(me: Principal, date: DateKey, now: Instant): void {
+  const k = key(me, date);
+  const plan = mockPlanOf(me, date);
+  for (const b of plan) {
+    const current = store.get(k);
+    if (!current || current.status !== "working") return;
+    const at = b.startAt;
+    if (Date.parse(at) > Date.parse(now)) return;
+    if (Date.parse(now) >= Date.parse(b.endAt)) continue;   // past this block: the job ran at its start
+    const events = state.ownEvents?.get(k) ?? [];
+    if (events.some((e) => Date.parse(e.at) >= Date.parse(at))) continue;
+    if (b.kind === "absence") {
+      closePause(k, current, at);
+      store.set(k, { ...current, status: "ended", endedAt: at, statusKey: null, statusName: null, statusSince: null, clock: closeStretch(current, at), hoursMarket: null });
+      state.ownEvents!.set(k, [...events, { at, kind: "end", code: null, statusKey: null, market: null, source: "roster" }]);
+      return;
+    }
+    const last = events[events.length - 1];
+    const booking = mockBooking(b, current.statusKey);
+    if (!booking || (last && last.code === booking.code && last.statusKey === booking.statusKey && last.market === booking.market)) continue;
+    mockBookOwn(k, current, { at, kind: "status", ...booking, source: "roster" });
+  }
+}
+
+/** An own day's events: its recorded ones, or for a seeded past day its fixture plan between its start and its end */
+function mockEventsOf(me: Principal, w: Workday): MockOwnEvent[] {
+  const k = key(me, w.date);
+  const recorded = state.ownEvents?.get(k);
+  if (recorded && recorded.length > 0) return recorded;
+  const plan = mockPlanOf(me, w.date).filter((b) => b.kind !== "absence" && Date.parse(b.endAt) > Date.parse(w.startedAt));
+  const out: MockOwnEvent[] = [];
+  for (const b of plan) {
+    const booking = mockBooking(b, out[out.length - 1]?.statusKey ?? null);
+    if (!booking) continue;
+    const at = out.length === 0 ? w.startedAt : b.startAt;
+    if (w.endedAt && Date.parse(at) >= Date.parse(w.endedAt)) break;
+    out.push({ at, kind: out.length === 0 ? "start" : "status", ...booking, source: out.length === 0 ? "user" : "roster" });
+  }
+  if (out.length === 0) out.push({ at: w.startedAt, kind: "start", code: null, statusKey: DEFAULT_STATUS.key, market: null, source: "user" });
+  if (w.endedAt) out.push({ at: w.endedAt, kind: "end", code: null, statusKey: null, market: null, source: "user" });
+  return out;
+}
+
+/** The Actual lane of an own day (cma.workday_actual_of): its stretches with their deviation from the block in force */
+function mockActualOf(me: Principal, w: Workday, plan: MyDayBlock[], now: Instant): ActualStretch[] {
+  const events = mockEventsOf(me, w);
+  const types = mockAssignmentTypes();
+  const out: ActualStretch[] = [];
+  events.forEach((e, i) => {
+    if (e.kind === "end") return;
+    const next = events[i + 1];
+    const status = MOCK_STATUSES.find((s) => s.key === e.statusKey) ?? DEFAULT_STATUS;
+    const t = e.code ? types.find((x) => x.code === e.code) : undefined;
+    const p = plan.find((b) => b.kind !== "absence" && Date.parse(b.startAt) <= Date.parse(e.at) && Date.parse(e.at) < Date.parse(b.endAt));
+    out.push({
+      code: e.code, name: t?.name ?? status.name, statusKey: status.key, statusName: status.name,
+      kind: t ? t.kind : status.isWorking ? "other" : "pause", isWorking: status.isWorking, workArea: t?.workArea ?? status.workArea,
+      market: e.market, fromAt: e.at, toAt: next ? next.at : null, open: !next, source: e.source,
+      deviates: !!p && (p.code !== e.code || p.market !== e.market),
+    });
+  });
+  if (out.length > 0 && out[out.length - 1]!.open && w.status === "ended") out[out.length - 1]!.open = false;
+  void now;
+  return out;
+}
+
+/** cma.clock_in_choice in the mock (E4, E5): the block of the moment, else the start status under D4's market */
+function mockClockInChoice(me: Principal, date: DateKey, at: Instant, againMarket: string | null = null): { code: string | null; statusKey: string; market: string | null } {
+  const b = mockClockInBlock(mockPlanOf(me, date), at);
+  const booking = b ? mockBooking(b, null) : null;
+  if (booking) return booking;
+  return { code: null, statusKey: mockStartStatus().key, market: againMarket ?? ownClockInMarket(me, date) };
+}
+
+/** The mock keeps an absence block (E9) under "@key" in its block lists; the API answers code null and the absence's key */
+function absenceCodeOf(key: string): string {
+  return `@${key}`;
+}
+function absenceKeyOfCode(code: string | null): string | null {
+  return code && code.startsWith("@") ? code.slice(1) : null;
+}
+function mockBlockOut(b: { assignmentId: string; code: string | null; start: string; end: string; hoursMarket: string | null; note: string | null }): AssignmentBlock {
+  const absence = absenceKeyOfCode(b.code);
+  return { assignmentId: b.assignmentId, code: absence === null ? b.code : null, absence, start: b.start, end: b.end, hoursMarket: b.hoursMarket, note: b.note };
+}
+
+/** The Switch panel's choices (E6) as cma.my_day lists them */
+function mockSwitchChoices(me: Principal, date: DateKey): SwitchChoices {
+  const types = mockAssignmentTypes().filter((t) => t.isActive).sort((a, b) => a.sortOrder - b.sortOrder || (a.code < b.code ? -1 : 1));
+  const booked = new Set(types.map((t) => t.statusKey).filter(Boolean));
+  return {
+    work: types.filter((t) => t.kind === "work").map((t) => ({ code: t.code, name: t.name, workArea: t.workArea, isExtra: t.isExtra })),
+    pause: types.filter((t) => t.kind === "pause").map((t) => ({ code: t.code, name: t.name })),
+    other: MOCK_STATUSES.filter((s) => s.isWorking && !booked.has(s.key)).map((s) => ({ key: s.key, name: s.name, workArea: s.workArea })),
+    hoursMarkets: mockHoursMarkets(me).filter((m) => m.isActive).map((m) => ({ code: m.code, name: m.name })),
+    defaultMarket: ownClockInMarket(me, date),
+  };
 }
 
 /** A fortnight of fictional history so the hours screen has something to show */
@@ -2248,6 +2428,9 @@ function editable(me: Principal, userId: string): DirectoryPerson {
 // as published, so the agent keeps seeing the publication while the planner edits (as the
 // versioned entries of 0005 give it). Dates follow the current week, as the dev fixture does.
 
+/** A block as the mock keeps it: the type's code, or "@key" for an absence block (addition 0010a, E9) */
+type MockBlock = { assignmentId: string; code: string; start: string; end: string; hoursMarket: string | null; note: string | null };
+
 type MockRosterWeek = {
   teamKey: string | null;
   weekStart: DateKey;
@@ -2258,9 +2441,9 @@ type MockRosterWeek = {
   cells: Map<string, RosterEntry>;
   /** The cells as of the last publish; null for a draft */
   published: Map<string, RosterEntry> | null;
-  /** `${userId}:${date}` -> current blocks (addition 0009zx), and as of the last publish */
-  blocks: Map<string, AssignmentBlock[]>;
-  publishedBlocks: Map<string, AssignmentBlock[]> | null;
+  /** `${userId}:${date}` -> current blocks (addition 0009zx), and as of the last publish; an absence block under "@key" (0010a) */
+  blocks: Map<string, MockBlock[]>;
+  publishedBlocks: Map<string, MockBlock[]> | null;
   /** Person-dates written since the last publish (D8's count of other changes) */
   changed: Set<string>;
 };
@@ -2325,6 +2508,7 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "export.csv.separator": "comma", "export.csv.decimal_mark": "point", "export.csv.date_format": "yyyy-mm-dd",
   "export.csv.duration_format": "decimal_hours", "export.csv.utf8_bom": "true", "roster.adherence_tolerance_minutes": "5",
   "roster.slot_minutes": "15", "roster.lunch_after_minutes": "360", "roster.lunch_type_code": "", "roster.planner_timezone": "",
+  "roster.switch_notice_minutes": "5", "roster.fallback_status": "",
   "workday.auto_close_grace_minutes": "120", "telephony.connected_min_seconds": "0",
   "auth.invitation_valid_days": "7", "auth.invitation_email_domains": "",
   "reports.cancellation_kind": "", "speed_to_lead.target_minutes": "60", "speed_to_lead.next_day_cutoff": "12:00", "speed_to_lead.goal_within_target_pct": "", "speed_to_lead.goal_before_cutoff_pct": "", "speed_to_lead.stale_business_days": "2", "tickets.sla_minutes": "240", "tickets.sla_warning_pct": "75", "leads.age_buckets_business_days": "1,2,5", "tasks.callback_window_minutes": "240",
@@ -2457,6 +2641,12 @@ function publishedBlocksOf(me: Principal, w: MockRosterWeek, userId: string, dat
   const own = seedPeople().get(userId)?.defaultHoursMarket ?? null;
   const zones = new Map(seedIntakeConfig(me).markets.map((m) => [m.code, m.timeZone]));
   return (w.publishedBlocks?.get(`${userId}:${date}`) ?? []).map((b) => {
+    const absenceKey = absenceKeyOfCode(b.code);
+    if (absenceKey !== null) {
+      const a = (state.config?.absences ?? MOCK_ABSENCES).find((x) => x.key === absenceKey);
+      return { code: null, name: a?.name ?? absenceKey, kind: "absence" as const, absenceKey, workArea: null, isExtra: false, start: b.start, end: b.end,
+        hoursMarket: null, ownMarket: false, hoursMarketZone: null };
+    }
     const t = mockAssignmentTypes().find((x) => x.code === b.code);
     // a pause has no hours market (0009zz)
     const pause = t?.kind === "pause";
@@ -3382,25 +3572,27 @@ export const mockData: CmaData = {
       // Clock in again (0008zp): the rule of cma.workday_can_clock_in_again, then a new session in the
       // default status; startedAt stays the first session's start. Any other day comes back unchanged
       if (ownDay(me, existing, now).canClockInAgain) {
+        // A later session starts on the block of that moment too (E4); a day without a plan continues under its own
+        // market (Martin, 23 November 2026), else D4's order
+        const own = state.ownLastMarket?.get(k) ?? null;
+        const ownMarket = own ? seedIntakeConfig(me).markets.find((x) => x.code === own)?.hoursMarketCode ?? null : null;
+        const choice = mockClockInChoice(me, date, now, ownMarket);
+        const status = MOCK_STATUSES.find((s) => s.key === choice.statusKey) ?? DEFAULT_STATUS;
         const again: Workday = {
           ...existing,
           status: "working",
           endedAt: null,
-          statusKey: DEFAULT_STATUS.key,
-          statusName: DEFAULT_STATUS.name,
+          statusKey: status.key,
+          statusName: status.name,
           statusSince: now,
-          clock: { closedSeconds: existing.clock.closedSeconds, runningSince: DEFAULT_STATUS.isWorking ? now : null },
+          clock: { closedSeconds: existing.clock.closedSeconds, runningSince: status.isWorking ? now : null },
           sessions: existing.sessions + 1,
           sessionStartedAt: now,
-          // Clocking in again continues the day under its own market (Martin, 23 November 2026), else D4's order
-          hoursMarket: (() => {
-            const own = state.ownLastMarket?.get(k) ?? null;
-            const m = own ? seedIntakeConfig(me).markets.find((x) => x.code === own) : undefined;
-            return m ? m.hoursMarketCode : ownClockInMarket(me, date);
-          })(),
+          hoursMarket: choice.market,
         };
         store.set(k, again);
         state.ownLastMarket!.set(k, again.hoursMarket);
+        (state.ownEvents ??= new Map()).set(k, [...(state.ownEvents.get(k) ?? []), { at: now, kind: "start", ...choice, source: "user" }]);
         return ownDay(me, again, now);
       }
       return ownDay(me, existing, now);
@@ -3412,24 +3604,28 @@ export const mockData: CmaData = {
       throw new CmaDbError("CMA04", `the workday starts at ${MOCK_WINDOW.start}`);
     }
     seedHistory(me, date);
+    // E4, E5 (addition 0010a): the block of the moment with its market, else the start status under D4's market
+    const choice = mockClockInChoice(me, date, now);
+    const startStatus = MOCK_STATUSES.find((s) => s.key === choice.statusKey) ?? DEFAULT_STATUS;
     const fresh: Workday = {
       date,
       status: "working",
       startedAt: now,
       endedAt: null,
-      statusKey: DEFAULT_STATUS.key,
-      statusName: DEFAULT_STATUS.name,
+      statusKey: startStatus.key,
+      statusName: startStatus.name,
       statusSince: now,
-      clock: { closedSeconds: 0, runningSince: DEFAULT_STATUS.isWorking ? now : null },
+      clock: { closedSeconds: 0, runningSince: startStatus.isWorking ? now : null },
       dayEndsAt: new Date(dayEndMs(date, me.timeZone)).toISOString(),
       sessions: 1,
       sessionStartedAt: now,
       clockInAgain: false,
       canClockInAgain: false,
-      hoursMarket: ownClockInMarket(me, date),
+      hoursMarket: choice.market,
     };
     store.set(k, fresh);
     (state.ownLastMarket ??= new Map()).set(k, fresh.hoursMarket);
+    (state.ownEvents ??= new Map()).set(k, [{ at: now, kind: "start", ...choice, source: "user" }]);
     return ownDay(me, fresh, now);
   },
 
@@ -3458,6 +3654,9 @@ export const mockData: CmaData = {
       hoursMarket: null,
     };
     store.set(key(me, date), ended);
+    if (state.ownEvents?.has(key(me, date))) {
+      state.ownEvents.set(key(me, date), [...state.ownEvents.get(key(me, date))!, { at: now, kind: "end", code: null, statusKey: null, market: null, source: "user" }]);
+    }
     return ownDay(me, ended, now);
   },
 
@@ -3471,32 +3670,136 @@ export const mockData: CmaData = {
 
   async setStatus(me, change, now) {
     const date = dateKeyInZone(now, me.timeZone);
-    const current = store.get(key(me, date));
-    // Same contract as cma.set_status (addition 0009zo): CMA04 neither, CMA02 no day or unknown key, CMA03 ended day,
-    // CMA02 or CMA04 for a market that is no active hours market of the tenant
-    if (change.key === null && change.hoursMarket === null) throw new CmaDbError("CMA04", "a change needs a status, a market or both");
+    const k = key(me, date);
+    mockRosterSwitch(me, date, now);
+    const current = store.get(k);
+    // Same contract as cma.set_status (additions 0009zo and 0010a): CMA04 nothing asked or an assignment with a status,
+    // CMA02 no day, unknown key or type, CMA03 ended day, CMA02 or CMA04 for a market that is no active hours market,
+    // CMA04 a pause or an Other status with a market, a work assignment without any market
+    const assignment = change.assignment ?? null;
+    if (change.key === null && change.hoursMarket === null && assignment === null) throw new CmaDbError("CMA04", "a change needs an assignment, a status, a market or a combination");
+    if (assignment !== null && change.key !== null) throw new CmaDbError("CMA04", "an assignment books its own status");
     if (!current) throw new CmaDbError("CMA02", "no workday today");
     if (current.status === "ended") throw new CmaDbError("CMA03", "workday already ended");
+    const types = mockAssignmentTypes();
+    const events = state.ownEvents?.get(k) ?? [];
+    const inForce = events.filter((e) => e.kind !== "end").at(-1) ?? null;
+    let code: string | null = assignment;
+    if (code === null && change.key === null && inForce?.code) {
+      // a market alone on an assignment: the assignment in force booked again under it
+      code = inForce.code;
+    }
+    if (code !== null) {
+      const t = types.find((x) => x.code === code!.toUpperCase() && x.isActive);
+      if (!t) throw new CmaDbError("CMA02", `assignment type ${code} is not in use`);
+      if (t.kind === "pause" && change.hoursMarket !== null) throw new CmaDbError("CMA04", `assignment ${t.code} is a pause, and a pause has no hours market`);
+      const market = t.kind === "pause" ? null : change.hoursMarket !== null ? assertMockHoursMarket(me, change.hoursMarket) : ownClockInMarket(me, date);
+      if (t.kind === "work" && market === null) throw new CmaDbError("CMA04", `assignment ${t.code} is booked under an hours market: choose one`);
+      const working = MOCK_STATUSES.find((s) => s.key === current.statusKey && s.isWorking);
+      const statusKey = t.isExtra ? working?.key ?? mockStartStatus().key : t.statusKey!;
+      if (inForce && inForce.code === t.code && inForce.statusKey === statusKey && inForce.market === market) return ownDay(me, current, now);
+      return ownDay(me, mockBookOwn(k, current, { at: now, kind: "status", code: t.code, statusKey, market, source: "user" }), now);
+    }
     const next = MOCK_STATUSES.find((s) => s.key === (change.key ?? current.statusKey));
     if (!next) throw new CmaDbError("CMA02", "unknown work status");
+    const usesTypes = types.some((t) => t.isActive);
+    const other = usesTypes && (!next.isWorking || !types.some((t) => t.isActive && t.statusKey === next.key));
+    if (other && change.hoursMarket !== null) throw new CmaDbError("CMA04", `${next.name} has no hours market`);
     // A kept market books as it books now (the tenant may have mapped it elsewhere since)
     const kept = current.hoursMarket ? seedIntakeConfig(me).markets.find((m) => m.code === current.hoursMarket)?.hoursMarketCode ?? null : null;
-    const market = change.hoursMarket === null ? kept : assertMockHoursMarket(me, change.hoursMarket);
-    // A market change alone to the market in force books nothing
+    const market = other ? null : change.hoursMarket === null ? kept : assertMockHoursMarket(me, change.hoursMarket);
+    // A market change alone to the market in force books nothing; the same Other status again neither
     if (change.key === null && market === current.hoursMarket) return ownDay(me, current, now);
-    closePause(key(me, date), current, now);
-    const closed = closeStretch(current, now);
-    const updated: Workday = {
-      ...current,
-      statusKey: next.key,
-      statusName: next.name,
-      statusSince: now,
-      clock: { closedSeconds: closed.closedSeconds, runningSince: next.isWorking ? now : null },
-      hoursMarket: market,
+    if (other && inForce && inForce.code === null && inForce.statusKey === next.key) return ownDay(me, current, now);
+    return ownDay(me, mockBookOwn(k, current, { at: now, kind: "status", code: null, statusKey: next.key, market, source: "user" }), now);
+  },
+
+  async getMyDay(me, date) {
+    if (!me.permissions.includes("workday.own")) throw new CmaDbError("CMA06", "not permitted");
+    seedHistory(me, dateKeyInZone(new Date(), me.timeZone));
+    const now = new Date().toISOString();
+    const isToday = date === dateKeyInZone(now, me.timeZone);
+    if (isToday) mockRosterSwitch(me, date, now);
+    const w = store.get(key(me, date)) ?? null;
+    const plan = mockPlanOf(me, date);
+    const found = publishedCellFor(me.userId, date);
+    const ms = Date.parse(now);
+    const planNow = isToday ? plan.find((b) => Date.parse(b.startAt) <= ms && ms < Date.parse(b.endAt)) ?? null : null;
+    const planNext = isToday ? plan.find((b) => Date.parse(b.startAt) > ms) ?? null : null;
+    const actual = w ? mockActualOf(me, w, plan, now) : [];
+    const last = w?.status === "working" ? actual.at(-1) ?? null : null;
+    const minutes = Number(mockSetting("roster.switch_notice_minutes")) || 0;
+    const notice = last && last.source === "roster" && ms - Date.parse(last.fromAt) < minutes * 60_000
+      ? { at: last.fromAt, code: last.code, name: last.name, kind: last.kind === "other" ? null : last.kind, market: last.market, until: new Date(Date.parse(last.fromAt) + minutes * 60_000).toISOString() }
+      : null;
+    const offPlan = last && planNow && planNow.kind !== "absence" && (planNow.code !== last.code || planNow.market !== last.market)
+      ? { code: planNow.code, name: planNow.name, kind: planNow.kind as "work" | "pause", market: planNow.market, since: planNow.startAt,
+          nextAt: planNext?.startAt ?? null, nextCode: planNext?.code ?? null, nextName: planNext?.name ?? null, nextKind: planNext?.kind ?? null, nextMarket: planNext?.market ?? null }
+      : null;
+    const shiftEntry = found?.entry ?? null;
+    const myDay: MyDayPlan = {
+      date, timeZone: me.timeZone, isToday,
+      shift: shiftEntry
+        ? { kind: shiftEntry.kind, start: shiftEntry.start?.slice(0, 5) ?? "", end: shiftEntry.end?.slice(0, 5) ?? "",
+            startAt: shiftEntry.start ? new Date(localMs(date, shiftEntry.start.slice(0, 5), me.timeZone)).toISOString() : null,
+            endAt: shiftEntry.end ? new Date(localMs(date, shiftEntry.end.slice(0, 5), me.timeZone)).toISOString() : null, absenceName: shiftEntry.absenceName }
+        : plan.length > 0 ? { kind: "shift", start: plan[0]!.start, end: plan.at(-1)!.end, startAt: plan[0]!.startAt, endAt: plan.at(-1)!.endAt, absenceName: null } : null,
+      plan, actual,
+      marks: actual.filter((a) => a.source === "user" && a.deviates && a !== actual[0]).map((a) => {
+        const p = plan.find((b) => b.kind !== "absence" && Date.parse(b.startAt) <= Date.parse(a.fromAt) && Date.parse(a.fromAt) < Date.parse(b.endAt));
+        return { at: a.fromAt, code: a.code, statusName: a.statusName, market: a.market, plannedCode: p?.code ?? null, plannedMarket: p?.market ?? null };
+      }),
+      current: last ? { code: last.code, name: last.name, kind: last.kind, statusKey: last.statusKey, statusName: last.statusName, workArea: last.workArea,
+        market: last.market, since: last.fromAt, source: last.source } : null,
+      planNow, planNext, notice, offPlan,
+      usesAssignments: mockAssignmentTypes().some((t) => t.isActive),
+      choices: mockSwitchChoices(me, date),
     };
-    store.set(key(me, date), updated);
-    (state.ownLastMarket ??= new Map()).set(key(me, date), market);
-    return ownDay(me, updated, now);
+    return { workday: w ? ownDay(me, w, now) : null, plan: myDay };
+  },
+
+  async getMyHoursWeek(me, weekStart) {
+    if (!me.permissions.includes("workday.own")) throw new CmaDbError("CMA06", "not permitted");
+    const today = dateKeyInZone(new Date(), me.timeZone);
+    seedHistory(me, today);
+    const now = new Date().toISOString();
+    if (weekStart <= today && today <= addDays(weekStart, 6)) mockRosterSwitch(me, today, now);
+    const rows = new Map<string, MyHoursWeek["rows"][number]>();
+    const pauses = new Map<string, MyHoursWeek["pauses"][number]>();
+    let worked = 0;
+    let planned = 0;
+    const days: MyHoursWeek["days"] = [];
+    for (let i = 0; i < 7; i++) {
+      const date = addDays(weekStart, i);
+      const w = store.get(key(me, date));
+      const plan = date <= today ? mockPlanOf(me, date) : [];
+      planned += plan.filter((b) => b.kind === "work").reduce((n, b) => n + (Date.parse(b.endAt) - Date.parse(b.startAt)) / 60_000, 0);
+      const actual = w ? mockActualOf(me, w, plan, now) : [];
+      const segments = actual.map((a) => {
+        const to = a.toAt ?? (w?.status === "working" ? now : w?.endedAt ?? now);
+        const seconds = Math.max(0, Math.floor((Date.parse(to) - Date.parse(a.fromAt)) / 1000));
+        return { code: a.code, name: a.name, statusName: a.statusName, kind: a.kind, isWorking: a.isWorking, workArea: a.workArea, market: a.market, fromAt: a.fromAt, toAt: to, seconds };
+      });
+      const split = new Map<string, MyHoursWeek["days"][number]["split"][number]>();
+      let dayWorked = 0;
+      for (const g of segments) {
+        const label = g.code ?? g.name;
+        if (g.isWorking) {
+          dayWorked += g.seconds;
+          const k = `${label}/${g.market ?? ""}`;
+          split.set(k, { code: g.code, name: label, market: g.market, seconds: (split.get(k)?.seconds ?? 0) + g.seconds });
+          rows.set(k, { code: g.code, name: g.name, workArea: g.workArea, market: g.market, seconds: (rows.get(k)?.seconds ?? 0) + g.seconds });
+        } else {
+          pauses.set(label, { code: g.code, name: g.name, seconds: (pauses.get(label)?.seconds ?? 0) + g.seconds });
+        }
+      }
+      worked += dayWorked;
+      days.push({ date, isToday: date === today, hasTime: segments.length > 0, workedSeconds: dayWorked, segments, split: [...split.values()] });
+    }
+    return {
+      weekStart, today, timeZone: me.timeZone, workedSeconds: worked, plannedMinutes: Math.round(planned),
+      rows: [...rows.values()].sort((a, b) => b.seconds - a.seconds), pauses: [...pauses.values()].sort((a, b) => b.seconds - a.seconds), days,
+    };
   },
 
   async getHours(me, range) {
@@ -3934,10 +4237,19 @@ export const mockData: CmaData = {
         const [userId, date] = k.split(":") as [string, DateKey];
         if (!people.some((p) => p.userId === userId)) return [];
         return list.map((b): RosterAssignment => {
+          const absenceKey = absenceKeyOfCode(b.code);
+          if (absenceKey !== null) {
+            const a = (state.config?.absences ?? MOCK_ABSENCES).find((x) => x.key === absenceKey);
+            return {
+              assignmentId: b.assignmentId, userId, date, code: "", name: a?.name ?? absenceKey, kind: "absence", workArea: null, isExtra: false,
+              start: `${b.start}:00`, end: `${b.end}:00`, hoursMarket: null, note: b.note, recordedAt: new Date().toISOString(), absenceKey, absenceName: a?.name ?? absenceKey,
+            };
+          }
           const t = mockAssignmentTypes().find((x) => x.code === b.code);
           return {
             assignmentId: b.assignmentId, userId, date, code: b.code, name: t?.name ?? b.code, kind: t?.kind ?? "work", workArea: t?.workArea ?? null,
             isExtra: t?.isExtra ?? false, start: `${b.start}:00`, end: `${b.end}:00`, hoursMarket: b.hoursMarket, note: b.note, recordedAt: new Date().toISOString(),
+            absenceKey: null, absenceName: null,
           };
         });
       }),
@@ -4253,6 +4565,8 @@ export const mockData: CmaData = {
     const others = [...w.changed].filter((x) => x !== k).length;
     if (today && others > 0 && !publishOthers) return { status: "confirm", otherChanges: others };
     const entry = mockEntry(userId, date, cell, me.displayName);
+    // what a refused at-once publication puts back (E5: the database's transaction writes nothing)
+    const undo = { cell: w.cells.get(k), blocks: w.blocks.get(k), changed: w.changed.has(k) };
     if (entry) w.cells.set(k, entry);
     else w.cells.delete(k);
     w.changed.add(k);
@@ -4260,8 +4574,22 @@ export const mockData: CmaData = {
     const before = w.blocks.get(k) ?? [];
     const kept = cell.kind === "shift" ? before.filter((b) => b.start >= cell.start && b.end <= cell.end) : [];
     w.blocks.set(k, kept);
-    if (today) await mockData.publishRoster(me, weekStart, teamKey);
-    return { status: "saved", entry, assignments: kept.map((b) => ({ ...b })), endedAssignments: before.length - kept.length, published: today };
+    // E5 (addition 0010a): a shift of today without a block waits for its blocks, which publish it at once
+    if (today && cell.kind === "shift" && kept.length === 0 && mockAssignmentTypes().some((t) => t.isActive)) {
+      return { status: "saved", entry, assignments: [], endedAssignments: before.length, published: false, waiting: "no_assignments" };
+    }
+    let published = today;
+    if (today) {
+      const r = await mockData.publishRoster(me, weekStart, teamKey);
+      if (r.status === "refused") {
+        if (undo.cell) w.cells.set(k, undo.cell); else w.cells.delete(k);
+        if (undo.blocks) w.blocks.set(k, undo.blocks); else w.blocks.delete(k);
+        if (!undo.changed) w.changed.delete(k);
+        return { status: "refused", emptyShifts: r.emptyShifts };
+      }
+      published = true;
+    }
+    return { status: "saved", entry, assignments: kept.map(mockBlockOut), endedAssignments: before.length - kept.length, published };
   },
 
   async setRosterAssignments(me, weekStart, teamKey, userId, date, input, publishOthers): Promise<RosterAssignmentsResult> {
@@ -4279,19 +4607,39 @@ export const mockData: CmaData = {
     const slot = Number(mockSetting("roster.slot_minutes")) || 15;
     const min = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
     const sorted = [...input].sort((a, b) => min(a.start) - min(b.start));
+    const defaultMarket = (() => {
+      const m = person.defaultHoursMarket ? seedIntakeConfig(me).markets.find((x) => x.code === person.defaultHoursMarket) : undefined;
+      return m && m.isActive && m.hoursMarketCode === m.code ? m.code : null;
+    })();
+    const absences = state.config?.absences ?? MOCK_ABSENCES;
     for (const [i, b] of sorted.entries()) {
-      const t = mockAssignmentTypes().find((x) => x.code === b.code);
-      if (!t) throw new CmaDbError("CMA02", `assignment type ${b.code} does not exist`);
       if (min(b.end) <= min(b.start) || min(b.start) % slot !== 0 || min(b.end) % slot !== 0) throw new CmaDbError("CMA04", "a block starts and ends on the grid");
       if (shift && (b.start < shift.start!.slice(0, 5) || b.end > shift.end!.slice(0, 5))) throw new CmaDbError("CMA04", "the block lies outside the shift");
       if (i > 0 && min(sorted[i - 1]!.end) > min(b.start)) throw new CmaDbError("CMA04", "the blocks overlap");
+      if (b.absence) {
+        // E9: an absence block, never an assignment as well, never under a market
+        if (b.code) throw new CmaDbError("CMA04", "a block is either an assignment or an absence, not both");
+        if (!absences.some((a) => a.key === b.absence && a.isActive)) throw new CmaDbError("CMA02", `absence type ${b.absence} does not exist`);
+        if (b.hoursMarket) throw new CmaDbError("CMA04", "an absence block has no hours market");
+        continue;
+      }
+      const t = mockAssignmentTypes().find((x) => x.code === b.code);
+      if (!t) throw new CmaDbError("CMA02", `assignment type ${b.code} does not exist`);
       if (b.hoursMarket && t.kind === "pause") {
         throw new CmaDbError("CMA04", `assignment type ${t.code} is a pause, and a pause has no hours market: plan ${t.code} without one, not ${t.code}-${b.hoursMarket}`);
       }
       if (b.hoursMarket) assertMockHoursMarket(me, b.hoursMarket);
+      // E10: a work block names its market; without one it takes the person's Default market
+      if (t.kind === "work" && !b.hoursMarket && !defaultMarket) throw new CmaDbError("CMA04", `assignment ${t.code} needs an hours market: this person has no Default market, so choose one`);
+    }
+    // the stored shape: an absence under "@key", a work block's market written in (E10)
+    for (const b of sorted) {
+      const t = b.absence ? undefined : mockAssignmentTypes().find((x) => x.code === b.code);
+      if (b.absence) Object.assign(b, { code: absenceCodeOf(b.absence), hoursMarket: null });
+      else if (t?.kind === "work" && !b.hoursMarket) b.hoursMarket = defaultMarket;
     }
     const before = w.blocks.get(k) ?? [];
-    const same = (a: AssignmentBlockInput, b: AssignmentBlock) => a.code === b.code && a.start === b.start && a.end === b.end && (a.hoursMarket ?? null) === b.hoursMarket && (a.note ?? null) === b.note;
+    const same = (a: AssignmentBlockInput, b: MockBlock) => a.code === b.code && a.start === b.start && a.end === b.end && (a.hoursMarket ?? null) === b.hoursMarket && (a.note ?? null) === b.note;
     const kept = before.filter((b) => sorted.some((a) => same(a, b)));
     const added = sorted.filter((a) => !before.some((b) => same(a, b)));
     const ended = before.length - kept.length;
@@ -4304,10 +4652,18 @@ export const mockData: CmaData = {
     }
     const next = [...kept, ...added.map((a) => ({ assignmentId: crypto.randomUUID(), code: a.code, start: a.start, end: a.end, hoursMarket: a.hoursMarket ?? null, note: a.note ?? null }))]
       .sort((a, b) => min(a.start) - min(b.start));
+    const undo = { blocks: w.blocks.get(k), changed: w.changed.has(k) };
     w.blocks.set(k, next);
     if (changes) w.changed.add(k);
-    if (published) await mockData.publishRoster(me, weekStart, teamKey);
-    return { status: "saved", kept: kept.length, ended, added: added.length, published, version: w.version, blocks: next.map((b) => ({ ...b })) };
+    if (published) {
+      const r = await mockData.publishRoster(me, weekStart, teamKey);
+      if (r.status === "refused") {
+        if (undo.blocks) w.blocks.set(k, undo.blocks); else w.blocks.delete(k);
+        if (!undo.changed) w.changed.delete(k);
+        return { status: "refused", emptyShifts: r.emptyShifts };
+      }
+    }
+    return { status: "saved", kept: kept.length, ended, added: added.length, published, version: w.version, blocks: next.map(mockBlockOut) };
   },
 
   async getRosterSlotCoverage(me, date, teamKey): Promise<RosterSlotCoverageRow[]> {
@@ -4323,7 +4679,7 @@ export const mockData: CmaData = {
         const [userId, d] = k.split(":");
         if (d !== date) continue;
         for (const b of list) {
-          if (min(b.start) > s || s >= min(b.end)) continue;
+          if (min(b.start) > s || s >= min(b.end) || absenceKeyOfCode(b.code) !== null) continue;   // an absence is no figure (E9)
           const pause = mockAssignmentTypes().find((x) => x.code === b.code)?.kind === "pause";
           const market = pause ? null : b.hoursMarket ?? seedPeople().get(userId!)?.defaultHoursMarket ?? null;
           const key = `${b.code}/${market ?? ""}`;
@@ -4448,16 +4804,25 @@ export const mockData: CmaData = {
     a.carriesOver = carriesOver;
   },
 
-  async publishRoster(me, weekStart, teamKey): Promise<RosterWeekHeader> {
+  async publishRoster(me, weekStart, teamKey): Promise<RosterPublishResult> {
     assertRosterManage(me);
     const w = rosterWeekOf(teamKey, weekStart);
+    // E5 (addition 0010a): a shift dated today or later without any block refuses Publish, naming the people and dates
+    if (mockAssignmentTypes().some((t) => t.isActive)) {
+      const emptyShifts = [...w.cells.values()]
+        .filter((e) => e.kind === "shift" && e.date >= dateKeyInZone(new Date(), seedPeople().get(e.userId)?.timeZone ?? me.timeZone)
+          && (w.blocks.get(`${e.userId}:${e.date}`) ?? []).length === 0)
+        .sort((a, b) => a.date.localeCompare(b.date) || a.userId.localeCompare(b.userId))
+        .map((e) => ({ userId: e.userId, date: e.date }));
+      if (emptyShifts.length > 0) return { status: "refused", emptyShifts };
+    }
     w.version += 1;
     w.publishedAt = new Date().toISOString();
     w.publishedByName = me.displayName;
     w.published = new Map([...w.cells].map(([k, e]) => [k, { ...e }]));
     w.publishedBlocks = new Map([...w.blocks].map(([k, b]) => [k, b.map((x) => ({ ...x }))]));
     w.changed = new Set();
-    return rosterHeaderOf(w);
+    return { status: "published", header: rosterHeaderOf(w) };
   },
 
   async copyRosterWeek(me, fromWeekStart, toWeekStart, teamKey): Promise<RosterReportRow[]> {

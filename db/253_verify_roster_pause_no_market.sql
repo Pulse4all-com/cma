@@ -33,6 +33,10 @@
 --       shift of this week and next, a pause's hoursMarket, ownMarket and hoursMarketZone taken away (null, false, null)
 -- Provoke: verify.provoke below. 'true': every check reads FAIL and the verdict says PROVOKED, NOT A PASS. A check's id:
 -- that check alone compares with a deliberate difference (R1 to R4: 248's side loses a row).
+-- Edited by addition 0010a (254_roster_drives_the_day.sql, brief B, E10): a work block written without a market stores the
+-- person's Default market, so the fixture's own-market SL (a1's Default market NL) reads "SL NL" where it read "SL -", is
+-- not own market in the agent's view, and R2 compares roster_assignments' thirteen earlier columns by name, its absence
+-- blocks (E9) aside, since 0010a appends absence_key and absence_name. As edited it expects 0010a.
 -- Collation: every ordering that feeds a compared text says collate "C".
 -- =============================================================================================
 
@@ -448,19 +452,19 @@ begin
   perform set_config('app.user_id', '', true);
 
   perform pg_temp.v0009zz_row(11, 'B1', 'the planner''s CODE-MARKET on a pause is refused and says why; a pause is stored without a market',
-    v_b1, 'LB-GB CMA04, says why; written 0; stored SL GB, LB -, SL -');
+    v_b1, 'LB-GB CMA04, says why; written 0; stored SL GB, LB -, SL NL');
   perform pg_temp.v0009zz_row(12, 'B2', 'the table refuses a pause with a market on its own',
     v_b2, 'table: LB GB CMA04');
   perform pg_temp.v0009zz_row(13, 'B3', 'an older pause with a market reads without one; the work blocks keep theirs',
-    v_b3, 'assignments SL GB, LB -, SL -; cell SL GB, LB -, SL -; coverage LB/-, SL/GB, SL/NL; planned LB/-=30, SL/GB=180, SL/NL=270');
+    v_b3, 'assignments SL GB, LB -, SL NL; cell SL GB, LB -, SL NL; coverage LB/-, SL/GB, SL/NL; planned LB/-=30, SL/GB=180, SL/NL=270');
   perform pg_temp.v0009zz_row(14, 'B4', 'published: the pause has no market, is not own market and has no zone',
-    v_b4, 'agent SL GB false Europe/London, LB - false -, SL NL true Europe/Amsterdam');
+    v_b4, 'agent SL GB false Europe/London, LB - false -, SL NL false Europe/Amsterdam');
   perform pg_temp.v0009zz_row(15, 'B5', 'the Standard week saves, shows and applies a pause without a market, never dropping it',
-    v_b5, 'saved SL GB, LB -, SL -; standard_week SL GB, LB -, SL -; apply done 3 dropped 0; applied SL GB, LB -, SL -; stored SL GB, LB -, SL -');
+    v_b5, 'saved SL GB, LB -, SL NL; standard_week SL GB, LB -, SL NL; apply done 3 dropped 0; applied SL GB, LB -, SL NL; stored SL GB, LB -, SL NL');
   perform pg_temp.v0009zz_row(16, 'B6', 'the planner''s write of the read-back blocks ends the older pause and stores it without a market',
-    v_b6, 'kept 2 ended 1 added 1; stored SL GB, LB -, SL -');
+    v_b6, 'kept 2 ended 1 added 1; stored SL GB, LB -, SL NL');
   perform pg_temp.v0009zz_row(17, 'B7', 'an older pause of a retired type: the write-back is accepted and stores it without a market; a new one is refused',
-    v_b7, 'write back accepted; stored SL -, LB -; a new LB CMA04');
+    v_b7, 'write back accepted; stored SL NL, LB -; a new LB CMA04');
 end
 $$;
 
@@ -517,7 +521,7 @@ begin
             end if;
             -- R2: 248's blocks, a pause's market taken away
             v_n2 := v_n2 + (select count(*) from cma.roster_assignments(wk, tk));
-            if exists ((select n.* from cma.roster_assignments(wk, tk) n)
+            if exists ((select n.assignment_id, n.user_id, n.business_date, n.code, n.name, n.kind, n.work_area, n.is_extra, n.start_time, n.end_time, n.hours_market_code, n.note, n.recorded_at from cma.roster_assignments(wk, tk) n where n.kind <> 'absence')
                        except all
                        (select o.assignment_id, o.user_id, o.business_date, o.code, o.name, o.kind, o.work_area, o.is_extra, o.start_time,
                                o.end_time, case when o.kind = 'pause' then null else o.hours_market_code end, o.note, o.recorded_at
@@ -526,7 +530,7 @@ begin
                                   o.end_time, case when o.kind = 'pause' then null else o.hours_market_code end, o.note, o.recorded_at
                            from pg_temp.v0009zz_assignments_0009zx(wk, tk) o offset v_o2)
                           except all
-                          (select n.* from cma.roster_assignments(wk, tk) n))
+                          (select n.assignment_id, n.user_id, n.business_date, n.code, n.name, n.kind, n.work_area, n.is_extra, n.start_time, n.end_time, n.hours_market_code, n.note, n.recorded_at from cma.roster_assignments(wk, tk) n where n.kind <> 'absence'))
                or (v_o2 = 1 and not exists (select 1 from cma.roster_assignments(wk, tk))) then
               v_r2 := v_r2 || wk || '/' || coalesce(tk, 'tenant') || ' ';
             end if;

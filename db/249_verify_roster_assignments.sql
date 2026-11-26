@@ -4,6 +4,10 @@
 -- Read-only on real data: every behaviour check runs on a throwaway tenant inside a block that always rolls back; the
 -- R checks read every active tenant as it is. Run as your own IAM login after 248: dev first (normal, then provoked),
 -- then prod before the merge. Expected: the last row reads "PASS | 249_verify_roster_assignments: n PASS, 0 FAIL, ...".
+-- Edited by addition 0010a (254_roster_drives_the_day.sql, brief B): since E5 every shift dated today or later holds a
+-- block before Publish, so B4 and B6 give a2's and a1's shifts one first, and since E10 a work block names its market (a
+-- person without a Default market names it in the block; a block written without one stores the person's), so B3, B4,
+-- B7 and B10 read GO under NL or GB where they read own market (-). As edited it expects 0010a.
 --
 -- Checks
 --   S1  the addition 0009zx recorded once, after 0009zv
@@ -402,6 +406,8 @@ begin
     perform set_config('app.user_id', v_a1::text, true);
     select 'before ' || coalesce(jsonb_array_length(m.assignments)::text, 'null') into v_b4 from cma.my_roster(v_wk, v_wk) m;
     perform set_config('app.user_id', v_mgr::text, true);
+    -- since 0010a (E5) every shift dated today or later holds a block before Publish: a2's shift gets one
+    perform cma.roster_set_assignments(v_wk, 'alpha', v_a2, v_wk, '[{"code":"GO","start":"08:00","end":"12:00","hoursMarket":"GB"}]');
     w := cma.roster_publish(v_wk, 'alpha');
     v_j := cma.roster_set_assignments(v_wk, 'alpha', v_a1, v_wk,
       '[{"code":"SL","start":"09:00","end":"11:00","hoursMarket":"GB"},{"code":"LB","start":"12:00","end":"12:30"},{"code":"GO","start":"13:00","end":"15:00"}]');
@@ -438,12 +444,15 @@ begin
     -- B6: D8 on today (this week): a1 and a2 work today all day; the week is published
     e := cma.roster_set_entry(v_this, 'alpha', v_a1, v_today, 'shift', '00:00', '24:00', null, null);
     e := cma.roster_set_entry(v_this, 'alpha', v_a2, v_today, 'shift', '00:00', '24:00', null, null);
+    -- since 0010a (E5) both shifts hold a block before Publish, and a2 (no Default market) names its market (E10)
+    perform cma.roster_set_assignments(v_this, 'alpha', v_a1, v_today, '[{"code":"GO","start":"00:00","end":"01:00"}]');
+    perform cma.roster_set_assignments(v_this, 'alpha', v_a2, v_today, '[{"code":"GO","start":"09:00","end":"10:00","hoursMarket":"GB"}]');
     w := cma.roster_publish(v_this, 'alpha');
-    v_j := cma.roster_set_assignments(v_this, 'alpha', v_a2, v_today, '[{"code":"SL","start":"10:00","end":"11:00"}]');
+    v_j := cma.roster_set_assignments(v_this, 'alpha', v_a2, v_today, '[{"code":"SL","start":"10:00","end":"11:00","hoursMarket":"GB"}]');
     v_b6 := format('a2 today: published %s version %s', v_j->>'published', v_j->>'version');
     e := cma.roster_set_entry(v_this, 'alpha', v_a1, v_today, 'shift', '00:00', '23:00', null, null);
     begin
-      perform cma.roster_set_assignments(v_this, 'alpha', v_a2, v_today, '[{"code":"SL","start":"10:00","end":"12:00"}]');
+      perform cma.roster_set_assignments(v_this, 'alpha', v_a2, v_today, '[{"code":"SL","start":"10:00","end":"12:00","hoursMarket":"GB"}]');
       v_b6 := v_b6 || '; with another change waiting: accepted';
     exception when sqlstate 'CMA03' then
       get stacked diagnostics v_text = pg_exception_detail;
@@ -451,7 +460,7 @@ begin
     end;
     select v_b6 || '; a2 still ' || string_agg((x->>'start') || '-' || (x->>'end'), ',')
     into v_b6 from cma.roster_cell(v_this, 'alpha', v_a2, v_today) c cross join lateral jsonb_array_elements(c.assignments) x;
-    v_j := cma.roster_set_assignments(v_this, 'alpha', v_a2, v_today, '[{"code":"SL","start":"10:00","end":"12:00"}]', true);
+    v_j := cma.roster_set_assignments(v_this, 'alpha', v_a2, v_today, '[{"code":"SL","start":"10:00","end":"12:00","hoursMarket":"GB"}]', true);
     v_b6 := v_b6 || format('; confirmed: published %s version %s', v_j->>'published', v_j->>'version');
     perform set_config('app.user_id', v_a1::text, true);
     select v_b6 || '; a1 sees ' || to_char(m.end_time, 'HH24:MI') into v_b6 from cma.my_roster(v_today, v_today) m;
@@ -465,7 +474,7 @@ begin
     e := cma.roster_set_entry(v_wk, 'alpha', v_a1, v_wk + 1, 'absence', null, null, 'off', null);
     e := cma.roster_set_entry(v_wk, 'alpha', v_a1, v_wk + 2, 'absence', null, null, 'sick', null);
     v_j := cma.roster_set_assignments(v_wk, 'alpha', v_a2, v_wk,
-      '[{"code":"GO","start":"08:00","end":"12:00"},{"code":"LB","start":"12:00","end":"13:00"},{"code":"SL","start":"13:00","end":"16:00","hoursMarket":"GB"}]');
+      '[{"code":"GO","start":"08:00","end":"12:00","hoursMarket":"GB"},{"code":"LB","start":"12:00","end":"13:00"},{"code":"SL","start":"13:00","end":"16:00","hoursMarket":"GB"}]');
     select string_agg(u.display_name || ' ' || (r.business_date - v_wk - 7) || ' ' || r.outcome || coalesce(' ' || r.reason, '') || ' ' || r.blocks, '; '
                       order by u.display_name collate "C", r.business_date)
     into v_b7 from cma.roster_copy_week_report(v_wk, v_wk + 7, 'alpha') r join cma.app_user u on u.tenant_id = v_t and u.id = r.user_id;
@@ -593,21 +602,21 @@ begin
   perform pg_temp.v0009zx_row(12, 'B2', 'roster_set_assignments'' refusals, the table''s own, and the first write',
     v_b2, 'overlap CMA04; off grid CMA04; outside CMA04; no shift CMA04; BE CMA04; UK CMA02; unknown type CMA02; retired type CMA04; past CMA04; analyst CMA04; agent CMA06; written 0/0/3 published false; table: overlap 23P01, off grid CMA04, BE CMA04, UK CMA04');
   perform pg_temp.v0009zx_row(13, 'B3', 'versioning: the equal blocks kept, the changed one ended with its successor',
-    v_b3, 'kept 2 ended 1 added 1; rows 4, current 3; the ended GO 13:00-17:00 superseded by GO 13:00-16:00; current SL 09:00-11:00 GB, LB 12:00-12:30, GO 13:00-16:00');
+    v_b3, 'kept 2 ended 1 added 1; rows 4, current 3; the ended GO 13:00-17:00 superseded by GO 13:00-16:00; current SL 09:00-11:00 GB, LB 12:00-12:30, GO 13:00-16:00 NL');
   perform pg_temp.v0009zx_row(14, 'B4', 'the published read: nothing before, the publication while a change waits, then the change',
-    v_b4, 'before 0; future change published false; changed since publish t; planner SL 09:00-11:00, LB 12:00-12:30, GO 13:00-15:00; agent SL 09:00-11:00 work sales GB false Europe/London, LB 12:00-12:30 pause - - false -, GO 13:00-16:00 work operations NL true Europe/Amsterdam; after the second publication GO 13:00-15:00');
+    v_b4, 'before 0; future change published false; changed since publish t; planner SL 09:00-11:00, LB 12:00-12:30, GO 13:00-15:00; agent SL 09:00-11:00 work sales GB false Europe/London, LB 12:00-12:30 pause - - false -, GO 13:00-16:00 work operations NL false Europe/Amsterdam; after the second publication GO 13:00-15:00');
   perform pg_temp.v0009zx_row(15, 'B5', 'a shortened shift ends the blocks outside it (reported), an absence ends the rest',
     v_b5, 'shortened: cell shift 09:00-12:00, blocks SL, ended 2; without a successor 2; absence: blocks 0');
   perform pg_temp.v0009zx_row(16, 'B6', 'D8: today publishes at once; another change waiting asks first and writes nothing; confirmed it publishes both',
     v_b6, 'a2 today: published true version 2; with another change waiting: CMA03 publish_others=1; a2 still 10:00-11:00; confirmed: published true version 3; a1 sees 23:00');
   perform pg_temp.v0009zx_row(17, 'B7', 'Copy week: the blocks with the shift, an absence only when it carries over, the report',
-    v_b7, 'a1 0 skipped absence_not_carried 0; a1 1 done 0; a1 2 skipped absence_not_carried 0; a2 0 done 3 | target GO 08:00-12:00, LB 12:00-13:00, SL 13:00-16:00 GB | entries 0 shift, 1 absence off | copy_week again 2');
+    v_b7, 'a1 0 skipped absence_not_carried 0; a1 1 done 0; a1 2 skipped absence_not_carried 0; a2 0 done 3 | target GO 08:00-12:00 GB, LB 12:00-13:00, SL 13:00-16:00 GB | entries 0 shift, 1 absence off | copy_week again 2');
   perform pg_temp.v0009zx_row(18, 'B8', 'the Standard week: save''s report, apply fills empty person-dates only, a second save keeps the replaced rows',
     v_b8, 'a1 1 skipped absence_not_carried 0; a1 2 done 0; a1 3 skipped absence_not_carried 0; a2 1 done 3 | standard a1 2 absence off 0, a2 1 shift 08:00-16:00 3 | apply a1 1 done 0; a2 0 skipped not_empty 0 | a2 kept 10:00-14:00 | again skipped not_empty, skipped not_empty | after a second save: current 2, ended 2, ended blocks 3');
   perform pg_temp.v0009zx_row(19, 'B9', 'the settings refuse a name that is no zone and a grid of 7; a 30-minute grid refuses 08:15',
     v_b9, 'zone Mars/Base CMA04; slot 7 CMA04; 08:15 on a 30-minute grid CMA04; planner zone Africa/Lagos');
   perform pg_temp.v0009zx_row(20, 'B10', 'D12: coverage per slot of the planner zone''s day and the planned minutes per type and market',
-    v_b10, '09:00 w1 GO/-=1, 10:00 w2 GO/-=1, 10:00 w2 SL/NL=1, 13:00 w1 LB/-=1, 13:00 w1 SL/NL=1, 14:00 w2 SL/GB=1, 14:00 w2 X/NL=1, 17:45 w1 SL/GB=1 | slots 36, first 09:00, last 17:45 | planned a1 SL/GB=180, a1 SL/NL=240, a1 X/NL=60, a2 GO/-=240, a2 LB/-=60, a2 SL/GB=180');
+    v_b10, '09:00 w1 GO/GB=1, 10:00 w2 GO/GB=1, 10:00 w2 SL/NL=1, 13:00 w1 LB/-=1, 13:00 w1 SL/NL=1, 14:00 w2 SL/GB=1, 14:00 w2 X/NL=1, 17:45 w1 SL/GB=1 | slots 36, first 09:00, last 17:45 | planned a1 SL/GB=180, a1 SL/NL=240, a1 X/NL=60, a2 GO/GB=240, a2 LB/-=60, a2 SL/GB=180');
   perform pg_temp.v0009zx_row(23, 'B13', 'D8 for a cell: a shift or an absence of today publishes at once, asks first while another change waits; roster_set_entry and a future date never publish',
     v_b13, 'a shift of today, nothing else waiting: published true version 4; roster_set_entry: version 4, changed t; sick with a change waiting: CMA03 publish_others=1, a2 still shift with 1 blocks; confirmed: published true version 5; a2 sees absence with 0 blocks, a1 sees the end 21:00; a future date: published false');
   perform pg_temp.v0009zx_row(22, 'B12', 'a type in the plan keeps its kind, status and extra flag; its name is free',

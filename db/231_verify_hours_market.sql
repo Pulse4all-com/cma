@@ -81,6 +81,9 @@
 -- Expected verdict: "PASS | 231_verify_hours_market: <n> PASS, 0 FAIL, <k> skip".
 -- =============================================================================================
 
+-- Edited by addition 0010a (254_roster_drives_the_day.sql, brief B): cma_read.time_event and cma_read.time_interval gain
+-- assignment_type_id after hours_market_code, so S2 reads each view's last column before that one; set_status gains a
+-- fifth argument, p_assignment_code, so S3 takes the 4- or the 5-argument signature.
 do $$
 begin
   if session_user = 'postgres' and coalesce(current_setting('cma.emergency', true), '') <> 'on' then
@@ -494,6 +497,7 @@ begin
               and pg_get_constraintdef(k.oid) ~ 'hours_market_code IS NULL' and pg_get_constraintdef(k.oid) ~ 'start' and pg_get_constraintdef(k.oid) ~ 'status'),
       exists (select 1 from pg_trigger g where g.tgrelid = 'cma.time_event'::regclass and g.tgname = 'time_event_hours_market_ok' and g.tgenabled = 'O'),
       (select string_agg(coalesce((select ic.column_name from information_schema.columns ic where ic.table_schema = 'cma_read' and ic.table_name = v.n
+                                     and ic.column_name <> 'assignment_type_id'   -- appended after it by 0010a
                                    order by ic.ordinal_position desc limit 1), 'missing'), ', ' order by v.o)
        from (values (1, 'market'), (2, 'app_user'), (3, 'time_event'), (4, 'time_interval')) v(o, n)),
       (select bool_and(has_table_privilege('cma_readonly', 'cma_read.' || v.n, 'select'))
@@ -530,16 +534,18 @@ begin
   if to_regprocedure('cma.set_status(uuid,text,timestamptz)') is not null then
     v_bad := v_bad || 'the 3-argument set_status remains; ';
   end if;
-  f := to_regprocedure('cma.set_status(uuid,text,timestamptz,text)');
+  -- 0010a appends p_assignment_code (default null) after p_hours_market_code: the fifth argument is accepted
+  f := coalesce(to_regprocedure('cma.set_status(uuid,text,timestamptz,text)'), to_regprocedure('cma.set_status(uuid,text,timestamptz,text,text)'));
   if f is null then
     v_bad := v_bad || 'the 4-argument set_status missing; ';
-  elsif (select p.pronargdefaults <> 2 or p.proargnames[4] <> 'p_hours_market_code' from pg_proc p where p.oid = f) then
+  elsif (select p.pronargdefaults <> p.pronargs - 2 or p.proargnames[4] <> 'p_hours_market_code' from pg_proc p where p.oid = f) then
     v_bad := v_bad || 'set_status''s p_hours_market_code is not last with its default; ';
   end if;
   foreach v_fn in array array['cma.is_hours_market(text,boolean)', 'cma.assert_hours_market(text,boolean)',
       'cma.workday_hours_market(uuid,timestamptz)', 'cma.resolve_hours_market(text)', 'cma.clock_in_hours_market(uuid)', 'cma.hours_markets()',
       'cma.set_market_hours_market(text,text)', 'cma.set_person_default_hours_market(uuid,text)',
-      'cma.set_status(uuid,text,timestamptz,text)', 'cma.open_workday(timestamptz)', 'cma.correct_workday(uuid,date,jsonb,text)',
+      coalesce(to_regprocedure('cma.set_status(uuid,text,timestamptz,text)'), to_regprocedure('cma.set_status(uuid,text,timestamptz,text,text)'))::text,
+      'cma.open_workday(timestamptz)', 'cma.correct_workday(uuid,date,jsonb,text)',
       'cma.correct_time_event(uuid,text,timestamptz,text,uuid,text,uuid)',
       'cma.team_status_time(date,date,uuid)', 'cma.team_now()', 'cma.export_status_changes(date,date,uuid)',
       'cma.export_hours(date,date,uuid)', 'cma.team_day(uuid,date)', 'cma.markets_all()', 'cma.directory()'] loop

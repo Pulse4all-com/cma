@@ -34,7 +34,7 @@ import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
 import type { AbsenceType, AssignmentBlock, RosterEntry, RosterReportRow, RosterWeekSummary, TeamInfo } from "@/lib/data";
 import dynamic from "next/dynamic";
-import { pct, planCheck, plannedMinutes, plannedSummary, toMinutes, toneOf, TONE_CLASS, type Block, type PlannedDay, type PlannerWeek } from "@/lib/assignments";
+import { absenceKeyOf, blockCode, pct, planCheck, plannedMinutes, plannedSummary, toMinutes, toneOf, TONE_CLASS, type Block, type PlannedDay, type PlannerWeek } from "@/lib/assignments";
 import { PlannedMeter, type MeterWords } from "./PlannedMeter";
 // The Day view's code comes with the Day view only: the Week view's page carries none of it (web/verify/perf.json)
 const RosterDay = dynamic(() => import("./RosterDay").then((m) => m.RosterDay));
@@ -116,7 +116,7 @@ export function RosterPlanner({
   const [header, setHeader] = useState(week.header);
   // The week's blocks per cell, for the thin bar under each cell (addition 0009zx)
   const blockMap = (w: PlannerWeek) => new Map(Object.entries(w.blocks).map(([k, list]) =>
-    [k, list.map(([code, start, end, hoursMarket, note]): AssignmentBlock => ({ assignmentId: "", code, start, end, hoursMarket, note }))]));
+    [k, list.map(([code, start, end, hoursMarket, note]): AssignmentBlock => ({ assignmentId: "", code: absenceKeyOf(code) === null ? code : null, absence: absenceKeyOf(code), start, end, hoursMarket, note }))]));
   const [cellBlocks, setCellBlocks] = useState(() => blockMap(week));
   // A refresh of this week and team (Publish, Copy previous week) brings a new answer: the cells and the header follow it
   const [answer, setAnswer] = useState(week);
@@ -178,6 +178,15 @@ export function RosterPlanner({
       const body = cell.kind === "shift" ? { kind: "shift", start: cell.start, end: cell.end, note: current?.note ?? null }
         : cell.kind === "absence" ? { kind: "absence", absenceKey: cell.key, note: current?.note ?? null } : { kind: "clear" };
       const res = await send("PUT", `/api/v1/roster/weeks/${weekStart}/cells`, { team: teamArg, userId, date, cell: body, publishOthers });
+      if (res.status === 409) {
+        // E5 (addition 0010a): today publishes at once, and a shift of the week has no block yet: nothing was written
+        const refused = ((await res.clone().json().catch(() => null)) as { data?: { status?: string; emptyShifts?: { userId: string; date: string }[] } } | null)?.data;
+        if (refused?.status === "refused") {
+          setState(k, { status: "problem", problem: "conflict" });
+          setNotice(refusalText(refused.emptyShifts ?? []));
+          return;
+        }
+      }
       if (!res.ok) {
         const err = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
         const m = err?.error?.message ?? "";
@@ -185,7 +194,7 @@ export function RosterPlanner({
         setState(k, { status: "problem", problem });
         return;
       }
-      const answer = ((await res.json()) as { data: (RosterEntry & { assignments: AssignmentBlock[]; endedAssignments: number; published: boolean }) | { status: "confirm"; otherChanges: number } | null }).data;
+      const answer = ((await res.json()) as { data: (RosterEntry & { assignments: AssignmentBlock[]; endedAssignments: number; published: boolean; waiting?: string }) | { status: "confirm"; otherChanges: number } | null }).data;
       if (answer && "status" in answer && answer.status === "confirm") {
         // today in a published week with other changes waiting (D8): nothing was written; the cell keeps its text until
         // the planner says yes (the optimistic value drops when this transition ends)
@@ -193,12 +202,14 @@ export function RosterPlanner({
         setCellConfirm({ userId, date, text, others: answer.otherChanges });
         return;
       }
-      const stored = answer as (RosterEntry & { assignments: AssignmentBlock[]; endedAssignments: number; published: boolean }) | null;
+      const stored = answer as (RosterEntry & { assignments: AssignmentBlock[]; endedAssignments: number; published: boolean; waiting?: string }) | null;
       setEntries((m) => { const n = new Map(m); if (stored) n.set(k, stored); else n.delete(k); return n; });
       // the blocks outside the new shift ended with it (addition 0009zx); a clear ends every block of the day
       const endedNow = stored ? stored.endedAssignments : (cellBlocks.get(k) ?? []).length;
       setCellBlocks((m) => new Map(m).set(k, stored?.assignments ?? []));
       if (endedNow > 0) setNotice(ta.endedWithShift.replace("{n}", String(endedNow)));
+      // E5 (addition 0010a): a shift of today without a block waits for its blocks, which publish it at once
+      if (stored?.waiting === "no_assignments") setNotice(ta.waitingForAssignments);
       setDrafts((m) => { const n = new Map(m); n.delete(k); return n; });
       setState(k, { status: "saved" });
       setHeader((h) => ({ ...h, changedSincePublish: h.status === "published", entryCount: h.entryCount + (stored ? (current ? 0 : 1) : current ? -1 : 0) }));
@@ -250,6 +261,12 @@ export function RosterPlanner({
     setNotice(null);
     startTransition(async () => {
       const res = await send("POST", `/api/v1/roster/weeks/${weekStart}/publish`, { team: teamArg });
+      if (res.status === 409) {
+        // E5 (addition 0010a): a shift dated today or later without any block refuses Publish; nothing was published
+        const refused = ((await res.json().catch(() => null)) as { data?: { emptyShifts?: { userId: string; date: string }[] } } | null)?.data;
+        setNotice(refusalText(refused?.emptyShifts ?? []));
+        return;
+      }
       if (!res.ok) { setNotice(t.publishFailed); return; }
       setHeader(((await res.json()) as { data: typeof header }).data);
       router.refresh();
@@ -294,12 +311,26 @@ export function RosterPlanner({
     });
   }
 
+  /** E5's refusal in words: the people and dates whose shifts have no assignment yet */
+  function refusalText(list: { userId: string; date: string }[]): string {
+    return ta.refusedEmpty.replace("{list}", list.map((x) =>
+      `${week.people.find((p) => p.userId === x.userId)?.displayName ?? ""} ${fmtDate(x.date, locale, "compact")}`.trim()).join(", "));
+  }
+
   // The plan check before Publish (brief A): two warnings that never block, over the week's shifts that hold blocks
   const kinds = useMemo(() => new Map(week.planner.types.map((x) => [x.code, x.kind])), [week.planner.types]);
+  // E5 (addition 0010a): Publish refuses a shift dated today or later (in its person's zone) without any block, beside the
+  // warnings; a tenant without assignment types plans no blocks and is never refused
+  const usesAssignments = week.planner.types.some((x) => x.isActive);
+  const emptyShifts = confirm === "publish" && usesAssignments ? [...entries.values()].filter((e) => {
+    if (e.kind !== "shift") return false;
+    const zone = week.people.find((p) => p.userId === e.userId)?.timeZone ?? viewerZone;
+    return e.date >= todayOf(zone) && (cellBlocks.get(`${e.userId}:${e.date}`) ?? []).length === 0;
+  }).sort((a, b) => a.date.localeCompare(b.date)) : [];
   const typeOf = useMemo(() => new Map(week.planner.types.map((x) => [x.code, x])), [week.planner.types]);
   const warnings = confirm === "publish" ? [...entries.values()].flatMap((e) => {
     if (e.kind !== "shift" || !e.start || !e.end) return [];
-    const blocks: Block[] = (cellBlocks.get(`${e.userId}:${e.date}`) ?? []).map((b) => ({ code: b.code, start: toMinutes(b.start), end: toMinutes(b.end), market: b.hoursMarket, note: b.note }));
+    const blocks: Block[] = (cellBlocks.get(`${e.userId}:${e.date}`) ?? []).map((b) => ({ code: blockCode(b), start: toMinutes(b.start), end: toMinutes(b.end), market: b.hoursMarket, note: b.note }));
     const name = week.people.find((p) => p.userId === e.userId)?.displayName ?? "";
     return planCheck({ start: toMinutes(e.start), end: toMinutes(e.end) }, blocks, week.planner.lunchAfterMinutes, week.planner.lunchTypeCode, kinds).map((w) =>
       w.kind === "lunch"
@@ -318,7 +349,7 @@ export function RosterPlanner({
     const days: PlannedDay[] = view !== "week" ? [] : [...entries.values()].filter((e) => byId.has(e.userId)).map((e) => ({
       userId: e.userId, date: e.date, defaultMarket: byId.get(e.userId)?.defaultHoursMarket ?? null,
       shift: e.kind === "shift" && e.start && e.end ? { start: toMinutes(e.start), end: toMinutes(e.end) } : null,
-      blocks: (cellBlocks.get(`${e.userId}:${e.date}`) ?? []).map((b) => ({ code: b.code, start: toMinutes(b.start), end: toMinutes(b.end), market: b.hoursMarket, note: b.note })),
+      blocks: (cellBlocks.get(`${e.userId}:${e.date}`) ?? []).map((b) => ({ code: blockCode(b), start: toMinutes(b.start), end: toMinutes(b.end), market: b.hoursMarket, note: b.note })),
     }));
     const perUser = new Map<string, number>();
     for (const d of days) perUser.set(d.userId, (perUser.get(d.userId) ?? 0) + plannedMinutes(d.shift, d.blocks, kinds));
@@ -429,6 +460,7 @@ export function RosterPlanner({
 
       {view === "day" && copy.assignmentsDay ? (
         <RosterDay key={shownDay} week={week} date={shownDay} teamArg={teamArg} copy={{ ...copy, assignmentsDay: copy.assignmentsDay }} meterWords={meterWords} locale={locale}
+          absences={absences}
           onPublishedNow={() => startTransition(() => router.refresh())}
           onChanged={() => setHeader((h) => (h.status === "published" && !h.changedSincePublish ? { ...h, changedSincePublish: true } : h))} />
       ) : week.people.length === 0 ? (
@@ -560,7 +592,7 @@ export function RosterPlanner({
         onCancel={() => setConfirm(null)}
         busy={pending}
         irreversible={confirm === "copy" || confirm === "copyWeek" || confirm === "save"}
-        confirmDisabled={confirm === "copyWeek" && copyFrom === weekStart}
+        confirmDisabled={(confirm === "copyWeek" && copyFrom === weekStart) || (confirm === "publish" && emptyShifts.length > 0)}
       >
         {confirm === "copy" ? t.copyConfirm : confirm === "apply" ? ta.applyConfirm : confirm === "save" ? ta.saveConfirm : confirm === "copyWeek" ? (
           <span className="flex flex-col gap-3">
@@ -574,6 +606,15 @@ export function RosterPlanner({
         ) : (
           <span className="flex flex-col gap-3">
             <span>{t.publishConfirm}</span>
+            {emptyShifts.length > 0 ? (
+              <span className="flex flex-col gap-1 text-small" data-testid="roster-publish-refused" role="alert">
+                <span className="font-semibold text-p4a-heading">{ta.refusedTitle}</span>
+                {emptyShifts.slice(0, 8).map((e) => (
+                  <span key={`${e.userId}:${e.date}`}>{ta.refusedLine.replace("{name}", week.people.find((p) => p.userId === e.userId)?.displayName ?? "").replace("{date}", fmtDate(e.date, locale, "compact"))}</span>
+                ))}
+                {emptyShifts.length > 8 ? <span>{ta.checkMore.replace("{n}", String(emptyShifts.length - 8))}</span> : null}
+              </span>
+            ) : null}
             <span className="font-semibold text-p4a-heading">{ta.checkTitle}</span>
             {warnings.length === 0 ? <span>{ta.checkNone}</span> : (
               <span className="flex flex-col gap-1 text-small" data-testid="roster-plan-check">
@@ -612,10 +653,11 @@ function CellBar({ entry, blocks, typeOf }: {
   return (
     <div className="relative mt-1 h-1.5 overflow-hidden rounded-button bg-p4a-neutral-surface" data-testid="roster-cell-bar"
       // the blocks in words on hover, built then: a week of cells would otherwise carry them all in the page (perf.json)
-      onPointerEnter={(e) => { e.currentTarget.title = blocks.map((b) => `${b.start}–${b.end} ${b.code}${b.hoursMarket ? `-${b.hoursMarket}` : ""} ${typeOf.get(b.code)?.name ?? ""}`.trim()).join("\n"); }}>
+      onPointerEnter={(e) => { e.currentTarget.title = blocks.map((b) => `${b.start}–${b.end} ${b.absence ?? `${b.code ?? ""}${b.hoursMarket ? ` · ${b.hoursMarket}` : ""} ${typeOf.get(b.code ?? "")?.name ?? ""}`}`.trim()).join("\n"); }}>
       {blocks.map((b) => {
-        const type = typeOf.get(b.code);
-        return <span key={`${b.start}-${b.code}`} className={`absolute inset-y-0 ${TONE_CLASS[type ? toneOf(type) : "productive"]}`}
+        const type = b.code ? typeOf.get(b.code) : undefined;
+        // an absence block (addition 0010a, E9) in Background Blue, as a cell absence
+        return <span key={`${b.start}-${blockCode(b)}`} className={`absolute inset-y-0 ${b.absence ? TONE_CLASS.absence : TONE_CLASS[type ? toneOf(type) : "productive"]}`}
           style={{ left: `${pct(toMinutes(b.start) - s, span)}%`, width: `${pct(toMinutes(b.end) - toMinutes(b.start), span)}%` }} />;
       })}
     </div>

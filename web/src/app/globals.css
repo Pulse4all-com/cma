@@ -238,3 +238,14 @@ a:has([data-link-pending="true"]) {
   opacity: 0.75;
 }
 
+
+/* My day's Now marker (addition 0010a, brief B): a softly pulsing dot in Denim Blue; still for whoever asks for less motion */
+@keyframes my-day-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-p4a-deepblue) 45%, transparent); }
+  70% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--color-p4a-deepblue) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-p4a-deepblue) 0%, transparent); }
+}
+.my-day-pulse { animation: my-day-pulse 1.8s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .my-day-pulse { animation: none; }
+}

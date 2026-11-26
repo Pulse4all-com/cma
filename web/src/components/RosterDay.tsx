@@ -17,14 +17,20 @@
  * Above the grid: the Planned hours meter of the week and the day (PlannedMeter). Under it: Working per slot, 0 inside
  * someone's shift so gaps show (hover for each assignment and market), and per person the Planned hours: the work blocks,
  * a shift without blocks whole, never a pause (hover for the split). Staff data only.
+ *
+ * Since addition 0010a (brief B; Arno's and Kira's artboard 7): every work bar reads CODE · MARKET (the block's market,
+ * else the person's Default market), a pause its code; the Assignment dropdown's group Absence paints an absence block
+ * (E9: Sick from 11:00, going home early), a Background Blue bar with the absence's name that counts neither as planned
+ * nor as working; the market's default reads "Each person's default" (E10: the database writes the person's Default
+ * market into the block), and the bar dialog shows the person's market itself.
  */
 import { useMemo, useRef, useState, useTransition, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
 import type { AssignmentBlockInput, AssignmentType, RosterAssignmentsResult } from "@/lib/data";
 import {
-  assignmentText, fromMinutes, fromPlannerMinutes, paintBlocks, plannedByKey, plannedMinutes, plannedSummary, sameBlocks, slotFigures,
-  slotFloor, toMinutes, toneOf, TONE_CLASS, toPlannerMinutes, type Block, type ParseProblem, type PlannedDay, type PlannerWeek,
+  absenceKeyOf, assignmentText, barLabel, blockCode, fromMinutes, fromPlannerMinutes, paintBlocks, plannedByKey, plannedMinutes, plannedSummary,
+  sameBlocks, slotFigures, slotFloor, toMinutes, toneOf, TONE_CLASS, toPlannerMinutes, type Block, type ParseProblem, type PlannedDay, type PlannerWeek,
 } from "@/lib/assignments";
 import { fmtDate, fmtMinutes } from "@/lib/time";
 import { AssignmentPicker, type Choice } from "./AssignmentPicker";
@@ -36,7 +42,7 @@ import { Button, Notice } from "./primitives";
 const SLOT_PX = 20;
 
 type Sel = { r0: number; s0: number; r1: number; s1: number };
-type RowProblem = ParseProblem | "outside" | "times" | "past" | "failed";
+type RowProblem = ParseProblem | "outside" | "times" | "past" | "failed" | "refused";
 type Pending = { userId: string; prev: Block[]; next: Block[]; others: number };
 /** A problem with text typed in the Assignment dropdown (not with the selection or the save) */
 const typedProblem = (p: RowProblem | null): boolean => p === "unknown" || p === "retired" || p === "market" || p === "pauseMarket" || p === "format";
@@ -46,7 +52,7 @@ async function send(path: string, body: unknown): Promise<Response> {
 }
 
 export function RosterDay({
-  week, date, teamArg, copy, meterWords, locale, onPublishedNow, onChanged,
+  week, date, teamArg, copy, meterWords, locale, onPublishedNow, onChanged, absences = [],
 }: {
   week: PlannerWeek;
   date: string;
@@ -59,6 +65,8 @@ export function RosterDay({
   onPublishedNow: () => void;
   /** A write was saved as a draft change: the header shows a change waiting for Publish */
   onChanged: () => void;
+  /** The tenant's absence types (E9): the active ones in the dropdown, every one by name on its bars */
+  absences?: readonly { key: string; name: string; isActive: boolean }[];
 }) {
   const t = copy.assignmentsDay;
   const router = useRouter();
@@ -77,6 +85,11 @@ export function RosterDay({
   const exampleMarket = ctx.hoursMarkets.find((m) => m.isActive)?.code ?? "";
   const example = (text: string) => text.replaceAll("{code}", exampleCode).replaceAll("{market}", exampleMarket);
   const typeOf = useMemo(() => new Map(ctx.types.map((x) => [x.code, x])), [ctx.types]);
+  const absenceName = (key: string) => absences.find((a) => a.key === key)?.name ?? null;
+  /** E5's refusal in words: the people and dates whose shifts have no assignment yet */
+  const refusalText = (list: { userId: string; date: string }[]) => copy.assignments.refusedEmpty.replace("{list}", list.map((x) =>
+    `${week.people.find((p) => p.userId === x.userId)?.displayName ?? ""} ${fmtDate(x.date, locale, "compact")}`.trim()).join(", "));
+  const activeAbsences = absences.filter((a) => a.isActive);
 
   // The people of the day with their shift and blocks in minutes of the planner zone's day
   const rows = useMemo(() => week.people.map((p) => {
@@ -163,7 +176,9 @@ export function RosterDay({
       const start = fromPlannerMinutes(b.start, date, p.timeZone, zone);
       const end = fromPlannerMinutes(b.end, date, p.timeZone, zone);
       if (!start || !end || end <= start) return null;
-      out.push({ code: b.code, start, end, hoursMarket: b.market, note: b.note });
+      const absence = absenceKeyOf(b.code);
+      // an absence block (E9) is written as {absence}, never with a market
+      out.push(absence !== null ? { code: "", absence, start, end, hoursMarket: null, note: b.note } : { code: b.code, start, end, hoursMarket: b.market, note: b.note });
     }
     return out;
   }
@@ -188,6 +203,13 @@ export function RosterDay({
         };
         if (!blocks) { fail("times"); continue; }
         const res = await send(`/api/v1/roster/weeks/${week.header.weekStart}/assignments`, { team: teamArg, userId: c.userId, date, blocks, publishOthers });
+        if (res.status === 409) {
+          // E5 (addition 0010a): today publishes at once, and a shift of the week has no block yet: nothing was written
+          const body = (await res.json().catch(() => null)) as { data?: { status?: string; emptyShifts?: { userId: string; date: string }[] } } | null;
+          if (body?.data?.status === "refused") { fail("refused"); setNotice(refusalText(body.data.emptyShifts ?? [])); continue; }
+          fail("failed");
+          continue;
+        }
         if (!res.ok) {
           const err = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
           const m = err?.error?.message ?? "";
@@ -195,6 +217,7 @@ export function RosterDay({
           continue;
         }
         const r = ((await res.json()) as { data: RosterAssignmentsResult }).data;
+        if (r.status === "refused") { fail("refused"); setNotice(refusalText(r.emptyShifts)); continue; }
         if (r.status === "confirm") {
           // nothing was written: the row shows the database's blocks again until the planner confirms (D8)
           confirm.push({ userId: c.userId, prev: prevOf.get(c.userId)!, next: c.next, others: r.otherChanges });
@@ -205,7 +228,7 @@ export function RosterDay({
         // the row as the database answered it (its own blocks, in the planner zone's minutes)
         const p = week.people.find((x) => x.userId === c.userId)!;
         setBlocksOf((m) => new Map(m).set(c.userId, r.blocks.map((b) => ({
-          code: b.code, market: b.hoursMarket, note: b.note,
+          code: blockCode(b), market: b.hoursMarket, note: b.note,
           start: toPlannerMinutes(date, b.start, p.timeZone, zone) ?? 0, end: toPlannerMinutes(date, b.end, p.timeZone, zone) ?? 0,
         }))));
         published ||= r.published;
@@ -242,7 +265,8 @@ export function RosterDay({
   function paint(what: { code: string; market: string | null } | null) {
     if (!sel) return;
     const { rA, rZ, sA, sZ } = range(sel);
-    if (what && kinds.get(what.code) === "pause") what = { code: what.code, market: null };   // a pause has no market (0009zz)
+    // a pause has no market (0009zz), nor an absence block (E9)
+    if (what && (kinds.get(what.code) === "pause" || absenceKeyOf(what.code) !== null)) what = { code: what.code, market: null };
     const from = axisStart + sA * slot;
     const to = axisStart + (sZ + 1) * slot;
     const changes: { userId: string; next: Block[] }[] = [];
@@ -307,8 +331,9 @@ export function RosterDay({
     const without = paintBlocks(blocksOf.get(row.person.userId) ?? [], dialog.block.start, dialog.block.end, null, row.shift);
     if (remove) { setDialog(null); write([{ userId: row.person.userId, next: without }]); return; }
     const type = ctx.types.find((x) => x.code === dialog.code);
-    if (!type) { setDialogProblem("unknown"); return; }
-    const parsed = { code: type.code, market: type.kind === "pause" ? null : dialog.market };
+    const isAbsence = absenceKeyOf(dialog.code) !== null && absences.some((a) => blockCode({ code: null, absence: a.key }) === dialog.code);
+    if (!type && !isAbsence) { setDialogProblem("unknown"); return; }
+    const parsed = { code: dialog.code, market: !type || type.kind === "pause" ? null : dialog.market };
     const okTime = /^([01]\d|2[0-3]):[0-5]\d$|^24:00$/;
     if (!okTime.test(dialog.from) || !okTime.test(dialog.to)) { setDialogProblem("times"); return; }
     const from = toMinutes(dialog.from);
@@ -348,6 +373,7 @@ export function RosterDay({
   const problemText: Record<RowProblem, string> = {
     empty: t.problemEmpty, unknown: t.problemUnknown, retired: t.problemRetired, market: example(t.problemMarket), format: example(t.problemFormat),
     pauseMarket: t.problemPauseMarket, outside: t.problemOutside, times: t.problemTimes, past: t.problemPast, failed: t.problemFailed,
+    refused: t.problemRefused,
   };
   const hours: number[] = [];
   for (let h = Math.ceil(axisStart / 60) * 60; h < axisEnd; h += 60) hours.push(h);
@@ -369,7 +395,11 @@ export function RosterDay({
   const othersPending = Math.max(0, ...(pending ?? []).map((p) => p.others));
   const selRange = sel ? range(sel) : null;
   const barText = (type: AssignmentType | undefined, b: Block, defaultMarket: string | null) =>
-    `${type?.name ?? b.code}${b.market ? ` · ${b.market}` : ""} · ${fromMinutes(b.start)}–${fromMinutes(b.end)}${defaultMarket && !b.market ? ` · ${t.ownMarket}` : ""}`;
+    `${type?.name ?? absenceName(absenceKeyOf(b.code) ?? "") ?? b.code}${type?.kind === "work" && (b.market ?? defaultMarket) ? ` · ${b.market ?? defaultMarket}` : ""} · ${fromMinutes(b.start)}–${fromMinutes(b.end)}`;
+  const pickerLabels = (eachDefault: string) => ({
+    assignment: t.codeLabel, market: t.market, eachDefault, pauseNoMarket: t.pauseNoMarket, absenceNoMarket: t.absenceNoMarket,
+    absenceGroup: t.absenceGroup, placeholder: example(t.codeHint), noMatch: t.noMatch,
+  });
 
   return (
     <div className="flex flex-col gap-4" data-testid="roster-day">
@@ -379,6 +409,7 @@ export function RosterDay({
         <AssignmentPicker
           types={ctx.types}
           markets={ctx.hoursMarkets}
+          absences={activeAbsences}
           value={chosen}
           inputRef={codeField}
           invalid={codeProblem !== null}
@@ -387,7 +418,7 @@ export function RosterDay({
           onChoose={(v) => { if (sel) paint(v); }}
           onEscape={() => grid.current?.focus()}
           onProblem={(p) => setCodeProblem(p)}
-          labels={{ assignment: t.codeLabel, market: t.market, ownMarket: t.ownMarket, pauseNoMarket: t.pauseNoMarket, placeholder: example(t.codeHint), noMatch: t.noMatch }}
+          labels={pickerLabels(t.eachDefault)}
         />
         <Button variant="outlined" disabled={!sel || !chosen.code || busy} onClick={applyChosen}>{t.apply}</Button>
         {codeProblem ? <p className="pb-2 text-caption text-p4a-error" role="alert" data-testid="assignment-problem">{problemText[codeProblem]}</p> : null}
@@ -452,18 +483,20 @@ export function RosterDay({
                   ) : null}
                   {blocks.map((b) => {
                     const type = typeOf.get(b.code);
-                    const tone = type ? toneOf(type) : "productive";
+                    const absent = absenceKeyOf(b.code) !== null;
+                    const tone = absent ? "absence" : type ? toneOf(type) : "productive";
+                    // E10: every work bar names its market, CODE · MARKET; a pause its code; an absence block its name
+                    const label = barLabel(b, row.person.defaultHoursMarket, kinds, absenceName);
                     return (
                       <div
                         key={`${b.start}-${b.code}`}
                         // the type's name in words on hover (D13), built then: the page stays within its budget
                         onPointerEnter={(e) => { e.currentTarget.title = barText(type, b, row.person.defaultHoursMarket); }}
-                        aria-label={`${assignmentText(b)} ${fromMinutes(b.start)}–${fromMinutes(b.end)}`}
+                        aria-label={`${absent ? label : assignmentText({ code: b.code, market: kinds.get(b.code) === "work" ? b.market ?? row.person.defaultHoursMarket : null })} ${fromMinutes(b.start)}–${fromMinutes(b.end)}`}
                         className={`absolute inset-y-1 flex items-center gap-1 overflow-hidden whitespace-nowrap rounded-button px-1 text-caption font-semibold ${TONE_CLASS[tone]}`}
                         style={{ left: px(b.start), width: Math.max(4, px(b.end) - px(b.start)) }}
                       >
-                        <span>{b.code}</span>
-                        {b.market && b.market !== row.person.defaultHoursMarket ? <span className="rounded-button bg-white/80 px-1 text-p4a-inkt">{b.market}</span> : null}
+                        <span>{label}</span>
                       </div>
                     );
                   })}
@@ -518,12 +551,15 @@ export function RosterDay({
           <div className="flex flex-col gap-3" data-testid="assignment-dialog">
             <AssignmentPicker
               types={ctx.types.filter((x) => x.isActive || x.code === dialog.code).map((x) => (x.code === dialog.code ? { ...x, isActive: true } : x))}
+              absences={absences.filter((a) => a.isActive || blockCode({ code: null, absence: a.key }) === dialog.code)}
               markets={ctx.hoursMarkets}
               value={{ code: dialog.code, market: dialog.market }}
               onChange={(v) => setDialog({ ...dialog, code: v.code ?? dialog.code, market: v.market })}
               onChoose={() => undefined}
               onProblem={(p) => setDialogProblem(p)}
-              labels={{ assignment: t.codeLabel, market: t.market, ownMarket: t.ownMarket, pauseNoMarket: t.pauseNoMarket, placeholder: example(t.codeHint), noMatch: t.noMatch }}
+              // the bar dialog shows the person's market itself (E10): its empty choice names their Default market
+              labels={pickerLabels(rows[dialog.r]?.person.defaultHoursMarket
+                ? t.personDefault.replace("{market}", rows[dialog.r]!.person.defaultHoursMarket!) : t.eachDefault)}
               testId="assignment-dialog-code"
               inline
             />

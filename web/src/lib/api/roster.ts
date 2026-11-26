@@ -54,7 +54,13 @@ export function blocksParam(raw: unknown): AssignmentBlockInput[] {
   return raw.map((x) => {
     if (!x || typeof x !== "object" || Array.isArray(x)) throw new ApiError(400, "invalid_blocks", "each block is an object");
     const b = x as Record<string, unknown>;
-    if (typeof b.code !== "string" || !/^[A-Z0-9]{1,6}$/.test(b.code)) throw new ApiError(400, "invalid_blocks", "code must be 1 to 6 of A-Z and 0-9");
+    // an absence block (addition 0010a, E9): { absence: "<key>", start, end }, never a code or a market as well
+    const absence = b.absence === undefined || b.absence === null || b.absence === "" ? null : b.absence;
+    if (absence !== null) {
+      if (typeof absence !== "string" || !/^[a-z0-9_]{1,40}$/.test(absence)) throw new ApiError(400, "invalid_blocks", "absence must be an absence type key");
+      if (b.code !== undefined && b.code !== null && b.code !== "") throw new ApiError(400, "invalid_blocks", "a block is either an assignment or an absence, not both");
+      if (b.hoursMarket !== undefined && b.hoursMarket !== null && b.hoursMarket !== "") throw new ApiError(400, "invalid_blocks", "an absence block has no hours market");
+    } else if (typeof b.code !== "string" || !/^[A-Z0-9]{1,6}$/.test(b.code)) throw new ApiError(400, "invalid_blocks", "code must be 1 to 6 of A-Z and 0-9");
     if (typeof b.start !== "string" || typeof b.end !== "string" || !BLOCK_START_RE.test(b.start) || !BLOCK_END_RE.test(b.end) || b.end <= b.start) {
       throw new ApiError(400, "invalid_blocks", "start and end must be hh:mm, the end after the start");
     }
@@ -62,6 +68,7 @@ export function blocksParam(raw: unknown): AssignmentBlockInput[] {
     if (market !== null && (typeof market !== "string" || !/^[A-Z]{2}$/.test(market))) throw new ApiError(400, "invalid_blocks", "hoursMarket must be a market code");
     const note = b.note === undefined || b.note === null || b.note === "" ? null : b.note;
     if (note !== null && (typeof note !== "string" || note.trim().length > 120)) throw new ApiError(400, "invalid_blocks", "note must be at most 120 characters");
-    return { code: b.code, start: b.start, end: b.end, hoursMarket: market as string | null, note: note === null ? null : (note as string).trim() || null };
+    return { code: absence === null ? (b.code as string) : "", absence: absence as string | null, start: b.start, end: b.end, hoursMarket: market as string | null,
+      note: note === null ? null : (note as string).trim() || null };
   });
 }

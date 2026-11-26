@@ -11,6 +11,12 @@ export const dynamic = "force-dynamic";
  * new status and market. No day today, an unknown key or a market the tenant lacks is a 404, a market that is no active
  * hours market a 400, an ended day a 409 (changing an ended day is a correction). Same guards as /day/end: header
  * x-cma-request: 1 and no cross-site requests.
+ *
+ * Switch (addition 0010a, E6): body { "assignment": "<code>", "hoursMarket": "<code>" } books an active assignment type with
+ * its own status, a work or extra type under the market (without one: the person's Default market; none at all is a 400), a
+ * pause without a market (a market given: 400); an assignment and a key together are a 400. A key alone in a tenant that
+ * has assignment types books a pause status or an Other status (Training, Meeting, Coaching) without a market, and a market
+ * alone re-books the assignment in force under it.
  */
 export async function POST(request: Request) {
   return forPrincipal(async (me) => {
@@ -21,9 +27,14 @@ export async function POST(request: Request) {
       throw new ApiError(400, "invalid_status", "key must be a status key from /api/v1/me/statuses");
     }
     const hoursMarket = body.hoursMarket === undefined ? null : hoursMarketOrNull(body.hoursMarket, "hoursMarket");
-    if (key === null && hoursMarket === null) {
-      throw new ApiError(400, "invalid_status", "a change needs a key, an hoursMarket or both");
+    const assignment = body.assignment === undefined || body.assignment === null ? null : body.assignment;
+    if (assignment !== null && (typeof assignment !== "string" || !/^[A-Za-z0-9]{1,6}$/.test(assignment))) {
+      throw new ApiError(400, "invalid_status", "assignment must be an assignment type code from /api/v1/me/day/plan");
     }
-    return ok(await data().setStatus(me, { key, hoursMarket }, new Date().toISOString()));
+    if (assignment !== null && key !== null) throw new ApiError(400, "invalid_status", "an assignment books its own status: give one of key and assignment");
+    if (key === null && hoursMarket === null && assignment === null) {
+      throw new ApiError(400, "invalid_status", "a change needs an assignment, a key, an hoursMarket or a combination");
+    }
+    return ok(await data().setStatus(me, { key, hoursMarket, assignment: assignment === null ? null : (assignment as string).toUpperCase() }, new Date().toISOString()));
   });
 }

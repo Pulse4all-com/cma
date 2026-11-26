@@ -16,7 +16,10 @@
  * 2026 (brief A, addition 0009zx) the assignments: the CODE-MARKET parser with the UK alias, painting and emptying over a
  * selection inside the shift, joined bars, the colours from what a type books, the planner zone, the planned figures per
  * slot and per person on 249's B10 fixture, and the plan check. Copy week, Apply and Save as standard week write the team
- * as the other writes do (four writes on the page's key).
+ * as the other writes do (four writes on the page's key). Since 26 November 2026 (brief B, addition 0010a) the absence
+ * block's code, which no type's code can be, never planned or counted as working; every work bar CODE · MARKET; and My day's
+ * lanes: the words of a block, the axis widened by the Actual lane, a stretch clamped to the lane, the labels, the Switch
+ * button's words, the colours of plan and actual alike (lib/my-day).
  */
 import { readFileSync } from "node:fs";
 import {
@@ -25,9 +28,10 @@ import {
 } from "../src/lib/roster.ts";
 import { fmtDateRange } from "../src/lib/time.ts";
 import {
-  assignmentText, fromPlannerMinutes, joinBlocks, paintBlocks, parseAssignment, planCheck, plannedByKey, plannedMinutes, plannedSummary, pickerFilter,
-  pickerOrder, slotFigures, toneOf, toPlannerMinutes,
+  absenceCode, absenceKeyOf, assignmentText, barLabel, blockCode, fromPlannerMinutes, isAbsenceCode, joinBlocks, paintBlocks, parseAssignment, planCheck,
+  plannedByKey, plannedMinutes, plannedSummary, pickerFilter, pickerOrder, slotFigures, toneOf, toPlannerMinutes,
 } from "../src/lib/assignments.ts";
+import { chipLabel, hoursMinutes, itemLabel, itemTone, laneAxis, laneBox, laneTicks, switchLabel } from "../src/lib/my-day.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -298,6 +302,47 @@ expect("the plan check: no lunch block in a long shift and a gap; the lunch type
     planCheck(shift9to17, [...day, { code: "LB", start: 720, end: 750, market: null, note: null }], 360, "", kinds).map((w) => w.kind), planCheck(shift9to17, [], 360, "LB", kinds)],
   [[{ kind: "lunch" }, { kind: "gap", start: 720, end: 780 }], [], ["gap"], []],
   [[{ kind: "gap", start: 720, end: 780 }], [], [], []]);
+
+// ---- brief B (addition 0010a): absence blocks, CODE · MARKET, My day's lanes ------------------------------------------
+const kindsB = new Map([["SL", "work"], ["GO", "work"], ["LB", "pause"], ["X", "work"]]);
+expect("an absence block's code: no type's code can be it, and it carries its key both ways",
+  [absenceCode("sick"), isAbsenceCode("@sick"), isAbsenceCode("SL"), absenceKeyOf("@sick"), absenceKeyOf("GO"), blockCode({ code: null, absence: "sick" }), blockCode({ code: "GO", absence: null }),
+    parseAssignment("@sick", [{ code: "SL", name: "Sales", kind: "work", workArea: "sales", isExtra: false, statusIsProductive: true, isActive: true }], [])],
+  ["@sick", true, false, "sick", null, "@sick", "GO", { problem: "format" }],
+  ["sick", false, true, null, "GO", "sick", "@GO", { code: "SL", market: null }]);
+const withSick = [{ code: "SL", start: 540, end: 660, market: "NL", note: null }, { code: "LB", start: 660, end: 690, market: null, note: null },
+  { code: "@sick", start: 690, end: 1020, market: null, note: null }];
+expect("an absence block is neither planned nor working (E9); a shift whose blocks are absences is no shift without assignments",
+  [plannedMinutes(shift9to17, withSick, kindsB), [...plannedByKey(withSick, "NL", kindsB)], slotFigures([{ userId: "a", defaultMarket: "NL", blocks: withSick }], kindsB, 15, 690, 705).map((f) => [f.working, [...f.byKey]]),
+    plannedMinutes(shift9to17, [{ code: "@sick", start: 540, end: 1020, market: null, note: null }], kindsB),
+    plannedSummary([{ userId: "a", date: "2026-11-30", defaultMarket: "NL", shift: shift9to17, blocks: withSick }], kindsB).dayLevel],
+  [120, [["SL/NL", 120], ["LB/", 30]], [[0, []]], 0, 0],
+  [450, [["SL/NL", 120], ["LB/", 30], ["@sick/NL", 330]], [[1, [["@sick/NL", 1]]]], 480, 480]);
+expect("every work bar reads CODE · MARKET (its own, else the Default market), a pause its code, an absence its name (E10)",
+  [barLabel({ code: "GO", market: "SE" }, "NL", kindsB), barLabel({ code: "GO", market: null }, "NL", kindsB), barLabel({ code: "LB", market: null }, "NL", kindsB),
+    barLabel({ code: "@sick", market: null }, "NL", kindsB, (k) => (k === "sick" ? "Sick" : null)), barLabel({ code: "GO", market: null }, null, kindsB)],
+  ["GO · SE", "GO · NL", "LB", "Sick", "GO"],
+  ["GO-SE", "GO", "LB · NL", "@sick", "GO · null"]);
+const atB = (hhmm) => Date.parse(`2026-11-26T${hhmm}:00Z`);
+const planB = [{ code: "MC", name: "Missed calls", kind: "work", workArea: "operations", market: "SE", from: atB("09:00"), to: atB("09:30") },
+  { code: "SB", name: "Short break", kind: "pause", workArea: null, market: null, from: atB("11:00"), to: atB("11:15") },
+  { code: "SL", name: "Sales", kind: "work", workArea: "sales", market: "SE", from: atB("15:00"), to: atB("17:30") }];
+const actB = [{ code: "MC", name: "Missed calls", kind: "work", workArea: "operations", market: "SE", from: atB("08:58"), to: atB("09:30") },
+  { code: null, name: "Training", kind: "other", workArea: null, market: null, from: atB("09:30"), to: atB("17:50") }];
+const axisB = laneAxis(planB, actB, atB("17:50"));
+expect("My day's lanes: the plan sets the axis, Actual past it widens the end, a stretch before it starts at its edge",
+  [new Date(axisB.from).toISOString().slice(11, 16), new Date(axisB.to).toISOString().slice(11, 16), laneBox(actB[0], axisB).left, laneTicks(axisB).length,
+    new Date(laneTicks(axisB)[0]).toISOString().slice(11, 16)],
+  ["09:00", "18:00", 0, 4, "09:00"],
+  ["08:58", "17:30", -0.22, 5, "08:00"]);
+expect("My day's words and colours: GO · SE, SB, a name without a code; plan and actual alike; the Switch button (E6)",
+  [itemLabel({ code: "GO", name: "General Ops", kind: "work", market: "SE" }), itemLabel({ code: "SB", name: "Short break", kind: "pause", market: null }),
+    itemLabel({ code: null, name: "Training", kind: "other", market: null }), chipLabel({ code: "CC", name: "Courtesy calls" }),
+    itemTone({ kind: "work", workArea: "sales" }) === toneOf({ kind: "work", workArea: "sales", isExtra: false, statusIsProductive: true }), itemTone({ kind: "absence", workArea: null }),
+    switchLabel("Switch to", { kind: "work", code: "GO", name: "General Ops", market: "SE" }), switchLabel("Switch to", { kind: "pause", code: "SB", name: "Short break", market: null }),
+    switchLabel("Switch to", { kind: "other", code: null, name: "Training", market: null }), hoursMinutes(4 * 3600 + 5 * 60), hoursMinutes(30 * 60)],
+  ["GO · SE", "SB", "Training", "CC · Courtesy calls", true, "absence", "Switch to GO · SE", "Switch to SB Short break", "Switch to Training", "4h 05m", "0h 30m"],
+  ["GO-SE", "SB · null", "null", "CC", false, "pause", "Switch to GO", "Switch to SB", "Switch to training", "4:05", "30m"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

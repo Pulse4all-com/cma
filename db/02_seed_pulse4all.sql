@@ -791,3 +791,31 @@ begin
   on conflict (tenant_id, key) do nothing;
 end
 $$;
+
+-- The roster drives the day (after addition 0010a; Martin, 26 November 2026, brief B, E3, E5, E12): Pulse4all
+-- Subscriptions shows a roster switch for 5 minutes (the catalog default, set here so the value is the tenant's own); a
+-- Clock in on a shift without blocks (a week published before shifts needed assignments) starts on Available - Operations
+-- (available_operations; confirmed by Arno, 26 Nov 2026); two absence types for part of a day, Appointment and Personal,
+-- unpaid and not carried over (confirmed by Arno, 26 Nov 2026), whose names say nothing medical beyond the word. A rerun
+-- adds what is missing and keeps what was changed since on the configuration screen (on conflict do nothing). A database
+-- without the addition says so; rerun this seed after 254_roster_drives_the_day.sql.
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  if not exists (select 1 from cma.setting where key = 'roster.fallback_status') then
+    raise notice 'The roster does not drive the day yet (addition 0010a): rerun this seed after 254_roster_drives_the_day.sql';
+    return;
+  end if;
+  insert into cma.absence_type (tenant_id, key, name, is_paid, sort_order, carries_over) values
+    (v_subs, 'appointment', 'Appointment', false, 28, false),
+    (v_subs, 'personal',    'Personal',    false, 29, false)
+  on conflict (tenant_id, key) do nothing;
+  insert into cma.tenant_setting (tenant_id, key, value)
+  select v_subs, v.key, v.value
+  from (values ('roster.switch_notice_minutes', '5'), ('roster.fallback_status', 'available_operations')) as v(key, value)
+  where v.key <> 'roster.fallback_status'
+     or exists (select 1 from cma.work_status s where s.tenant_id = v_subs and s.key = 'available_operations' and s.status = 'active' and s.is_working)
+  on conflict (tenant_id, key) do nothing;
+end
+$$;

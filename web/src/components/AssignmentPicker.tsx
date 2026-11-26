@@ -8,6 +8,11 @@
  * Enter takes the typed code, else the highlighted type. Next to it the Hours market: Own market (the default) and the
  * tenant's active hours markets; disabled for a pause, which has no market (0009zz).
  *
+ * Since addition 0010a (brief B, E9 and E10): a group Absence after the types, the tenant's active absence types (an
+ * absence block, "@key" in the planner's lists, Background Blue as a cell absence), and the market's empty choice reads
+ * "Each person's default" (a block written without a market takes the person's Default market); an absence, as a pause,
+ * has no market.
+ *
  * A combobox per the ARIA pattern: the input owns the list (aria-controls, aria-activedescendant), the arrows move in it,
  * Enter chooses, Esc closes the list (a second Esc hands back to the caller), Tab leaves. The colour never carries meaning
  * alone: the code and the name are always text (Pulse4all-Style 7.8). Inline (the bar dialog): the list takes its place
@@ -15,14 +20,17 @@
  */
 import { useId, useRef, useState, type RefObject } from "react";
 import type { AssignmentType, HoursMarket } from "@/lib/data";
-import { parseAssignment, pickerFilter, pickerOrder, toneOf, TONE_CLASS, type ParseProblem } from "@/lib/assignments";
+import { absenceCode, absenceKeyOf, parseAssignment, pickerFilter, pickerOrder, toneOf, TONE_CLASS, type ParseProblem } from "@/lib/assignments";
 
 export type Choice = { code: string | null; market: string | null };
 
 export function AssignmentPicker({
   types, markets, value, onChange, onChoose, onEscape, onProblem, inputRef, labels, invalid = false, testId = "assignment-code", inline = false,
+  absences = [],
 }: {
   types: readonly AssignmentType[];
+  /** The tenant's active absence types (E9): the group Absence after the types */
+  absences?: readonly { key: string; name: string }[];
   markets: readonly HoursMarket[];
   value: Choice;
   /** The type or market changed (the dropdowns follow it) */
@@ -34,7 +42,7 @@ export function AssignmentPicker({
   /** Typed text that names no type, or a market a pause cannot carry */
   onProblem: (p: ParseProblem | null) => void;
   inputRef?: RefObject<HTMLInputElement | null>;
-  labels: { assignment: string; market: string; ownMarket: string; pauseNoMarket: string; placeholder: string; noMatch: string };
+  labels: { assignment: string; market: string; eachDefault: string; pauseNoMarket: string; absenceNoMarket: string; absenceGroup: string; placeholder: string; noMatch: string };
   invalid?: boolean;
   testId?: string;
   /** In a dialog: the list in the flow, opened on a click, typing or an arrow (not on focus) */
@@ -45,15 +53,23 @@ export function AssignmentPicker({
   const input = inputRef ?? own;
   const ordered = pickerOrder(types);
   const current = types.find((t) => t.code === value.code) ?? null;
+  const currentAbsence = value.code !== null && absenceKeyOf(value.code) !== null ? absences.find((a) => absenceCode(a.key) === value.code) ?? null : null;
   const [text, setText] = useState<string | null>(null);   // null: the field shows the chosen code
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
-  const options = pickerFilter(ordered, text ?? "");
+  // the types, then the group Absence (E9): one list, so the arrows and Enter walk both
+  const absenceOptions = absences.map((a) => ({ code: absenceCode(a.key), name: a.name, absence: true as const }));
+  const options: ({ code: string; name: string; absence?: true } & Partial<AssignmentType>)[] = [
+    ...pickerFilter(ordered, text ?? ""),
+    ...absenceOptions.filter((a) => (text ?? "").trim() === "" || a.name.toUpperCase().includes((text ?? "").trim().toUpperCase())),
+  ];
+  const firstAbsence = options.findIndex((o) => o.absence);
   const isPause = current?.kind === "pause";
+  const noMarket = isPause || currentAbsence !== null;
 
   function choose(code: string, market: string | null) {
     const type = types.find((t) => t.code === code);
-    const m = type?.kind === "pause" ? null : market;
+    const m = type?.kind === "pause" || absenceKeyOf(code) !== null ? null : market;
     setText(null);
     setOpen(false);
     onProblem(null);
@@ -83,8 +99,8 @@ export function AssignmentPicker({
       <label className="relative flex flex-col gap-2 text-small font-semibold" htmlFor={`${id}-input`}>
         {labels.assignment}
         <span className={`relative flex ${inline ? "flex-col" : "items-center"}`}>
-          {current && text === null ? (
-            <span aria-hidden="true" className={`pointer-events-none absolute left-3 top-3 h-4 w-4 rounded-button ${TONE_CLASS[toneOf(current)]}`} />
+          {(current || currentAbsence) && text === null ? (
+            <span aria-hidden="true" className={`pointer-events-none absolute left-3 top-3 h-4 w-4 rounded-button ${current ? TONE_CLASS[toneOf(current)] : TONE_CLASS.absence}`} />
           ) : null}
           <input
             id={`${id}-input`}
@@ -95,7 +111,7 @@ export function AssignmentPicker({
             aria-autocomplete="list"
             aria-activedescendant={open && options[active] ? optionId(active) : undefined}
             aria-invalid={invalid || undefined}
-            value={text ?? (current ? `${current.code}  ${current.name}` : "")}
+            value={text ?? (current ? `${current.code}  ${current.name}` : currentAbsence ? currentAbsence.name : "")}
             placeholder={labels.placeholder}
             maxLength={40}
             data-testid={testId}
@@ -115,7 +131,7 @@ export function AssignmentPicker({
               const parsed = parseAssignment(typed, types.map((t) => ({ ...t })), markets);
               const only = options.length === 1 ? options[0]! : null;
               if ("problem" in parsed && (parsed.problem === "unknown" || parsed.problem === "format") && only) {
-                onChange({ code: only.code, market: only.kind === "pause" ? null : value.market });
+                onChange({ code: only.code, market: only.kind === "pause" || only.absence ? null : value.market });
                 return;
               }
               if ("problem" in parsed) { onProblem(parsed.problem); return; }
@@ -138,12 +154,13 @@ export function AssignmentPicker({
                 onEscape?.();
               }
             }}
-            className={`h-10 ${inline ? "w-56" : "w-72"} rounded-input border bg-white pr-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue ${current && text === null ? "pl-9" : "pl-3"} ${invalid ? "border-p4a-error" : "border-p4a-border"}`}
+            className={`h-10 ${inline ? "w-56" : "w-72"} rounded-input border bg-white pr-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue ${(current || currentAbsence) && text === null ? "pl-9" : "pl-3"} ${invalid ? "border-p4a-error" : "border-p4a-border"}`}
           />
           {open ? (
             <ul id={listId} role="listbox" aria-label={labels.assignment}
               className={`${inline ? "mt-1 max-h-60 w-full" : "absolute left-0 top-11 z-20 max-h-80 w-80"} overflow-y-auto rounded-input border border-p4a-border bg-white py-1 font-normal shadow-[0_1px_2px_rgba(11,19,61,0.06)]`}>
-              {options.length === 0 ? <li className="px-3 py-2 text-small text-p4a-muted">{labels.noMatch}</li> : options.map((t, i) => (
+              {options.length === 0 ? <li className="px-3 py-2 text-small text-p4a-muted">{labels.noMatch}</li> : options.flatMap((t, i) => [
+                ...(i === firstAbsence ? [<li key="absence-group" role="presentation" className="px-3 pb-1 pt-2 text-caption font-semibold text-p4a-grey">{labels.absenceGroup}</li>] : []),
                 <li
                   key={t.code}
                   id={optionId(i)}
@@ -154,11 +171,11 @@ export function AssignmentPicker({
                   onPointerEnter={() => setActive(i)}
                   className={`flex h-10 cursor-pointer items-center gap-3 px-3 text-body ${i === active ? "bg-p4a-bgblue" : ""}`}
                 >
-                  <span aria-hidden="true" className={`h-4 w-4 shrink-0 rounded-button ${TONE_CLASS[toneOf(t)]}`} />
-                  <span className="tabular w-12 shrink-0 font-semibold">{t.code}</span>
+                  <span aria-hidden="true" className={`h-4 w-4 shrink-0 rounded-button ${t.absence ? TONE_CLASS.absence : TONE_CLASS[toneOf(t as AssignmentType)]}`} />
+                  {t.absence ? null : <span className="tabular w-12 shrink-0 font-semibold">{t.code}</span>}
                   <span className="truncate">{t.name}</span>
-                </li>
-              ))}
+                </li>,
+              ])}
             </ul>
           ) : null}
         </span>
@@ -166,8 +183,8 @@ export function AssignmentPicker({
       <label className="flex flex-col gap-2 text-small font-semibold">
         {labels.market}
         <select
-          value={isPause ? "" : value.market ?? ""}
-          disabled={isPause}
+          value={noMarket ? "" : value.market ?? ""}
+          disabled={noMarket}
           data-testid={`${testId}-market`}
           onChange={(e) => {
             const market = e.target.value || null;
@@ -176,8 +193,8 @@ export function AssignmentPicker({
           }}
           className="h-10 min-w-40 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue disabled:border-transparent disabled:bg-p4a-sand disabled:text-p4a-muted"
         >
-          <option value="">{isPause ? labels.pauseNoMarket : labels.ownMarket}</option>
-          {isPause ? null : markets.filter((m) => m.isActive || m.code === value.market).map((m) => <option key={m.code} value={m.code}>{m.code} · {m.name}</option>)}
+          <option value="">{isPause ? labels.pauseNoMarket : currentAbsence ? labels.absenceNoMarket : labels.eachDefault}</option>
+          {noMarket ? null : markets.filter((m) => m.isActive || m.code === value.market).map((m) => <option key={m.code} value={m.code}>{m.code} · {m.name}</option>)}
         </select>
       </label>
     </div>

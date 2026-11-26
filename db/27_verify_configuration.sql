@@ -21,6 +21,8 @@
 -- since 0009l. Before 172 has run the list names a permission no role holds yet, which A4 accepts.
 -- Adjusted 23 November 2026 (addition 0009zn, 228_work_area.sql): A5 names cma.upsert_work_status's 8-argument signature
 -- (p_work_area last, default none); 228 drops the 7-argument one, and the 6- and 7-argument calls of block B reach the new one.
+-- Adjusted 26 November 2026 (addition 0010a, 254_roster_drives_the_day.sql): verify.job_permissions gains
+-- workday.roster_switch, the roster job's right, which cma.ensure_scheduler_user gives the scheduler role since 0010a.
 -- =============================================================================================
 
 do $$
@@ -33,7 +35,7 @@ $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);   -- 'true' to make every block fail
 -- The jobs' permissions: the only ones the scheduler role may hold (A4), each a system job's right, none a person's
-select set_config('verify.job_permissions', 'workday.close_forgotten,follow_up.refresh,flash.snapshot,data_quality.refresh,pledges.snapshot,customers.refresh', false);
+select set_config('verify.job_permissions', 'workday.close_forgotten,follow_up.refresh,flash.snapshot,data_quality.refresh,pledges.snapshot,customers.refresh,workday.roster_switch', false);
 
 -- A. Structure and privileges (universal)
 do $$

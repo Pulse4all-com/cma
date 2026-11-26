@@ -7,7 +7,7 @@ import { firstPage } from "@/lib/nav";
 import { cellLabel, weekDays } from "@/lib/roster";
 import { dateKeyInZone, fmtDate, fmtMinutes, isDateKey, startOfWeek } from "@/lib/time";
 import { resolve } from "@/app/access";
-import { instantOf, pct, plannedMinutes, toMinutes, toneOf, TONE_CLASS } from "@/lib/assignments";
+import { blockCode, instantOf, pct, plannedMinutes, toMinutes, toneOf, TONE_CLASS } from "@/lib/assignments";
 import { localParts } from "@/lib/corrections";
 import type { PublishedAssignment } from "@/lib/data";
 
@@ -49,7 +49,9 @@ export default async function MySchedulePage({ searchParams }: PageProps<"/sched
   const rows = await data().getMyRoster(me, { from: days[0]!, to: days[6]! });
   const planned = rows.reduce((n, d) => n + (d.kind === "shift" && d.start && d.end
     ? plannedMinutes({ start: toMinutes(d.start), end: toMinutes(d.end) },
-        d.assignments.map((b) => ({ code: b.code, start: toMinutes(b.start), end: toMinutes(b.end) })), new Map(d.assignments.map((b) => [b.code, b.kind])))
+        // an absence block (addition 0010a, E9) is neither planned nor worked: its code is no type's, so it counts nothing
+        d.assignments.map((b) => ({ code: blockCode(b), start: toMinutes(b.start), end: toMinutes(b.end) })),
+        new Map(d.assignments.flatMap((b) => (b.kind === "absence" || !b.code ? [] : [[b.code, b.kind] as const]))))
     : 0), 0);
 
   return (
@@ -131,7 +133,7 @@ function DayBlocks({ date, start, end, blocks, zone, label }: { date: string; st
     <div className="mt-2 flex flex-col gap-1 pb-2" data-testid="schedule-blocks">
       <div className="relative h-2 w-full max-w-md overflow-hidden rounded-button bg-p4a-neutral-surface" aria-hidden="true">
         {blocks.map((b) => (
-          <span key={`${b.start}-${b.code}`} className={`absolute inset-y-0 ${TONE_CLASS[toneOf({ ...b, statusIsProductive: null })]}`}
+          <span key={`${b.start}-${blockCode(b)}`} className={`absolute inset-y-0 ${b.kind === "absence" ? TONE_CLASS.absence : TONE_CLASS[toneOf({ ...b, kind: b.kind, statusIsProductive: null })]}`}
             style={{ left: `${pct(toMinutes(b.start) - s, span)}%`, width: `${pct(toMinutes(b.end) - toMinutes(b.start), span)}%` }} />
         ))}
       </div>
@@ -140,7 +142,7 @@ function DayBlocks({ date, start, end, blocks, zone, label }: { date: string; st
           const a = there(b, b.start);
           const z = there(b, b.end);
           return (
-            <li key={`${b.start}-${b.code}`} className="tabular">
+            <li key={`${b.start}-${blockCode(b)}`} className="tabular">
               {b.start}–{b.end}
               {a && z ? <span className="text-p4a-muted"> ({a}–{z} {b.hoursMarket})</span> : null}
               <span className="ml-2 font-semibold">{b.code}</span> {b.name}
