@@ -104,14 +104,20 @@ export function AssignmentPicker({
             onFocus={(e) => { e.currentTarget.select(); setActive(Math.max(0, ordered.findIndex((o) => o.code === value.code))); if (!inline) setOpen(true); }}
             onClick={() => setOpen(true)}
             onChange={(e) => { setText(e.target.value); setActive(0); setOpen(true); onProblem(null); }}
-            // leaving the field keeps what was typed when it names a type (CODE or CODE-MARKET), so Apply and Save use it
-            // and never the earlier choice; text that names none is let go and says why
+            // leaving the field keeps what was typed when it names a type (CODE or CODE-MARKET, or a filter with one match),
+            // so Apply and Save use it and never the earlier choice; text that names none says why, and the caller's Apply and
+            // Save wait until it is put right (RosterDay, typedProblem)
             onBlur={() => {
               setOpen(false);
               const typed = (text ?? "").trim();
               setText(null);
               if (typed === "") return;
               const parsed = parseAssignment(typed, types.map((t) => ({ ...t })), markets);
+              const only = options.length === 1 ? options[0]! : null;
+              if ("problem" in parsed && (parsed.problem === "unknown" || parsed.problem === "format") && only) {
+                onChange({ code: only.code, market: only.kind === "pause" ? null : value.market });
+                return;
+              }
               if ("problem" in parsed) { onProblem(parsed.problem); return; }
               const type = types.find((t) => t.code === parsed.code);
               onChange({ code: parsed.code, market: type?.kind === "pause" ? null : parsed.market ?? value.market });

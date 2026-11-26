@@ -38,6 +38,8 @@ const SLOT_PX = 20;
 type Sel = { r0: number; s0: number; r1: number; s1: number };
 type RowProblem = ParseProblem | "outside" | "times" | "past" | "failed";
 type Pending = { userId: string; prev: Block[]; next: Block[]; others: number };
+/** A problem with text typed in the Assignment dropdown (not with the selection or the save) */
+const typedProblem = (p: RowProblem | null): boolean => p === "unknown" || p === "retired" || p === "market" || p === "pauseMarket" || p === "format";
 
 async function send(path: string, body: unknown): Promise<Response> {
   return fetch(path, { method: "PUT", headers: { "content-type": "application/json", "x-cma-request": "1" }, body: JSON.stringify(body) });
@@ -260,6 +262,8 @@ export function RosterDay({
   /** Enter on the grid or Apply: the assignment chosen in the dropdown; without one, the dropdown takes the keyboard */
   function applyChosen() {
     if (!sel) return;
+    // typed text that names no type waits to be put right: the earlier choice is never painted in its place
+    if (typedProblem(codeProblem)) { codeField.current?.focus(); return; }
     if (!chosen.code) { setCodeProblem("empty"); codeField.current?.focus(); return; }
     paint({ code: chosen.code, market: chosen.market });
   }
@@ -297,6 +301,7 @@ export function RosterDay({
   }
   function saveDialog(remove: boolean) {
     if (!dialog) return;
+    if (!remove && typedProblem(dialogProblem)) return;   // the dialog keeps saying why; the bar's earlier type is not saved
     const row = rows[dialog.r]!;
     if (!row.shift) return;
     const without = paintBlocks(blocksOf.get(row.person.userId) ?? [], dialog.block.start, dialog.block.end, null, row.shift);

@@ -560,7 +560,8 @@ begin
       -- R4: the published blocks of every published shift this week and next, against 248's with a pause's market taken away
       for pe in select e.roster_week_id, e.user_id, e.business_date from cma.roster_published_entry e
                 where e.kind = 'shift' and e.business_date between v_this and v_this + 13 loop
-        v_n4 := v_n4 + 1;
+        -- counts the blocks compared, so a provoked run without any published block cannot read PASS
+        v_n4 := v_n4 + jsonb_array_length(pg_temp.v0009zz_published_0009zx(pe.roster_week_id, pe.user_id, pe.business_date));
         if cma.roster_published_blocks_json(pe.roster_week_id, pe.user_id, pe.business_date) is distinct from
            (select coalesce(jsonb_agg(case when x->>'kind' = 'pause'
                                            then x || '{"hoursMarket": null, "ownMarket": false, "hoursMarketZone": null}'::jsonb else x end
@@ -570,7 +571,7 @@ begin
           v_r4 := v_r4 || pe.business_date || ' ';
         end if;
       end loop;
-      if v_o4 = 1 and v_n4 = 0 then v_r4 := 'none to compare'; end if;
+      if v_o4 = 1 and v_n4 = 0 then v_r4 := 'no published block to compare'; end if;
     exception when others then
       v_err := sqlstate || ': ' || left(sqlerrm, 300);
     end;
@@ -578,12 +579,12 @@ begin
     perform set_config('app.tenant_id', '', true);
     perform set_config('app.user_id', '', true);
     if v_err is not null then
-      insert into pg_temp.verify_0009zz values (30, 'R1 and R2 ' || t.slug || ': the checks ran to their end', 'FAIL', v_err);
+      insert into pg_temp.verify_0009zz values (30, 'R1 to R4 ' || t.slug || ': the checks ran to their end', 'FAIL', v_err);
       continue;
     end if;
     if v_planner is null then
-      insert into pg_temp.verify_0009zz values (31, 'R1 and R2 ' || t.slug,
-        case when pg_temp.v0009zz_p('R1') or pg_temp.v0009zz_p('R2') then 'FAIL' else 'skip' end, 'no active person holds roster.manage');
+      insert into pg_temp.verify_0009zz values (31, 'R1 to R3 ' || t.slug,
+        case when pg_temp.v0009zz_p('R1') or pg_temp.v0009zz_p('R2') or pg_temp.v0009zz_p('R3') then 'FAIL' else 'skip' end, 'no active person holds roster.manage');
     else
       insert into pg_temp.verify_0009zz values (31, 'R1 ' || t.slug || ': roster_planned_hours = 248''s, a pause under no market',
         case when btrim(v_r1) <> '' then 'FAIL' else 'PASS' end,
@@ -597,10 +598,10 @@ begin
     end if;
     insert into pg_temp.verify_0009zz values (34, 'R4 ' || t.slug || ': the published blocks = 248''s, a pause without market, own market or zone',
       case when btrim(v_r4) <> '' then 'FAIL' else 'PASS' end,
-      format('published shifts %s; differing %s', v_n4, coalesce(nullif(btrim(v_r4), ''), 'none')));
+      format('published blocks %s; differing %s', v_n4, coalesce(nullif(btrim(v_r4), ''), 'none')));
   end loop;
   if not v_any then
-    insert into pg_temp.verify_0009zz values (30, 'R1 and R2 per tenant',
+    insert into pg_temp.verify_0009zz values (30, 'R1 to R4 per tenant',
       case when current_setting('verify.provoke') <> 'false' then 'FAIL' else 'skip' end, 'no active tenant');
   end if;
 end
