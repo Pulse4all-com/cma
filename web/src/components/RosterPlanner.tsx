@@ -312,17 +312,22 @@ export function RosterPlanner({
 
   const liveEntries = [...entries.values()];
   // Planned per person and the meter (Martin, 26 November 2026): the work blocks, a shift without blocks whole, no pause
-  const plannedDays: PlannedDay[] = liveEntries.filter((e) => week.people.some((p) => p.userId === e.userId)).map((e) => ({
-    userId: e.userId, date: e.date, defaultMarket: week.people.find((p) => p.userId === e.userId)?.defaultHoursMarket ?? null,
-    shift: e.kind === "shift" && e.start && e.end ? { start: toMinutes(e.start), end: toMinutes(e.end) } : null,
-    blocks: (cellBlocks.get(`${e.userId}:${e.date}`) ?? []).map((b) => ({ code: b.code, start: toMinutes(b.start), end: toMinutes(b.end), market: b.hoursMarket, note: b.note })),
-  }));
-  const planned = new Map<string, number>();
-  for (const d of plannedDays) planned.set(d.userId, (planned.get(d.userId) ?? 0) + plannedMinutes(d.shift, d.blocks, kinds));
-  const meterWords: MeterWords = {
+  // once per change of the cells or blocks, not per key typed in a cell (a draft changes neither); none in Day view
+  const { planned, weekSummary } = useMemo(() => {
+    const byId = new Map(week.people.map((p) => [p.userId, p]));
+    const days: PlannedDay[] = view !== "week" ? [] : [...entries.values()].filter((e) => byId.has(e.userId)).map((e) => ({
+      userId: e.userId, date: e.date, defaultMarket: byId.get(e.userId)?.defaultHoursMarket ?? null,
+      shift: e.kind === "shift" && e.start && e.end ? { start: toMinutes(e.start), end: toMinutes(e.end) } : null,
+      blocks: (cellBlocks.get(`${e.userId}:${e.date}`) ?? []).map((b) => ({ code: b.code, start: toMinutes(b.start), end: toMinutes(b.end), market: b.hoursMarket, note: b.note })),
+    }));
+    const perUser = new Map<string, number>();
+    for (const d of days) perUser.set(d.userId, (perUser.get(d.userId) ?? 0) + plannedMinutes(d.shift, d.blocks, kinds));
+    return { planned: perUser, weekSummary: plannedSummary(days, kinds) };
+  }, [view, entries, cellBlocks, week.people, kinds]);
+  const meterWords = useMemo((): MeterWords => ({
     title: ta.meterTitle, hint: ta.meterHint, week: ta.meterWeek, day: ta.meterDay, of: ta.meterOf, perAssignment: ta.meterPerAssignment,
     dayLevel: ta.meterDayLevel, pauses: ta.meterPauses, pausesHint: ta.meterPausesHint, noMarket: ta.meterNoMarket, nothing: ta.meterNothing,
-  };
+  }), [ta]);
   const headcount = headcountByDate(liveEntries);
   const coverage = coverageGrid(week.coverage, days);
   const problemText: Record<string, string> = {
@@ -420,7 +425,7 @@ export function RosterPlanner({
         )) : null}
       </nav>
 
-      {view === "week" && week.people.length > 0 ? <PlannedMeter week={plannedSummary(plannedDays, kinds)} types={week.planner.types} words={meterWords} /> : null}
+      {view === "week" && week.people.length > 0 ? <PlannedMeter week={weekSummary} types={week.planner.types} words={meterWords} /> : null}
 
       {view === "day" && copy.assignmentsDay ? (
         <RosterDay key={shownDay} week={week} date={shownDay} teamArg={teamArg} copy={{ ...copy, assignmentsDay: copy.assignmentsDay }} meterWords={meterWords} locale={locale}

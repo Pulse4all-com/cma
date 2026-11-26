@@ -21,12 +21,18 @@
 --   B5  Save as standard week saves the older pause without its market; a standard row with LB-GB (as before 0009zz) is
 --       shown without it by standard_week() and applied without it, not dropped
 --   B6  the planner writes the read-back blocks again: accepted, the older pause ends and LB is stored without a market
+--   B7  an older pause with a market of a type retired since: the planner's write of the read-back blocks is accepted (the
+--       pause counts as unchanged) and stores it without the market; a new block of the retired type is still refused
 --   R1  per active tenant, this week and next, every roster: roster_planned_hours = 248's definition with a pause's market
 --       taken away (the work rows equal, the pause rows under no market), both ways
 --   R2  per active tenant, the same weeks and rosters: roster_assignments = 248's definition with a pause's market taken
 --       away, both ways
+--   R3  per active tenant, the fourteen dates of this week and next, every roster: roster_slot_coverage = 248's definition
+--       with a pause regrouped under no market, both ways
+--   R4  per active tenant: roster_published_blocks_json (what my_roster and roster_today show) = 248's for every published
+--       shift of this week and next, a pause's hoursMarket, ownMarket and hoursMarketZone taken away (null, false, null)
 -- Provoke: verify.provoke below. 'true': every check reads FAIL and the verdict says PROVOKED, NOT A PASS. A check's id:
--- that check alone compares with a deliberate difference (R1 and R2: 248's side loses a row).
+-- that check alone compares with a deliberate difference (R1 to R4: 248's side loses a row).
 -- Collation: every ordering that feeds a compared text says collate "C".
 -- =============================================================================================
 
@@ -78,6 +84,7 @@ exception when others then
   return sqlstate;
 end
 $$;
+grant execute on function pg_temp.v0009zz_try(text) to cma_app;
 
 -- ---------------------------------------------------------------------------------------------
 -- 248's definitions (248_roster_assignments.sql), kept to compare with
@@ -153,6 +160,98 @@ begin
 end
 $$;
 
+create or replace function pg_temp.v0009zz_coverage_0009zx(p_date date, p_team_key text)
+returns table (
+  slot_start         timestamptz,
+  slot_time          time,
+  working            integer,
+  code               text,
+  hours_market_code  text,
+  people             integer
+)
+language plpgsql stable
+as $$
+#variable_conflict use_column
+declare
+  v_team uuid;
+  v_zone text;
+  v_slot integer;
+begin
+  perform cma.assert_permission('roster.manage');
+  if p_date is null then
+    raise exception 'a date is required' using errcode = 'CMA04';
+  end if;
+  v_team := cma.roster_team_id(p_team_key);
+  v_zone := cma.roster_planner_zone();
+  v_slot := cma.setting_of(cma.current_tenant_id(), 'roster.slot_minutes')::integer;
+  return query
+    with raw as materialized (
+      -- the weeks that hold the business dates around the day, through roster_week_week_idx (no read of older weeks)
+      select a.user_id, a.business_date, a.start_time, a.end_time, a.hours_market_code, a.assignment_type_id
+      from cma.roster_week w
+      join cma.roster_assignment a on a.tenant_id = w.tenant_id and a.roster_week_id = w.id
+      where w.tenant_id = cma.current_tenant_id()
+        and w.week_start between cma.week_start(p_date - 1) and cma.week_start(p_date + 1)
+        and w.team_id is not distinct from v_team
+        and a.valid_to is null and a.business_date between p_date - 1 and p_date + 1
+    ),
+    -- once per person: on the roster, the zone and the Default market (not once per block)
+    people as materialized (
+      select u.id as user_id, cma.user_timezone(u.id) as zone, u.default_hours_market_code
+      from (select distinct r.user_id from raw r) x
+      join cma.app_user u on u.tenant_id = cma.current_tenant_id() and u.id = x.user_id
+      where cma.on_roster(x.user_id)
+    ),
+    blocks as materialized (
+      select r.user_id, t.code, t.kind, t.sort_order, coalesce(r.hours_market_code, p.default_hours_market_code) as market,
+             (r.business_date + r.start_time) at time zone p.zone as starts,
+             (r.business_date + r.end_time) at time zone p.zone as ends
+      from raw r
+      join people p on p.user_id = r.user_id
+      join cma.assignment_type t on t.tenant_id = cma.current_tenant_id() and t.id = r.assignment_type_id
+    ),
+    slots as (
+      select s as slot_start
+      from generate_series(p_date::timestamp at time zone v_zone,
+                           (p_date + 1)::timestamp at time zone v_zone - make_interval(mins => v_slot),
+                           make_interval(mins => v_slot)) s
+    ),
+    hits as materialized (
+      select sl.slot_start, b.user_id, b.code, b.kind, b.sort_order, b.market
+      from slots sl join blocks b on b.starts <= sl.slot_start and sl.slot_start < b.ends
+    ),
+    -- the people working per slot, counted once per slot
+    working as (
+      select h.slot_start, count(distinct h.user_id)::integer as n from hits h where h.kind = 'work' group by h.slot_start
+    )
+    select h.slot_start, (h.slot_start at time zone v_zone)::time, coalesce(wk.n, 0),
+           h.code::text, h.market::text, count(distinct h.user_id)::integer
+    from hits h
+    left join working wk on wk.slot_start = h.slot_start
+    group by h.slot_start, wk.n, h.code, h.sort_order, h.market
+    order by h.slot_start, h.sort_order, h.code collate "C", h.market collate "C" nulls last;
+end
+$$;
+
+create or replace function pg_temp.v0009zz_published_0009zx(p_week_id uuid, p_user_id uuid, p_date date)
+returns jsonb
+language sql stable
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'code', t.code, 'name', t.name, 'kind', t.kind, 'workArea', s.work_area, 'isExtra', t.is_extra,
+           'start', to_char(a.start_time, 'HH24:MI'),
+           'end', case when a.end_time = '24:00'::time then '24:00' else to_char(a.end_time, 'HH24:MI') end,
+           'hoursMarket', coalesce(a.hours_market_code, u.default_hours_market_code), 'ownMarket', a.hours_market_code is null,
+           'hoursMarketZone', m.time_zone)
+           order by a.start_time), '[]'::jsonb)
+  from cma.roster_published_assignment a
+  join cma.assignment_type t on t.tenant_id = a.tenant_id and t.id = a.assignment_type_id
+  left join cma.work_status s on s.tenant_id = t.tenant_id and s.id = t.work_status_id
+  join cma.app_user u on u.tenant_id = a.tenant_id and u.id = a.user_id
+  left join cma.market m on m.tenant_id = a.tenant_id and m.code = coalesce(a.hours_market_code, u.default_hours_market_code)
+  where a.roster_week_id = p_week_id and a.user_id = p_user_id and a.business_date = p_date
+$$;
+
 -- ---------------------------------------------------------------------------------------------
 -- S. Structure
 -- ---------------------------------------------------------------------------------------------
@@ -207,7 +306,7 @@ declare
   v_lb   uuid;
   v_j    jsonb;
   v_err  text;
-  v_b1 text; v_b2 text; v_b3 text; v_b4 text; v_b5 text; v_b6 text;
+  v_b1 text; v_b2 text; v_b3 text; v_b4 text; v_b5 text; v_b6 text; v_b7 text;
   e      cma.roster_entry;
   w      cma.roster_week;
 begin
@@ -241,7 +340,8 @@ begin
         '[{"code":"SL","start":"09:00","end":"12:00","hoursMarket":"GB"},{"code":"LB","start":"12:00","end":"12:30","hoursMarket":"GB"}]');
       v_b1 := 'LB-GB accepted';
     exception when others then
-      v_b1 := format('LB-GB %s, says %s', sqlstate, case when sqlerrm ~ 'pause' and sqlerrm ~ 'no hours market' then 'why' else sqlerrm end);
+      -- the planner's own words (the writer's), not the table's: "plan LB without one, not LB-GB"
+      v_b1 := format('LB-GB %s, says %s', sqlstate, case when sqlerrm ~ 'is a pause' and sqlerrm ~ 'not LB-GB' then 'why' else sqlerrm end);
     end;
     v_b1 := v_b1 || format('; written %s', (select count(*) from cma.roster_assignment a where a.tenant_id = v_t));
     v_j := cma.roster_set_assignments(v_wk, 'alpha', v_a1, v_wk,
@@ -314,6 +414,28 @@ begin
     from cma.roster_assignment a join cma.assignment_type t on t.tenant_id = a.tenant_id and t.id = a.assignment_type_id
     where a.tenant_id = v_t and a.business_date = v_wk and a.valid_to is null;
 
+    -- B7: an older pause with a market (as before 0009zz) whose type was retired since: the planner writes back what it read
+    perform set_config('role', 'cma_app', true);
+    e := cma.roster_set_entry(v_wk, 'alpha', v_a1, v_wk + 1, 'shift', '09:00', '17:00', null, null);
+    v_j := cma.roster_set_assignments(v_wk, 'alpha', v_a1, v_wk + 1,
+      '[{"code":"SL","start":"09:00","end":"12:00"},{"code":"LB","start":"12:00","end":"12:30"}]');
+    perform set_config('role', 'cma_owner', true);
+    update cma.roster_assignment set hours_market_code = 'GB'
+     where tenant_id = v_t and assignment_type_id = v_lb and business_date = v_wk + 1 and valid_to is null;
+    perform set_config('role', 'cma_app', true);
+    perform cma.upsert_assignment_type('LB', 'Lunch break', 'pause', 'lunch', false, 90, 'inactive');
+    select jsonb_agg(jsonb_build_object('code', x->>'code', 'start', x->>'start', 'end', x->>'end', 'hoursMarket', x->'hoursMarket'))
+    into v_j from cma.roster_cell(v_wk, 'alpha', v_a1, v_wk + 1) c cross join lateral jsonb_array_elements(c.assignments) x;
+    v_b7 := 'write back ' || pg_temp.v0009zz_try(format('select cma.roster_set_assignments(%L, %L, %L, %L, %L)', v_wk, 'alpha', v_a1, v_wk + 1, v_j));
+    perform set_config('role', 'cma_owner', true);
+    select v_b7 || '; stored ' || string_agg(t.code || ' ' || coalesce(a.hours_market_code, '-'), ', ' order by a.start_time)
+    into v_b7
+    from cma.roster_assignment a join cma.assignment_type t on t.tenant_id = a.tenant_id and t.id = a.assignment_type_id
+    where a.tenant_id = v_t and a.business_date = v_wk + 1 and a.valid_to is null;
+    perform set_config('role', 'cma_app', true);
+    v_b7 := v_b7 || '; a new LB ' || pg_temp.v0009zz_try(format('select cma.roster_set_assignments(%L, %L, %L, %L, %L)', v_wk, 'alpha', v_a1, v_wk + 1,
+      '[{"code":"SL","start":"09:00","end":"12:00"},{"code":"LB","start":"12:00","end":"12:30"},{"code":"LB","start":"16:30","end":"17:00"}]'));
+
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
     when sqlstate 'CMAOK' then null;
@@ -337,6 +459,8 @@ begin
     v_b5, 'saved SL GB, LB -, SL -; standard_week SL GB, LB -, SL -; apply done 3 dropped 0; applied SL GB, LB -, SL -; stored SL GB, LB -, SL -');
   perform pg_temp.v0009zz_row(16, 'B6', 'the planner''s write of the read-back blocks ends the older pause and stores it without a market',
     v_b6, 'kept 2 ended 1 added 1; stored SL GB, LB -, SL -');
+  perform pg_temp.v0009zz_row(17, 'B7', 'an older pause of a retired type: the write-back is accepted and stores it without a market; a new one is refused',
+    v_b7, 'write back accepted; stored SL -, LB -; a new LB CMA04');
 end
 $$;
 
@@ -350,16 +474,20 @@ declare
   v_planner uuid;
   wk        date;
   tk        text;
-  v_r1 text; v_r2 text;
-  v_n1 integer; v_n2 integer;
+  v_r1 text; v_r2 text; v_r3 text; v_r4 text;
+  v_n1 integer; v_n2 integer; v_n3 integer; v_n4 integer;
   v_o1 integer := case when pg_temp.v0009zz_p('R1') then 1 else 0 end;
   v_o2 integer := case when pg_temp.v0009zz_p('R2') then 1 else 0 end;
+  v_o3 integer := case when pg_temp.v0009zz_p('R3') then 1 else 0 end;
+  v_o4 integer := case when pg_temp.v0009zz_p('R4') then 1 else 0 end;
+  d         date;
+  pe        record;
   v_any boolean := false;
   v_err text;
 begin
   for t in select x.id, x.slug from cma.tenant x where x.status = 'active' order by x.slug collate "C" loop
     v_any := true;
-    v_r1 := ''; v_r2 := ''; v_n1 := 0; v_n2 := 0; v_err := null;
+    v_r1 := ''; v_r2 := ''; v_r3 := ''; v_r4 := ''; v_n1 := 0; v_n2 := 0; v_n3 := 0; v_n4 := 0; v_err := null;
     perform set_config('app.tenant_id', t.id::text, true);   -- cma.has_permission reads the current tenant
     select u.id into v_planner from cma.app_user u
     where u.tenant_id = t.id and u.status = 'active' and u.kind = 'person' and cma.has_permission(u.id, 'roster.manage')
@@ -404,7 +532,45 @@ begin
             end if;
           end loop;
         end loop;
+        -- R3: 248's slot coverage, a pause regrouped under no market (a person holds one block per slot, so the people of
+        -- the merged rows add up); fourteen dates, every roster
+        for d in select generate_series(v_this, v_this + 13, interval '1 day')::date loop
+          for tk in select null::text union all select x.key::text from cma.team x where x.tenant_id = t.id and x.valid_to is null loop
+            v_n3 := v_n3 + (select count(*) from cma.roster_slot_coverage(d, tk));
+            if exists ((select n.slot_start, n.slot_time, n.working, n.code, n.hours_market_code, n.people from cma.roster_slot_coverage(d, tk) n)
+                       except all
+                       (select o.slot_start, o.slot_time, o.working, o.code, case when ty.kind = 'pause' then null else o.hours_market_code end,
+                               sum(o.people)::integer
+                        from (select * from pg_temp.v0009zz_coverage_0009zx(d, tk) offset v_o3) o
+                        left join cma.assignment_type ty on ty.tenant_id = t.id and ty.code = o.code
+                        group by o.slot_start, o.slot_time, o.working, o.code, case when ty.kind = 'pause' then null else o.hours_market_code end))
+               or exists ((select o.slot_start, o.slot_time, o.working, o.code, case when ty.kind = 'pause' then null else o.hours_market_code end,
+                                  sum(o.people)::integer
+                           from (select * from pg_temp.v0009zz_coverage_0009zx(d, tk) offset v_o3) o
+                           left join cma.assignment_type ty on ty.tenant_id = t.id and ty.code = o.code
+                           group by o.slot_start, o.slot_time, o.working, o.code, case when ty.kind = 'pause' then null else o.hours_market_code end)
+                          except all
+                          (select n.slot_start, n.slot_time, n.working, n.code, n.hours_market_code, n.people from cma.roster_slot_coverage(d, tk) n))
+               or (v_o3 = 1 and not exists (select 1 from cma.roster_slot_coverage(d, tk))) then
+              v_r3 := v_r3 || d || '/' || coalesce(tk, 'tenant') || ' ';
+            end if;
+          end loop;
+        end loop;
       end if;
+      -- R4: the published blocks of every published shift this week and next, against 248's with a pause's market taken away
+      for pe in select e.roster_week_id, e.user_id, e.business_date from cma.roster_published_entry e
+                where e.kind = 'shift' and e.business_date between v_this and v_this + 13 loop
+        v_n4 := v_n4 + 1;
+        if cma.roster_published_blocks_json(pe.roster_week_id, pe.user_id, pe.business_date) is distinct from
+           (select coalesce(jsonb_agg(case when x->>'kind' = 'pause'
+                                           then x || '{"hoursMarket": null, "ownMarket": false, "hoursMarketZone": null}'::jsonb else x end
+                                      order by n), '[]'::jsonb)
+            from jsonb_array_elements(pg_temp.v0009zz_published_0009zx(pe.roster_week_id, pe.user_id, pe.business_date)) with ordinality as a(x, n)
+            where n > v_o4) then
+          v_r4 := v_r4 || pe.business_date || ' ';
+        end if;
+      end loop;
+      if v_o4 = 1 and v_n4 = 0 then v_r4 := 'none to compare'; end if;
     exception when others then
       v_err := sqlstate || ': ' || left(sqlerrm, 300);
     end;
@@ -425,7 +591,13 @@ begin
       insert into pg_temp.verify_0009zz values (32, 'R2 ' || t.slug || ': roster_assignments = 248''s, a pause without its market',
         case when btrim(v_r2) <> '' then 'FAIL' else 'PASS' end,
         format('rows %s; differing %s', v_n2, coalesce(nullif(btrim(v_r2), ''), 'none')));
+      insert into pg_temp.verify_0009zz values (33, 'R3 ' || t.slug || ': roster_slot_coverage = 248''s, a pause under no market',
+        case when btrim(v_r3) <> '' then 'FAIL' else 'PASS' end,
+        format('rows %s; differing %s', v_n3, coalesce(nullif(btrim(v_r3), ''), 'none')));
     end if;
+    insert into pg_temp.verify_0009zz values (34, 'R4 ' || t.slug || ': the published blocks = 248''s, a pause without market, own market or zone',
+      case when btrim(v_r4) <> '' then 'FAIL' else 'PASS' end,
+      format('published shifts %s; differing %s', v_n4, coalesce(nullif(btrim(v_r4), ''), 'none')));
   end loop;
   if not v_any then
     insert into pg_temp.verify_0009zz values (30, 'R1 and R2 per tenant',
@@ -434,6 +606,8 @@ begin
 end
 $$;
 
+drop function if exists pg_temp.v0009zz_published_0009zx(uuid, uuid, date);
+drop function if exists pg_temp.v0009zz_coverage_0009zx(date, text);
 drop function if exists pg_temp.v0009zz_assignments_0009zx(date, text);
 drop function if exists pg_temp.v0009zz_planned_0009zx(date, text);
 drop function if exists pg_temp.v0009zz_try(text);

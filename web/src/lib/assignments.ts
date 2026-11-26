@@ -294,12 +294,6 @@ export function plannedMinutes(
   return blocks.reduce((n, b) => n + (kinds.get(b.code) === "pause" ? 0 : b.end - b.start), 0);
 }
 
-/** Sums maps of minutes per key */
-export function addFigures(into: Map<string, number>, from: ReadonlyMap<string, number>): Map<string, number> {
-  for (const [k, v] of from) into.set(k, (into.get(k) ?? 0) + v);
-  return into;
-}
-
 /** One person-date for the Planned hours meter: its entry's shift (null without one) and its blocks */
 export interface PlannedDay {
   userId: string;

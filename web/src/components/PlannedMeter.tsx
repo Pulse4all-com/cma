@@ -11,7 +11,7 @@
  * Computed in the browser from the week the planner already holds (the blocks of cma.roster_assignments, the same rule
  * as cma.roster_planned_hours): no read of its own. The colour never carries meaning alone: each row names its code.
  */
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { AssignmentType } from "@/lib/data";
 import { pct, toneOf, TONE_CLASS, type PlannedSummary } from "@/lib/assignments";
 import { fmtMinutes } from "@/lib/time";
@@ -30,7 +30,8 @@ export interface MeterWords {
   nothing: string;
 }
 
-export function PlannedMeter({ week, day, types, words }: {
+/** Memoised: the planner re-renders on every key in a cell and every drag step; the meter only when its figures change */
+export const PlannedMeter = memo(function PlannedMeter({ week, day, types, words }: {
   week: PlannedSummary;
   /** The Day view's date; none in Week view */
   day?: PlannedSummary;
@@ -121,4 +122,4 @@ export function PlannedMeter({ week, day, types, words }: {
       ) : null}
     </section>
   );
-}
+});

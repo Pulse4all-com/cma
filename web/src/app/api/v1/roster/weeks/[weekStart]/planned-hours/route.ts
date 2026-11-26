@@ -10,7 +10,8 @@ type Params = { params: Promise<{ weekStart: string }> };
 /**
  * D12 (addition 0009zx): the planned minutes per person, date, assignment type and hours market of the week's current
  * blocks, ?team=<key> or none (cma.roster_planned_hours). A block without a market counts under the person's Default
- * market. Needs roster.manage
+ * market, a pause under none (0009zz). Pauses are rows of kind pause here; the planner's Planned leaves them out. Needs
+ * roster.manage
  */
 export async function GET(request: NextRequest, { params }: Params) {
   return forPrincipal(async (me) => {

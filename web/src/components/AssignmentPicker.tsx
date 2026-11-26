@@ -17,16 +17,16 @@ import { useId, useRef, useState, type RefObject } from "react";
 import type { AssignmentType, HoursMarket } from "@/lib/data";
 import { parseAssignment, pickerFilter, pickerOrder, toneOf, TONE_CLASS, type ParseProblem } from "@/lib/assignments";
 
-export type Pick = { code: string | null; market: string | null };
+export type Choice = { code: string | null; market: string | null };
 
 export function AssignmentPicker({
   types, markets, value, onChange, onChoose, onEscape, onProblem, inputRef, labels, invalid = false, testId = "assignment-code", inline = false,
 }: {
   types: readonly AssignmentType[];
   markets: readonly HoursMarket[];
-  value: Pick;
+  value: Choice;
   /** The type or market changed (the dropdowns follow it) */
-  onChange: (v: Pick) => void;
+  onChange: (v: Choice) => void;
   /** A type was chosen (a click, Enter) or the market changed with a type chosen: the caller may apply it at once */
   onChoose: (v: { code: string; market: string | null }) => void;
   /** Esc with the list closed: hand the keyboard back (the grid) */
@@ -104,7 +104,18 @@ export function AssignmentPicker({
             onFocus={(e) => { e.currentTarget.select(); setActive(Math.max(0, ordered.findIndex((o) => o.code === value.code))); if (!inline) setOpen(true); }}
             onClick={() => setOpen(true)}
             onChange={(e) => { setText(e.target.value); setActive(0); setOpen(true); onProblem(null); }}
-            onBlur={() => { setOpen(false); setText(null); }}
+            // leaving the field keeps what was typed when it names a type (CODE or CODE-MARKET), so Apply and Save use it
+            // and never the earlier choice; text that names none is let go and says why
+            onBlur={() => {
+              setOpen(false);
+              const typed = (text ?? "").trim();
+              setText(null);
+              if (typed === "") return;
+              const parsed = parseAssignment(typed, types.map((t) => ({ ...t })), markets);
+              if ("problem" in parsed) { onProblem(parsed.problem); return; }
+              const type = types.find((t) => t.code === parsed.code);
+              onChange({ code: parsed.code, market: type?.kind === "pause" ? null : parsed.market ?? value.market });
+            }}
             onKeyDown={(e) => {
               if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                 e.preventDefault();
@@ -115,8 +126,9 @@ export function AssignmentPicker({
               }
               if (e.key === "Enter") { e.preventDefault(); enter(); return; }
               if (e.key === "Escape") {
-                e.preventDefault();
-                if (open || text !== null) { setOpen(false); setText(null); onProblem(null); return; }
+                // Esc closes the list or drops the typed text first; with nothing to close it goes on to the caller (the
+                // grid takes the keyboard back) and, not prevented, to a dialog around it, which closes
+                if (open || text !== null) { e.preventDefault(); setOpen(false); setText(null); onProblem(null); return; }
                 onEscape?.();
               }
             }}

@@ -43,10 +43,15 @@ export default async function RosterPrintPage({ searchParams }: PageProps<"/rost
   // Planned as the planner counts it (Martin, 26 November 2026): the work blocks, a shift without blocks whole, no pause
   const kinds = new Map(week.planner.types.map((x) => [x.code, x.kind]));
   const planned = new Map<string, number>();
+  const blocksOf = new Map<string, { code: string; start: number; end: number }[]>();
+  for (const a of week.assignments) {
+    const k = `${a.userId}:${a.date}`;
+    if (!blocksOf.has(k)) blocksOf.set(k, []);
+    blocksOf.get(k)!.push({ code: a.code, start: toMinutes(a.start), end: toMinutes(a.end) });
+  }
   for (const e of week.entries) {
     if (e.kind !== "shift" || !e.start || !e.end) continue;
-    const blocks = week.assignments.filter((a) => a.userId === e.userId && a.date === e.date)
-      .map((a) => ({ code: a.code, start: toMinutes(a.start), end: toMinutes(a.end) }));
+    const blocks = blocksOf.get(`${e.userId}:${e.date}`) ?? [];
     planned.set(e.userId, (planned.get(e.userId) ?? 0) + plannedMinutes({ start: toMinutes(e.start), end: toMinutes(e.end) }, blocks, kinds));
   }
   const headcount = headcountByDate(week.entries);

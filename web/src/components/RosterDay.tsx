@@ -27,7 +27,7 @@ import {
   slotFloor, toMinutes, toneOf, TONE_CLASS, toPlannerMinutes, type Block, type ParseProblem, type PlannedDay, type PlannerWeek,
 } from "@/lib/assignments";
 import { fmtDate, fmtMinutes } from "@/lib/time";
-import { AssignmentPicker, type Pick as Chosen } from "./AssignmentPicker";
+import { AssignmentPicker, type Choice } from "./AssignmentPicker";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PlannedMeter, type MeterWords } from "./PlannedMeter";
 import { Button, Notice } from "./primitives";
@@ -115,7 +115,7 @@ export function RosterDay({
   const [sel, setSel] = useState<Sel | null>(null);
   const drag = useRef<{ r: number; s: number; moved: boolean } | null>(null);
   // The assignment chosen in the dropdown (Martin, 26 November 2026): Enter on the grid applies it to the selection
-  const [chosen, setChosen] = useState<Chosen>({ code: null, market: null });
+  const [chosen, setChosen] = useState<Choice>({ code: null, market: null });
   const [codeProblem, setCodeProblem] = useState<RowProblem | null>(null);
   const grid = useRef<HTMLDivElement>(null);
   const codeField = useRef<HTMLInputElement>(null);
@@ -316,22 +316,27 @@ export function RosterDay({
   }
 
   // ---- figures (D12) --------------------------------------------------------------------------------
-  const people = rows.map((r) => ({ userId: r.person.userId, defaultMarket: r.person.defaultHoursMarket, blocks: blocksOf.get(r.person.userId) ?? [] }));
-  const figures = slotFigures(people, kinds, slot, axisStart, axisEnd);
+  // Computed once per change of the blocks, never per pointer move or arrow key: a selection changes none of them
+  const people = useMemo(() => rows.map((r) => ({ userId: r.person.userId, defaultMarket: r.person.defaultHoursMarket, blocks: blocksOf.get(r.person.userId) ?? [] })), [rows, blocksOf]);
+  const figures = useMemo(() => slotFigures(people, kinds, slot, axisStart, axisEnd), [people, kinds, slot, axisStart, axisEnd]);
+  // Working shows 0 inside someone's shift, so a gap shows; outside every shift it stays empty (Martin, 26 November 2026)
+  const inShift = useMemo(() => new Set(figures.filter((f) => rows.some((r) => r.shift && r.shift.start <= f.start && f.start < r.shift.end)).map((f) => f.start)), [figures, rows]);
   // The meter (point 9): this date from the rows on screen (with their unsaved results), the week's other dates from the
-  // week as read; each person-date in the person's own minutes (a duration does not depend on the axis)
-  const dayDays: PlannedDay[] = rows.map((r) => ({
+  // week as read (once per week and date); each person-date in the person's own minutes (a duration does not depend on
+  // the axis)
+  const dayDays = useMemo((): PlannedDay[] => rows.map((r) => ({
     userId: r.person.userId, date, defaultMarket: r.person.defaultHoursMarket, shift: r.shift, blocks: blocksOf.get(r.person.userId) ?? [],
-  }));
-  const weekDays: PlannedDay[] = [...dayDays];
-  for (const e of week.entries) {
-    if (e.date === date || !week.people.some((p) => p.userId === e.userId)) continue;
-    weekDays.push({
-      userId: e.userId, date: e.date, defaultMarket: week.people.find((p) => p.userId === e.userId)?.defaultHoursMarket ?? null,
+  })), [rows, blocksOf, date]);
+  const otherDays = useMemo((): PlannedDay[] => {
+    const byId = new Map(week.people.map((p) => [p.userId, p]));
+    return week.entries.filter((e) => e.date !== date && byId.has(e.userId)).map((e) => ({
+      userId: e.userId, date: e.date, defaultMarket: byId.get(e.userId)?.defaultHoursMarket ?? null,
       shift: e.kind === "shift" && e.start && e.end ? { start: toMinutes(e.start), end: toMinutes(e.end) } : null,
       blocks: (week.blocks[`${e.userId}:${e.date}`] ?? []).map(([code, start, end, market, note]) => ({ code, start: toMinutes(start), end: toMinutes(end), market, note })),
-    });
-  }
+    }));
+  }, [week, date]);
+  const daySummary = useMemo(() => plannedSummary(dayDays, kinds), [dayDays, kinds]);
+  const weekSummary = useMemo(() => plannedSummary([...dayDays, ...otherDays], kinds), [dayDays, otherDays, kinds]);
   const keyLabel = (k: string) => { const [c, m] = k.split("/"); return m ? `${c} ${m}` : c ?? ""; };
   const splitText = (m: Map<string, number>) => [...m].sort((a, b) => a[0].localeCompare(b[0]))
     .map(([k, v]) => `${keyLabel(k)} ${fmtMinutes(v)}${kinds.get(k.split("/")[0]!) === "pause" ? ` (${meterWords.pauses})` : ""}`).join("\n");
@@ -355,8 +360,7 @@ export function RosterDay({
     maskImage: "repeating-linear-gradient(to bottom, #000 0 2px, transparent 2px 4px)",
     WebkitMaskImage: "repeating-linear-gradient(to bottom, #000 0 2px, transparent 2px 4px)",
   };
-  // Working shows 0 inside someone's shift, so a gap shows; outside every shift it stays empty (Martin, 26 November 2026)
-  const inAnyShift = (min: number) => rows.some((r) => r.shift && r.shift.start <= min && min < r.shift.end);
+
   const othersPending = Math.max(0, ...(pending ?? []).map((p) => p.others));
   const selRange = sel ? range(sel) : null;
   const barText = (type: AssignmentType | undefined, b: Block, defaultMarket: string | null) =>
@@ -364,7 +368,7 @@ export function RosterDay({
 
   return (
     <div className="flex flex-col gap-4" data-testid="roster-day">
-      <PlannedMeter week={plannedSummary(weekDays, kinds)} day={plannedSummary(dayDays, kinds)} types={ctx.types} words={meterWords} />
+      <PlannedMeter week={weekSummary} day={daySummary} types={ctx.types} words={meterWords} />
       <p className="max-w-4xl text-small text-p4a-muted">{example(t.dayIntro)}</p>
       <div className="flex flex-wrap items-end gap-3">
         <AssignmentPicker
@@ -475,7 +479,7 @@ export function RosterDay({
               {figures.map((f) => (
                 <div key={f.start} className="tabular flex h-10 shrink-0 items-center justify-center text-caption" style={{ width: SLOT_PX }}
                   onPointerEnter={(e) => { e.currentTarget.title = `${fromMinutes(f.start)}\n${[...f.byKey].sort((a, b) => a[0].localeCompare(b[0])).map(([k, n]) => `${keyLabel(k)}: ${n}`).join("\n")}`; }}>
-                  {f.working > 0 || inAnyShift(f.start) ? f.working : ""}
+                  {f.working > 0 || inShift.has(f.start) ? f.working : ""}
                 </div>
               ))}
             </div>

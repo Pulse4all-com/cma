@@ -289,7 +289,7 @@ expect("the grid keeps the focus after a click and a drag; Enter applies the ass
     /if \(e\.key === "Enter"\) \{ e\.preventDefault\(\); applyChosen\(\); return; \}/.test(dayView), /d\.moved\) \{ codeField|else codeField\.current/.test(dayView)],
   [true, true, true, false], [false, false, false, true]);
 expect("Working shows 0 inside someone's shift; Publish reads Published and waits while nothing changed",
-  [/f\.working > 0 \|\| inAnyShift\(f\.start\) \? f\.working : ""/.test(dayView),
+  [/f\.working > 0 \|\| inShift\.has\(f\.start\) \? f\.working : ""/.test(dayView),
     /disabled=\{pending \|\| \(header\.status === "published" && !header\.changedSincePublish\)\}/.test(plannerView)],
   [true, true], [false, false]);
 const day = [{ code: "SL", start: 540, end: 720, market: null, note: null }, { code: "GO", start: 780, end: 1020, market: null, note: null }];

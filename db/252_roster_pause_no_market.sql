@@ -22,7 +22,9 @@
 --                                          is refused (CMA04, "assignment type LB is a pause, and a pause has no hours
 --                                          market: plan LB without one, not LB-GB"); not strict (Copy week, Apply standard
 --                                          week): the pause is written without the market an older block or standard row
---                                          may still carry, never dropped
+--                                          may still carry, never dropped; a pause that differs from a current row only
+--                                          by that older market counts as unchanged, so a retired pause type does not
+--                                          lock its person-date (it is rewritten without the market)
 --   cma.roster_blocks_json, cma.roster_assignments, cma.standard_week()
 --                                          a pause block's hoursMarket / hours_market_code is null
 --   cma.roster_slot_coverage, cma.roster_planned_hours
@@ -43,8 +45,8 @@
 --   25_verify_roster.sql, 199_verify_roster_planned.sql
 --                                       my_roster and roster_today; unchanged (their fixtures hold no blocks)
 -- 131_time_all.sql: no new read; the rows 'roster assignments', 'roster slot coverage', 'roster planned hours', 'standard
--- week', 'my roster week' and 'my roster today' read the re-created functions as before (one more join to the type, already
--- joined in each).
+-- week', 'my roster week' and 'my roster today' read the re-created functions as before (the type is already
+-- joined in each; save_standard_week gains that join, by key on a small catalog).
 --
 -- SQLSTATEs as 0005's: CMA04 invalid.
 --
@@ -90,16 +92,17 @@ begin
       to_char(new.start_time, 'HH24:MI'), case when v_end = 1440 then '24:00' else to_char(new.end_time, 'HH24:MI') end
       using errcode = 'CMA04';
   end if;
-  if new.hours_market_code is not null and not exists (
-       select 1 from cma.market m
-       where m.tenant_id = new.tenant_id and m.code = new.hours_market_code and m.hours_market_code = m.code) then
-    raise exception 'market % is no hours market of the tenant', new.hours_market_code using errcode = 'CMA04';
-  end if;
-  -- A pause is no work under a market: a block of kind pause has no hours market (Martin, 26 November 2026)
+  -- A pause is no work under a market: a block of kind pause has no hours market (Martin, 26 November 2026); checked
+  -- first, so a pause with any market gets this reason
   if new.hours_market_code is not null and exists (
        select 1 from cma.assignment_type t
        where t.tenant_id = new.tenant_id and t.id = new.assignment_type_id and t.kind = 'pause') then
     raise exception 'a pause has no hours market: plan it without one (got %)', new.hours_market_code using errcode = 'CMA04';
+  end if;
+  if new.hours_market_code is not null and not exists (
+       select 1 from cma.market m
+       where m.tenant_id = new.tenant_id and m.code = new.hours_market_code and m.hours_market_code = m.code) then
+    raise exception 'market % is no hours market of the tenant', new.hours_market_code using errcode = 'CMA04';
   end if;
   return new;
 end
@@ -201,12 +204,14 @@ begin
     elsif v_note is not null and length(v_note) > 120 then
       v_bad := 'a block''s note has at most 120 characters';
     end if;
-    -- A retired type or market stays on a block that is kept unchanged; a new block needs an active one
+    -- A retired type or market stays on a block that is kept unchanged; a new block needs an active one. A pause that
+    -- differs only by the market an older row still holds (written before 0009zz) counts as unchanged: the planner writes
+    -- back the pause it read, without the market, and a retired pause type must not lock the person-date
     if v_bad is null and not exists (
          select 1 from cma.roster_assignment a
          where a.tenant_id = cma.current_tenant_id() and a.user_id = p_user_id and a.business_date = p_date and a.valid_to is null
            and a.assignment_type_id = v_type.id and a.start_time = v_start and a.end_time = v_end
-           and a.hours_market_code is not distinct from v_market and a.note is not distinct from v_note) then
+           and (v_type.kind = 'pause' or a.hours_market_code is not distinct from v_market) and a.note is not distinct from v_note) then
       if v_type.status <> 'active' then
         v_bad := format('assignment type %s is no longer in use', v_type.code);
       elsif v_market is not null then
