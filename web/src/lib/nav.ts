@@ -173,7 +173,8 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
       items: contactCenters.map((c): NavItem => ({ page: "live-board", href: `/live/${c.key}`, label: c.name, permission: "monitoring.live" })),
     },
     {
-      // Time: a person's own day, hours and schedule, and the team's hours; after Live since addition 0008zw (Team follows it)
+      // Time: a person's own day, hours and schedule, the team's hours and, since 25 November 2026 (Martin), the roster
+      // planner last, moved from Team; after Live since addition 0008zw (Team follows it)
       kind: "group",
       id: "time",
       label: copy.nav.time,
@@ -183,13 +184,15 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
         { page: "my-hours", href: "/hours", label: copy.nav.myHours, permission: "workday.own" },
         { page: "my-schedule", href: "/schedule", label: copy.nav.mySchedule, permission: "roster.view" },
         { page: "team-hours", href: "/team/hours", label: copy.nav.teamHours, permission: "workday.team" },
+        { page: "roster", href: "/roster/planner", label: copy.nav.roster, permission: "roster.manage" },
       ],
     },
     {
       // Team (night build, 7 October 2026): the people and, with 0005, the roster. After Time since addition 0008zw
       // (Martin, 5 November 2026; after Live and before Time before), so the keys of Time's pages come first for a
       // manager and an admin; an agent's keys (Welcome, Messages, My day, My hours) do not move: agents hold none of these.
-      // Since 13 November 2026 (Martin) People, Quality monitoring, Roster. Quality monitoring needs quality.manage (Martin,
+      // Since 13 November 2026 (Martin) People, Quality monitoring, Roster; since 25 November 2026 (Martin) Roster sits last
+      // in Time, so Team runs People, Quality monitoring. Quality monitoring needs quality.manage (Martin,
       // 14 November 2026), which the default ladder gives the manager, the admin and analytics, not the supervisor: an
       // analyst sees the group with Quality monitoring alone, and a supervisor has no Team group, as on main
       kind: "group",
@@ -202,7 +205,6 @@ export function navEntries(copy: Copy, contactCenters: readonly ContactCenter[])
         // coaching (KPI 10); quality.manage, the permission that already means quality scorecards and coaching notes
         // (Martin, 14 November 2026)
         { page: "quality-monitoring", href: "/team/quality-monitoring", label: copy.nav.qualityMonitoring, permission: "quality.manage" },
-        { page: "roster", href: "/roster/planner", label: copy.nav.roster, permission: "roster.manage" },
       ],
     },
     {
