@@ -191,13 +191,16 @@ db_connect () {
 REGION=europe-west4
 export REGION
 
-# A gcloud write hangs while "gcloud run services proxy" runs: stop any first
+# A gcloud write hangs while "gcloud run services proxy" runs: stop any first. The pattern names the gcloud command
+# itself (gcloud, or gcloud.py as python runs it), so a shell whose command text only mentions the words is left alone
+RUN_PROXY_RE='gcloud(\.py)? run services proxy'
+export RUN_PROXY_RE
 no_run_proxy () {
-  if pgrep -f "run services proxy" >/dev/null; then
-    pkill -f "run services proxy"
+  if pgrep -f "$RUN_PROXY_RE" >/dev/null; then
+    pkill -f "$RUN_PROXY_RE"
     sleep 3
-    pgrep -f "run services proxy" >/dev/null && { pkill -KILL -f "run services proxy"; sleep 1; }
-    pgrep -f "run services proxy" >/dev/null && stop_run "a 'gcloud run services proxy' keeps running: stop it, then rerun"
+    pgrep -f "$RUN_PROXY_RE" >/dev/null && { pkill -KILL -f "$RUN_PROXY_RE"; sleep 1; }
+    pgrep -f "$RUN_PROXY_RE" >/dev/null && stop_run "a 'gcloud run services proxy' keeps running: stop it, then rerun"
     note "stopped a running 'gcloud run services proxy' (a gcloud write hangs while it runs)"
   fi
 }

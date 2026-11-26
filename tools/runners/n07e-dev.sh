@@ -25,7 +25,7 @@ note "dev's cma-web onto ${IMAGE}"
 
 # the dev proxy this runner started, and no other (a prod proxy in another terminal stays); also on a stop or a closed
 # terminal (lib.sh's traps: INT, TERM, HUP)
-DEV_PROXY="run services proxy cma-web --project=p4a-cma-dev"
+DEV_PROXY='gcloud(\.py)? run services proxy cma-web --project=p4a-cma-dev'
 stop_proxy () {
   if pgrep -f "$DEV_PROXY" >/dev/null; then
     pkill -f "$DEV_PROXY"; sleep 2
