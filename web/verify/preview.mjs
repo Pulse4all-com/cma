@@ -122,7 +122,7 @@ expect("the supervisor's keys: 1 to 9 without gaps, none from the tenth",
   keys(SUPERVISOR), digits(hrefs(SUPERVISOR).length), digits(hrefs(SUPERVISOR).length).map((k, i) => (i === 3 ? "5" : k)));
 // since addition 0008zw Time comes before Team (Martin, 5 November 2026)
 expect("the admin: Live, Time, Team, Reports with Data quality, Sales, Customers, Assets, Campaigns",
-  hrefs(ADMIN_MOCK), ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/team/people", "/team/quality-monitoring", "/roster/planner",
+  hrefs(ADMIN_MOCK), ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/roster/planner", "/team/people", "/team/quality-monitoring",
     ...REPORTS, "/reports/data-quality", ...SALES, ...CUSTOMERS, ...ASSETS, "/campaigns", ...hrefs(ADMIN_MOCK).filter((h) => h.startsWith("/configuration/"))],
   []);
 expect("the admin's keys: 1 to 9 without gaps; the Configuration pages none",
@@ -152,19 +152,29 @@ expect("Assets: Installed base, Fulfillment, Maintenance, Storage, Purchase orde
     ["Geïnstalleerde basis", "Fulfilment", "Onderhoud", "Opslag", "Inkooporders", "Vlootbeheer"], "box",
     ["Active", "Subscriptions", "Payments", "Courtesy", "Compliance", "Reviews", "Cancellations"]],
   [["Maintenance"], ["Onderhoud"], "person", ["Cancellations", "Reviews", "Maintenance"]]);
-// Team (13 November 2026): People, Quality monitoring, Roster for the admin (Mensen, Kwaliteitsmonitoring, Rooster); Quality
-// monitoring needs quality.manage (14 November 2026): the analytics role's Team holds it alone and its crumb leads there, the
+// Team (13 November 2026): People, Quality monitoring for the admin (Mensen, Kwaliteitsmonitoring; Roster left it for Time
+// on 25 November 2026); Quality monitoring needs quality.manage (14 November 2026): the analytics role's Team holds it
+// alone and its crumb leads there, the
 // supervisor sees no Team group; Assets with Pledge lists for pledges.view, then Fleet management last (15 November 2026)
 const ANALYTICS = mock(["reports.view", "performance.team", "monitoring.live", "quality.manage"], "analytics");
-expect("Team: People, Quality monitoring, Roster; analytics' Team is Quality monitoring, the supervisor has none; Pledge lists, then Fleet management last",
+expect("Team: People, Quality monitoring; analytics' Team is Quality monitoring, the supervisor has none; Pledge lists, then Fleet management last",
   [labels(ADMIN_MOCK, "team"), visibleNav(ADMIN_MOCK, t("nl")).find((e) => e.kind === "group" && e.id === "team")?.items.map((i) => i.label) ?? null,
     labels(ANALYTICS, "team"), breadcrumbs(ANALYTICS, copy, "quality-monitoring")[1], breadcrumbs(ADMIN_MOCK, copy, "quality-monitoring")[1],
     labels(SUPERVISOR, "team"), labels(mock(["reports.view", "pledges.view"], "reader"), "assets")],
-  [["People", "Quality monitoring", "Roster"], ["Mensen", "Kwaliteitsmonitoring", "Rooster"], ["Quality monitoring"],
+  [["People", "Quality monitoring"], ["Mensen", "Kwaliteitsmonitoring"], ["Quality monitoring"],
     { label: "Team", href: "/team/quality-monitoring" }, { label: "Team", href: "/team/people" }, null,
     ["Installed base", "Fulfillment", "Maintenance", "Storage", "Purchase orders", "Pledge lists", "Fleet management"]],
   [["People", "Roster"], ["Mensen", "Rooster"], [], { label: "Team", href: undefined }, { label: "Team", href: "/roster/planner" }, ["Quality monitoring"],
     ["Installed base", "Maintenance", "Pledge lists"]]);
+// Time (25 November 2026, Martin): the roster planner last, after Team hours, moved from Team; its crumbs lead to Time's
+// first page the person may see. The keys follow the visible order: the admin's Roster takes 8, People 9
+expect("Time: My day, My hours, My schedule, Team hours, Roster (Mijn dag, Mijn uren, Mijn rooster, Teamuren, Rooster); Roster's crumbs Welcome › Time › Roster; the admin's Roster key 8",
+  [labels(ADMIN_MOCK, "time"), visibleNav(ADMIN_MOCK, t("nl")).find((e) => e.kind === "group" && e.id === "time")?.items.map((i) => i.label) ?? null,
+    breadcrumbs(ADMIN_MOCK, copy, "roster"), visiblePages(ADMIN_MOCK, copy).find((p) => p.href === "/roster/planner")?.key ?? null],
+  [["My day", "My hours", "My schedule", "Team hours", "Roster"], ["Mijn dag", "Mijn uren", "Mijn rooster", "Teamuren", "Rooster"],
+    [{ label: "Welcome", href: "/" }, { label: "Time", href: "/day" }, { label: "Roster" }], "8"],
+  [["My day", "My hours", "My schedule", "Team hours"], ["Mijn dag", "Mijn uren", "Mijn rooster", "Teamuren"],
+    [{ label: "Welcome", href: "/" }, { label: "Team", href: "/team/people" }, { label: "Roster" }], null]);
 expect("the Assets pages' breadcrumbs: Welcome › Assets › Installed base, › Maintenance, › Fleet management, the group to Installed base",
   [breadcrumbs(READER, copy, "installed-base"), breadcrumbs(READER, copy, "maintenance"), breadcrumbs(READER, copy, "fleet-management")],
   [[{ label: "Welcome", href: "/" }, { label: "Assets", href: "/reports/installed-base" }, { label: "Installed base" }],
