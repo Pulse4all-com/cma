@@ -1,7 +1,7 @@
 import "server-only";
 import { ApiError, uuidParam } from "@/lib/api/respond";
 import type {
-  AbsenceTypeInput, AlertRuleInput, ConfigAppLinkInput, ConfigStatusInput, FormCategoryInput, MarketInput, SkillDimension, SkillInputRow, SkillLevel, SourceConnectionInput,
+  AbsenceTypeInput, AssignmentTypeInput, AlertRuleInput, ConfigAppLinkInput, ConfigStatusInput, FormCategoryInput, MarketInput, SkillDimension, SkillInputRow, SkillLevel, SourceConnectionInput,
   SourceFormChange, SourceKind, SourceLineInput, SourceMissedReasonInput, SourceOutcomeChange, SourcePipelineInput, SourcePipelineSlaInput, SourceSettings, SourceStageOutcomeInput,
   SourceStore, SourceTagInput, SourceTagMeaningInput, SourceTaskStatusInput, SourceTaskTypeInput, TagMeaning, TeamInput, SourceInboxChannelInput, SourceInboxInput, SourceMailboxInput, SourceReviewChannelInput,
   RecordKindInput, RecordKindRuleInput, SourceReasonFieldInput, SourceReasonFlagInput, SourceStageReadTimesInput, SubscriptionVariantInput,
@@ -67,6 +67,20 @@ export function checkLinkInput(b: Record<string, unknown>): ConfigAppLinkInput {
 
 export function checkAbsenceInput(b: Record<string, unknown>): AbsenceTypeInput {
   return { key: checkKey(b.key, /^[a-z0-9_]+$/), name: text(b, "name", 40), isPaid: flag(b, "isPaid"), sortOrder: order(b) };
+}
+
+/** An assignment type (addition 0009zx, D2): { code, name, kind, statusKey, isExtra, sortOrder, active }; an extra type books no status */
+export function checkAssignmentTypeInput(b: Record<string, unknown>): AssignmentTypeInput {
+  if (typeof b.code !== "string" || !/^[A-Z0-9]{1,6}$/.test(b.code)) throw new ApiError(400, "invalid_code", "code must be 1 to 6 of A-Z and 0-9");
+  if (b.kind !== "work" && b.kind !== "pause") throw new ApiError(400, "invalid_kind", "kind must be work or pause");
+  const isExtra = b.isExtra === undefined ? false : flag(b, "isExtra");
+  const statusKey = isExtra ? null : checkKey(b.statusKey, /^[a-z0-9_]+$/);
+  return { code: b.code, name: text(b, "name", 40), kind: b.kind, statusKey, isExtra, sortOrder: order(b), isActive: b.active === undefined ? true : flag(b, "active") };
+}
+
+/** Whether an absence type carries over (D10): { carriesOver: boolean } */
+export function checkCarriesOver(b: Record<string, unknown>): boolean {
+  return flag(b, "carriesOver");
 }
 
 export function checkTeamInput(b: Record<string, unknown>): TeamInput {

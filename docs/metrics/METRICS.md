@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-674 figures. Statuses: verified 475 · discrepancy 16 · ambiguous 35 · prerequisite_missing 155 · cadence_unconfirmed 75.
+675 figures. Statuses: verified 476 · discrepancy 16 · ambiguous 35 · prerequisite_missing 155 · cadence_unconfirmed 75.
 
 ## Welcome
 
@@ -3752,12 +3752,12 @@ The Follow-up page's callbacks figures (per week, per person, no_contact/no_due 
 
 **Planned** on /roster/planner · Planned (Gepland)
 
-The hours planned for each person in the week on screen: the sum of their shift lengths. Absences count 0, paid or not.
+The hours planned for each person in the week on screen: per day the assignments of kind work, or the whole shift when it holds no assignments. Pauses and absences count 0.
 
 **Formula as computed**
 
 ```
-plannedMinutesByUser(current entries): sum over entries with kind = 'shift' of shiftMinutes(start, end) = minutes(end) - minutes(start), never negative; 24:00 is the end of the day. Computed on the CURRENT cells (the planner's live state as cells save), drafts included, not the published state. Shown via fmtMinutes.
+Sum over the person's current entries of plannedMinutes(shift, blocks, kinds) (src/lib/assignments.ts). Per person-date: a shift with blocks counts its blocks of kind work (an extra type included), never a pause; a shift without any block is planned on the day level only and counts whole; an absence or an empty cell counts 0 (Martin, 26 November 2026). Minutes are wall-clock: minutes(end) - minutes(start), 24:00 is 1440. Computed on the CURRENT cells and blocks (the planner's live state as they save), drafts included, not the published state. Shown via fmtMinutes.
 ```
 
 **Unit** minutes · **Grain** per_iso_week, per_person · **Status** verified
@@ -3767,13 +3767,15 @@ plannedMinutesByUser(current entries): sum over entries with kind = 'shift' of s
 | Table | Columns | Owner | Fed by | Cadence |
 |---|---|---|---|---|
 | `cma.roster_entry` | user_id, business_date, kind, start_time, end_time, valid_to | CMA | the Workspace's own write path: PUT /api/v1/roster/weeks/{monday}/cells → cma.roster_set_entry(); read by cma.roster_entries() (current rows, valid_to null) | on page load; the client updates its copy as each cell saves |
+| `cma.roster_assignment` | user_id, business_date, assignment_type_id, start_time, end_time, valid_to | CMA | the Workspace's own write path: PUT /api/v1/roster/weeks/{monday}/assignments → cma.roster_set_assignments(); read by cma.roster_assignments() (current rows, valid_to null) | on page load; the client updates its copy as each block saves |
+| `cma.assignment_type` | code, kind | CMA | Configuration → Roster, cma.upsert_assignment_type() | on page load |
 
 **Filters**
 
 - tenant: RLS plus cma.roster_entries()'s tenant filter
 - current entries of the week and team scope on screen (team_id is not distinct from the chosen team; null = Everyone)
 - entries of people on the roster only (time kept and roster.planned)
-- shifts only; absences and cleared cells excluded
+- shifts only; absences and cleared cells count 0; blocks of kind pause count 0
 
 **Time** the week is Monday-start; shift times are naive local times in the person's zone, so the minutes are wall-clock lengths (a DST day is NOT adjusted: 9-17 is always 480)
 
@@ -3781,21 +3783,72 @@ plannedMinutesByUser(current entries): sum over entries with kind = 'shift' of s
 
 **Refresh** on page load; recomputed client-side after every saved cell; no poll
 
-**Computed in** `cma.roster_entries` (0005); `plannedMinutesByUser` in src/lib/roster.ts; `shiftMinutes` in src/lib/roster.ts
+**Computed in** `cma.roster_entries` (0005); `cma.roster_assignments` (0009zz); `plannedMinutes` in src/lib/assignments.ts; `RosterPlanner` in src/components/RosterPlanner.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select e.user_id, sum(((extract(hour from e.end_time)*60 + extract(minute from e.end_time)) - (extract(hour from e.start_time)*60 + extract(minute from e.start_time))))::int as planned_minutes from cma.roster_entry e join cma.roster_week w on w.tenant_id = :tenant_id and w.id = e.roster_week_id where e.tenant_id = :tenant_id and e.valid_to is null and e.kind = 'shift' and w.week_start = :from and w.team_id is null group by e.user_id order by 1 -- :from = the Monday; for a team roster replace 'w.team_id is null' with the team's id
+with e as (select e.user_id, e.business_date, e.start_time, e.end_time from cma.roster_entry e join cma.roster_week w on w.tenant_id = :tenant_id and w.id = e.roster_week_id where e.tenant_id = :tenant_id and e.valid_to is null and e.kind = 'shift' and w.week_start = :from and w.team_id is null), b as (select a.user_id, a.business_date, count(*) as n, sum(case when t.kind = 'pause' then 0 else (extract(epoch from a.end_time) - extract(epoch from a.start_time)) / 60 end) as work from cma.roster_assignment a join cma.assignment_type t on t.tenant_id = a.tenant_id and t.id = a.assignment_type_id where a.tenant_id = :tenant_id and a.valid_to is null group by 1, 2) select e.user_id, sum(case when b.n is null then (extract(epoch from e.end_time) - extract(epoch from e.start_time)) / 60 else b.work end)::int as planned_minutes from e left join b on b.user_id = e.user_id and b.business_date = e.business_date group by e.user_id order by 1 -- :from = the Monday; for a team roster replace 'w.team_id is null' with the team's id
 ```
 
-**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 0 row(s); Martin compares the value with the page in Studio.
+**Fixture check** Ran on the local database (migrations to 0009zz, the dev seed and a hand-planned Team NL week of 30 November 2026 with blocks and a lunch), 26 November 2026: Agent One 2325 minutes (38h 45m), Test Supervisor 1980 (33h 00m), Team NL 4305 minutes (71h 45m), equal to the page; Martin compares the value with the page in Studio.
 
-**Documented in** api.md, Roster planner, print view and My schedule (0005); data-model/0001-0005b.md, Roster (0005); features.md §2
+**Documented in** api.md, Roster planner, print view and My schedule (0005); data-model/0001-0005b.md, Roster (0005); features.md §2; decisions.md, 26 Nov 2026, D12 updated: Planned per person
 
 **Notes**
 
-end_time = 24:00 is stored as time '24:00' and the TS parses the hh:mm text, so both sides count it as 1440. A time '24:00' extract gives hour 24 in PostgreSQL, matching. Planner shows current (possibly unpublished) cells by design; the agent-facing figures (My schedule, Live board) show published ones — documented, not a discrepancy.
+end_time = 24:00 is stored as time '24:00' and the TS parses the hh:mm text, so both sides count it as 1440. A time '24:00' extract gives hour 24 in PostgreSQL, matching. Planner shows current (possibly unpublished) cells by design; the agent-facing figures (My schedule, Live board) show published ones — documented, not a discrepancy. Since 26 November 2026 the pauses inside a shift no longer count (Martin's hand check in dev: Agent One showed 7h 00m with a 30-minute lunch in it); the Day view's Planned column and the Planned hours meter (roster.planner.planned_hours_meter) use the same function.
+
+#### `roster.planner.planned_hours_meter`
+
+**Planned hours** on /roster/planner · Planned hours (Geplande uren)
+
+The planned hours of the roster on screen for the week and, in Day view, the day, against the hours on shift; per assignment the split per assignment type and hours market, the shifts without assignments, and the pauses apart (never part of the total).
+
+**Formula as computed**
+
+```
+plannedSummary(person-dates, kinds) (src/lib/assignments.ts): planned = the sum of plannedMinutes over the person-dates (= the sum of the Planned column); onShift = the sum of the shifts' minutes; byKey = the minutes of the work blocks per figureKey(code, block market or the person's Default market); dayLevel = the minutes of shifts without any block; pauses = the minutes of pause blocks per type. Per person-date: a shift with blocks counts its blocks of kind work (an extra type included), never a pause; a shift without any block is planned on the day level only and counts whole; an absence or an empty cell counts 0 (Martin, 26 November 2026).
+```
+
+**Unit** minutes · **Grain** per_iso_week, per_day · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.roster_entry` | user_id, business_date, kind, start_time, end_time, valid_to | CMA | the Workspace's own write path: PUT /api/v1/roster/weeks/{monday}/cells → cma.roster_set_entry(); read by cma.roster_entries() (current rows, valid_to null) | on page load; the client updates its copy as each cell saves |
+| `cma.roster_assignment` | user_id, business_date, assignment_type_id, start_time, end_time, valid_to | CMA | the Workspace's own write path: PUT /api/v1/roster/weeks/{monday}/assignments → cma.roster_set_assignments(); read by cma.roster_assignments() (current rows, valid_to null) | on page load; the client updates its copy as each block saves |
+| `cma.assignment_type` | code, kind | CMA | Configuration → Roster, cma.upsert_assignment_type() | on page load |
+
+**Filters**
+
+- tenant: RLS plus cma.roster_entries()'s tenant filter
+- current entries of the week and team scope on screen (team_id is not distinct from the chosen team; null = Everyone)
+- entries of people on the roster only (time kept and roster.planned)
+- shifts only; absences and cleared cells count 0; blocks of kind pause count 0
+
+**Time** the week is Monday-start; shift times are naive local times in the person's zone, so the minutes are wall-clock lengths (a DST day is NOT adjusted: 9-17 is always 480)
+
+**Who may see it** `roster.manage`
+
+**Refresh** on page load; recomputed client-side after every saved cell; no poll
+
+**Computed in** `cma.roster_entries` (0005); `cma.roster_assignments` (0009zz); `plannedSummary` in src/lib/assignments.ts; `PlannedMeter` in src/components/PlannedMeter.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select sum(planned_minutes) from (with e as (select e.user_id, e.business_date, e.start_time, e.end_time from cma.roster_entry e join cma.roster_week w on w.tenant_id = :tenant_id and w.id = e.roster_week_id where e.tenant_id = :tenant_id and e.valid_to is null and e.kind = 'shift' and w.week_start = :from and w.team_id is null), b as (select a.user_id, a.business_date, count(*) as n, sum(case when t.kind = 'pause' then 0 else (extract(epoch from a.end_time) - extract(epoch from a.start_time)) / 60 end) as work from cma.roster_assignment a join cma.assignment_type t on t.tenant_id = a.tenant_id and t.id = a.assignment_type_id where a.tenant_id = :tenant_id and a.valid_to is null group by 1, 2) select e.user_id, sum(case when b.n is null then (extract(epoch from e.end_time) - extract(epoch from e.start_time)) / 60 else b.work end)::int as planned_minutes from e left join b on b.user_id = e.user_id and b.business_date = e.business_date group by e.user_id order by 1) x -- the week's total; :from = the Monday; for a team roster replace 'w.team_id is null' with the team's id. Per assignment: cma.roster_planned_hours(:from, null) where kind = 'work', as the planner (set app.tenant_id and app.user_id first)
+```
+
+**Fixture check** Ran on the local database (migrations to 0009zz, the dev seed and a hand-planned Team NL week of 30 November 2026 with blocks and a lunch), 26 November 2026: the week's total of Team NL 4305 minutes (71h 45m), equal to the page; Martin compares the value with the page in Studio.
+
+**Documented in** decisions.md, 26 Nov 2026, A Planned hours meter sits above the grid; features.md §2
+
+**Notes**
+
+Computed in the browser from the week the planner already reads (cma.roster_assignments' blocks, the rule of cma.roster_planned_hours): no read of its own. A block's duration is wall-clock minutes of the person's day, where cma.roster_planned_hours measures between instants: the two differ only for a block across a DST change.
 
 #### `roster.planner.headcount_per_day`
 
@@ -34522,12 +34575,12 @@ Equals the sent list's Recipients for the same message (same delivery rows) — 
 
 **Planned** on /roster/planner/print · Planned (Gepland)
 
-The print view's per-person planned minutes: the same figure as the planner's Planned column, on the A4 sheet.
+The print view's per-person planned minutes: the same figure as the planner's Planned column (the work assignments, or the whole shift when it holds none), on the A4 sheet.
 
 **Formula as computed**
 
 ```
-Identical to roster.planner.planned_minutes_per_person: plannedMinutesByUser(week.entries) over cma.roster_entries() — the CURRENT cells, so a draft or changed week prints the planner's state, with the draft/changed note in the header.
+Identical to roster.planner.planned_minutes_per_person: plannedMinutes(shift, blocks, kinds) per current entry of week.entries with week.assignments' blocks. Per person-date: a shift with blocks counts its blocks of kind work (an extra type included), never a pause; a shift without any block is planned on the day level only and counts whole; an absence or an empty cell counts 0 (Martin, 26 November 2026).
 ```
 
 **Unit** minutes · **Grain** per_iso_week, per_person · **Status** verified
@@ -34537,6 +34590,8 @@ Identical to roster.planner.planned_minutes_per_person: plannedMinutesByUser(wee
 | Table | Columns | Owner | Fed by | Cadence |
 |---|---|---|---|---|
 | `cma.roster_entry` | user_id, kind, start_time, end_time, valid_to | CMA | cma.roster_set_entry(); read by cma.roster_entries() | on page load (the print view does not poll) |
+| `cma.roster_assignment` | user_id, business_date, assignment_type_id, start_time, end_time, valid_to | CMA | the Workspace's own write path: PUT /api/v1/roster/weeks/{monday}/assignments → cma.roster_set_assignments(); read by cma.roster_assignments() (current rows, valid_to null) | on page load; the client updates its copy as each block saves |
+| `cma.assignment_type` | code, kind | CMA | Configuration → Roster, cma.upsert_assignment_type() | on page load |
 
 **Filters**
 
@@ -34550,15 +34605,15 @@ Identical to roster.planner.planned_minutes_per_person: plannedMinutesByUser(wee
 
 **Refresh** on page load
 
-**Computed in** `cma.roster_entries` (0005); `plannedMinutesByUser` in src/lib/roster.ts; `RosterPrintPage` in src/app/roster/planner/print/page.tsx
+**Computed in** `cma.roster_entries` (0005); `cma.roster_assignments` (0009zz); `plannedMinutes` in src/lib/assignments.ts; `RosterPrintPage` in src/app/roster/planner/print/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
 ```sql
-select e.user_id, sum(((extract(hour from e.end_time)*60 + extract(minute from e.end_time)) - (extract(hour from e.start_time)*60 + extract(minute from e.start_time))))::int as planned_minutes from cma.roster_entry e join cma.roster_week w on w.tenant_id = :tenant_id and w.id = e.roster_week_id where e.tenant_id = :tenant_id and e.valid_to is null and e.kind = 'shift' and w.week_start = :from and w.team_id is null group by e.user_id order by 1
+with e as (select e.user_id, e.business_date, e.start_time, e.end_time from cma.roster_entry e join cma.roster_week w on w.tenant_id = :tenant_id and w.id = e.roster_week_id where e.tenant_id = :tenant_id and e.valid_to is null and e.kind = 'shift' and w.week_start = :from and w.team_id is null), b as (select a.user_id, a.business_date, count(*) as n, sum(case when t.kind = 'pause' then 0 else (extract(epoch from a.end_time) - extract(epoch from a.start_time)) / 60 end) as work from cma.roster_assignment a join cma.assignment_type t on t.tenant_id = a.tenant_id and t.id = a.assignment_type_id where a.tenant_id = :tenant_id and a.valid_to is null group by 1, 2) select e.user_id, sum(case when b.n is null then (extract(epoch from e.end_time) - extract(epoch from e.start_time)) / 60 else b.work end)::int as planned_minutes from e left join b on b.user_id = e.user_id and b.business_date = e.business_date group by e.user_id order by 1 -- :from = the Monday; for a team roster replace 'w.team_id is null' with the team's id
 ```
 
-**Fixture check** The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 0 row(s); Martin compares the value with the page in Studio.
+**Fixture check** Ran on the local database (migrations to 0009zz, the dev seed and a hand-planned Team NL week of 30 November 2026 with blocks and a lunch), 26 November 2026: Agent One 2325 minutes (38h 45m), Test Supervisor 1980 (33h 00m), Team NL 4305 minutes (71h 45m), equal to the page; Martin compares the value with the page in Studio.
 
 **Documented in** api.md, Roster planner, print view and My schedule (0005); decisions.md 8 Oct 2026 (print view, browser dialog, PDF)
 
@@ -42467,12 +42522,12 @@ Both totals sit in one Total row (colspan 3, then pauses, then duration).
 
 **Planned this week** on /schedule · Planned this week (Gepland deze week)
 
-The person's own planned time for the week on screen, summed over their published shifts; absences and unpublished days count 0.
+The person's own planned time for the week on screen, over their published shifts: per day the published assignments of kind work, or the whole shift when it holds none. Pauses, absences and unpublished days count 0.
 
 **Formula as computed**
 
 ```
-sum over cma.my_roster(from, to) rows where kind = 'shift' of shiftMinutes(start, end). my_roster returns published entries only (per date the latest publication across overlapping rosters), own rows only.
+Sum over cma.my_roster(from, to) rows with kind = 'shift' of plannedMinutes(shift, the row's published assignments, their kinds) (src/lib/assignments.ts). Per person-date: a shift with blocks counts its blocks of kind work (an extra type included), never a pause; a shift without any block is planned on the day level only and counts whole; an absence or an empty cell counts 0 (Martin, 26 November 2026). my_roster returns published entries and blocks only (per date the latest publication across overlapping rosters), own rows only.
 ```
 
 **Unit** minutes · **Grain** per_iso_week · **Status** verified
@@ -42483,6 +42538,7 @@ sum over cma.my_roster(from, to) rows where kind = 'shift' of shiftMinutes(start
 |---|---|---|---|---|
 | `cma.roster_entry` | user_id, business_date, kind, start_time, end_time, recorded_at, valid_to | CMA | planner writes via cma.roster_set_entry(); read through cma.roster_published_entry and cma.my_roster() | on page load |
 | `cma.roster_week` | status, published_at, team_id, week_start | CMA | cma.roster_publish() | on page load |
+| `cma.roster_assignment` | user_id, business_date, assignment_type_id, start_time, end_time, recorded_at, valid_to | CMA | planner writes via cma.roster_set_assignments(); read through cma.roster_published_assignment and cma.my_roster() | on page load |
 
 **Filters**
 
@@ -42497,7 +42553,7 @@ sum over cma.my_roster(from, to) rows where kind = 'shift' of shiftMinutes(start
 
 **Refresh** on page load (no poll)
 
-**Computed in** `cma.my_roster` (0005); `cma.roster_published_entry` (0005); `MySchedulePage` in src/app/schedule/page.tsx; `shiftMinutes` in src/lib/roster.ts
+**Computed in** `cma.my_roster` (0009zx); `cma.roster_published_entry` (0005); `cma.roster_published_blocks_json` (0009zz); `MySchedulePage` in src/app/(shell)/schedule/page.tsx; `plannedMinutes` in src/lib/assignments.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -42511,7 +42567,7 @@ with pub as (select distinct on (e.business_date) e.business_date, e.kind, e.sta
 
 **Notes**
 
-Cross-page: the planner's Planned column can differ for the same person and week when the week has unpublished changes (planner = current cells, My schedule = published) — intentional, both pages say so (Draft / 'Not published yet'). A week not covered by any published roster totals 0:00 with every day saying 'Not published yet'.
+Cross-page: the planner's Planned column can differ for the same person and week when the week has unpublished changes (planner = current cells, My schedule = published) — intentional, both pages say so (Draft / 'Not published yet'). A week not covered by any published roster totals 0:00 with every day saying 'Not published yet'. Since 26 November 2026 a published pause no longer counts (Martin).
 
 #### `my_schedule.day_state`
 

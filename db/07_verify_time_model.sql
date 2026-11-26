@@ -297,15 +297,21 @@ rollback;
 begin;
 set local role cma_app;
 -- no app.tenant_id set on purpose: this is what the login calls first
-select t.slug
+select 'agent-one: ' || t.slug
 from cma.find_tenants_for_identity('mock', 'agent-one') f
+join cma.tenant t on t.id = f.tenant_id
+where coalesce(current_setting('verify.is_dev', true), 'false')::boolean
+union all
+select 'agent-one-invest: ' || t.slug
+from cma.find_tenants_for_identity('mock', 'agent-one-invest') f
 join cma.tenant t on t.id = f.tenant_id
 where coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 union all
 select 'block K skipped: not the dev database (no dev seed)' where not coalesce(current_setting('verify.is_dev', true), 'false')::boolean
 order by 1;
--- expect: pulse4all-invest, pulse4all-subscriptions (same person in two tenants: the picker case); in prod the
---         one line "block K skipped"
+-- expect: "agent-one: pulse4all-subscriptions" and "agent-one-invest: pulse4all-invest", one tenant per login (the app
+--         has no tenant picker and refuses a login that matches two tenants; Martin, 26 Nov 2026); in prod the one line
+--         "block K skipped"
 select count(*) as unknown_subject from cma.find_tenants_for_identity('mock', 'nobody');   -- expect: 0
 select count(*) as wrong_system    from cma.find_tenants_for_identity('google', 'agent-one'); -- expect: 0
 rollback;
