@@ -12,7 +12,10 @@
  * proxy.ts puts one policy on the request and the answer; the build renders every page per request (no page among the
  * prerendered routes). With BASE: every page answer carries the policy with a fresh nonce, every script of the HTML
  * carries that nonce but the fit's, whose text has the policy's hash; in Chromium Welcome, My day, Messages, My hours
- * and an unknown address (the 404 page) raise no CSP violation, and the fit still zooms at 1216 px.
+ * and an unknown address (the 404 page) raise no CSP violation, and the fit still zooms at 1216 px; and after the load
+ * (26 November 2026, after N07b, N07b2 and N07d): Welcome's head start writes its marker, the navigation beacon is
+ * answered 204, a rail click and Back stay client navigations (no document load), the Live board and Flash load as the
+ * supervisor, without a CSP violation. 8 checks, 14 with BASE.
  */
 import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
@@ -115,6 +118,41 @@ if (BASE) {
     const zoom = await p.evaluate(() => document.getElementById("cma-fit")?.textContent ?? "");
     check("Chromium: the desktop fit's script ran under the policy (its zoom written at 1216 px)", /0\.9\d*/.test(zoom), zoom.slice(0, 80));
     await ctx.close();
+
+    // After the load (26 November 2026, after N07b, N07b2 and N07d): what runs on a page once it is there runs under the
+    // policy too. Welcome's head start writes its marker (client code ran: N07b2), the navigation beacon is answered
+    // (N07d), a rail click and Back stay client navigations in the persistent shell (no document load: N07b), and the
+    // Live board and Flash load as the supervisor; no CSP violation on the way
+    const ctx2 = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const q = await ctx2.newPage();
+    const after = [];
+    q.on("console", (m) => { if (/Content Security Policy/i.test(m.text())) after.push(m.text().slice(0, 120)); });
+    await q.addInitScript(() => document.addEventListener("securitypolicyviolation", (e) => console.log(`Content Security Policy violation: ${e.violatedDirective} ${e.blockedURI}`)));
+    let documents = 0;
+    const beacons = [];
+    q.on("request", (req) => { if (req.resourceType() === "document") documents += 1; });
+    q.on("response", (res) => { if (new URL(res.url()).pathname === "/api/v1/telemetry/navigation") beacons.push(res.status()); });
+    await q.goto(`${BASE}/?as=agent-two`, { waitUntil: "networkidle" });
+    const marker = await q.waitForFunction(() => document.documentElement.dataset.headStart ?? null, null, { timeout: 15000 })
+      .then((h) => h.jsonValue()).catch(() => null);
+    const before = documents;
+    const rail = await q.locator("nav[data-rail-nav] a[href]").evaluateAll((as) => as.filter((a) => a.offsetParent !== null).map((a) => a.getAttribute("href")));
+    const target = rail.find((h) => h !== "/" && !h.startsWith("/reports")) ?? null;
+    if (target) {
+      await q.locator(`nav[data-rail-nav] a[href="${target}"]`).first().click();
+      await q.waitForURL(`**${target}`);
+      await q.waitForLoadState("networkidle");
+      await q.goBack();
+      await q.waitForLoadState("networkidle");
+    }
+    const clientNavs = documents - before;
+    for (const path of ["/?as=supervisor", "/live/newco", "/reports/flash"]) await q.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
+    await q.waitForTimeout(1500);
+    if (PROVOKE) after.push("provoked");
+    check("Chromium after the load: the head start's marker, the beacon answered, a rail click and Back without a document load, the Live board and Flash, no CSP violation",
+      after.length === 0 && marker !== null && beacons.includes(204) && target !== null && clientNavs === 0,
+      `violations ${after.slice(0, 2).join(" | ") || 0}; marker ${marker}; beacons ${beacons.join(",") || "none"}; rail click ${target}; document loads ${clientNavs}`);
+    await ctx2.close();
   } finally {
     await browser.close();
   }
