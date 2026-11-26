@@ -70976,6 +70976,10 @@
           {
             "file": "src/lib/data/postgres.ts",
             "export": "readDay"
+          },
+          {
+            "file": "src/components/MyDayPanel.tsx",
+            "export": "MyDayPanel"
           }
         ]
       },
@@ -70990,7 +70994,7 @@
       "status": [
         "verified"
       ],
-      "notes": "The clock and My hours count the same time by construction (both from cma.time_interval with is_working). Before the client clock starts (hydration) the closed part alone shows. The window end is read live per tenant, not per-day snapshot: see the window-retroactivity finding. The time between two sessions counts in no figure. After an end nothing runs (runningSince null) until the next clock-in."
+      "notes": "The clock and My hours count the same time by construction (both from cma.time_interval with is_working). Before the client clock starts (hydration) the closed part alone shows. The window end is read live per tenant, not per-day snapshot: see the window-retroactivity finding. The time between two sessions counts in no figure. After an end nothing runs (runningSince null) until the next clock-in. Since addition 0010a a tenant with assignment types shows it in MyDayPanel (the chip names the assignment and hours market), computed as before."
     },
     {
       "key": "my_day.started_at",
@@ -71138,6 +71142,10 @@
           {
             "file": "src/lib/dashboard.ts",
             "export": "agentGroupOf"
+          },
+          {
+            "file": "src/components/MyDayPanel.tsx",
+            "export": "MyDayPanel"
           }
         ]
       },
@@ -71151,7 +71159,7 @@
       "status": [
         "verified"
       ],
-      "notes": "No status key or name in code; the grid is the tenant's active list in its order. Pay and billing flags never reach the agent screen (listStatuses selects is_working and is_productive only)."
+      "notes": "No status key or name in code; the grid is the tenant's active list in its order. Pay and billing flags never reach the agent screen (listStatuses selects is_working and is_productive only). Since addition 0010a a tenant with assignment types shows it in MyDayPanel (the chip names the assignment and hours market), computed as before."
     },
     {
       "key": "my_day.status_since",
@@ -71217,6 +71225,10 @@
           {
             "file": "src/app/day/page.tsx",
             "export": "MyDayPage"
+          },
+          {
+            "file": "src/components/MyDayPanel.tsx",
+            "export": "MyDayPanel"
           }
         ]
       },
@@ -71230,7 +71242,7 @@
       "status": [
         "verified"
       ],
-      "notes": "verify_sql gives the last effective start/status time, which equals status_since while the day is open and not capped; on a capped day the page hides the label (status_since is null because the open interval is capped)."
+      "notes": "verify_sql gives the last effective start/status time, which equals status_since while the day is open and not capped; on a capped day the page hides the label (status_since is null because the open interval is capped). Since addition 0010a a tenant with assignment types shows it in MyDayPanel (the chip names the assignment and hours market), computed as before."
     },
     {
       "key": "my_day.ended_at",
@@ -71304,9 +71316,503 @@
       "notes": "An ended day stays ended unless the tenant's workday.clock_in_again lets the person clock in again after their own log out, within the workday window; other resumes stay corrections (Decision log, 3 Nov 2026, #217). The card then shows the Clock in card below it (canClockInAgain)."
     },
     {
-      "key": "my_hours.date",
+      "key": "my_day.scheduled",
       "surface": "agent",
-      "page": "/hours",
+      "page": "/day",
+      "tile": null,
+      "title": {
+        "en": "Scheduled",
+        "nl": "Gepland"
+      },
+      "definition": "The Scheduled lane: today's published blocks for the person, each with its start and end, as CODE · MARKET for work, the code for a pause and the name for an absence.",
+      "formula": "plan = cma.roster_plan_of(user, date): the blocks of the person's latest published shift that day, in time order (work, pause and absence blocks).",
+      "unit": "time_of_day",
+      "grain": [
+        "per_day"
+      ],
+      "sources": [
+        {
+          "table": "cma.roster_entry",
+          "columns": [
+            "user_id",
+            "business_date",
+            "kind",
+            "start_time",
+            "end_time"
+          ],
+          "owner": "CMA",
+          "fed_by": "the planner (roster_set_cell, roster_set_entry) and Publish (roster_publish), through the published views",
+          "cadence": "on publish"
+        },
+        {
+          "table": "cma.roster_assignment",
+          "columns": [
+            "assignment_type_id",
+            "absence_type_id",
+            "hours_market_code",
+            "start_time",
+            "end_time"
+          ],
+          "owner": "CMA",
+          "fed_by": "the planner (roster_put_assignments), published with the week",
+          "cadence": "on publish"
+        },
+        {
+          "table": "cma.assignment_type",
+          "columns": [
+            "code",
+            "name",
+            "kind",
+            "work_status_id",
+            "is_extra"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant seed 02; the Assignment types configuration",
+          "cadence": "on configuration change"
+        }
+      ],
+      "filters": [
+        "tenant: RLS (cma.current_tenant_id)",
+        "own day only (the acting user)",
+        "the date in the person's zone (today by default)",
+        "the latest published entry for the date, when it is a shift"
+      ],
+      "time": "Block times are local times on the business date in the person's zone, drawn as instants; the Now marker is the browser's clock.",
+      "comparison": null,
+      "settings": [],
+      "permissions": {
+        "anyOf": [
+          "workday.own"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load, a 30-second poll, on becoming visible after more than 10 s, and at the next block boundary plus 65 s",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.my_day",
+            "migration": "0010a"
+          },
+          {
+            "object": "cma.roster_plan_of",
+            "migration": "0010a"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/components/MyDayPanel.tsx",
+            "export": "MyDayPanel"
+          },
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getMyDay"
+          }
+        ]
+      },
+      "verify_sql": "-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_day reads both;\n-- :user_id the person (holding workday.own), :from the date (null: today in the person's zone)\nwith ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)\nselect b ->> 'code' as code, b ->> 'kind' as kind, b ->> 'hoursMarket' as hours_market, b ->> 'startAt' as start_at, b ->> 'endAt' as end_at\nfrom (select cma.my_day(:from) as j from ctx) p cross join lateral jsonb_array_elements(p.j -> 'plan') b",
+      "fixture_check": "Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.",
+      "prerequisites": [],
+      "docs": [
+        "api.md, GET /api/v1/me/day/plan",
+        "decisions.md 26 Nov 2026 (E1 to E10; addition 0010a)",
+        "data-model/0008.md, the roster drives the day (0010a)"
+      ],
+      "status": [
+        "verified"
+      ],
+      "notes": "Shown when the tenant uses assignment types (usesAssignments); a tenant without them keeps the status panel."
+    },
+    {
+      "key": "my_day.actual",
+      "surface": "agent",
+      "page": "/day",
+      "tile": null,
+      "title": {
+        "en": "Actual",
+        "nl": "Werkelijk"
+      },
+      "definition": "The Actual lane: the day's stretches from its time events, each with the assignment and hours market it carried, a running one up to now; a stretch that differs from the block planned at that time is marked.",
+      "formula": "actual = cma.workday_actual_of(workday): one stretch per effective start or status event to the next event (or now); deviates = the stretch's assignment or market differs from the block in force at its start.",
+      "unit": "time_of_day",
+      "grain": [
+        "per_day"
+      ],
+      "sources": [
+        {
+          "table": "cma.time_event",
+          "columns": [
+            "kind",
+            "status_id",
+            "assignment_type_id",
+            "hours_market_code",
+            "occurred_at",
+            "recorded_at",
+            "supersedes_event_id",
+            "source"
+          ],
+          "owner": "CMA",
+          "fed_by": "the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep",
+          "cadence": "immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly"
+        },
+        {
+          "table": "cma.work_status",
+          "columns": [
+            "is_working",
+            "work_area"
+          ],
+          "owner": "CMA",
+          "fed_by": "migration seed + tenant seed 02; the Statuses screen",
+          "cadence": "on configuration change"
+        },
+        {
+          "table": "cma.assignment_type",
+          "columns": [
+            "code",
+            "name",
+            "kind",
+            "work_status_id",
+            "is_extra"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant seed 02; the Assignment types configuration",
+          "cadence": "on configuration change"
+        },
+        {
+          "table": "cma.roster_entry",
+          "columns": [
+            "user_id",
+            "business_date",
+            "kind",
+            "start_time",
+            "end_time"
+          ],
+          "owner": "CMA",
+          "fed_by": "the planner (roster_set_cell, roster_set_entry) and Publish (roster_publish), through the published views",
+          "cadence": "on publish"
+        },
+        {
+          "table": "cma.roster_assignment",
+          "columns": [
+            "assignment_type_id",
+            "absence_type_id",
+            "hours_market_code",
+            "start_time",
+            "end_time"
+          ],
+          "owner": "CMA",
+          "fed_by": "the planner (roster_put_assignments), published with the week",
+          "cadence": "on publish"
+        }
+      ],
+      "filters": [
+        "tenant: RLS (cma.current_tenant_id)",
+        "own day only (the acting user)",
+        "the date in the person's zone (today by default)"
+      ],
+      "time": "Block times are local times on the business date in the person's zone, drawn as instants; the Now marker is the browser's clock.",
+      "comparison": null,
+      "settings": [],
+      "permissions": {
+        "anyOf": [
+          "workday.own"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load, a 30-second poll, on becoming visible after more than 10 s, and at the next block boundary plus 65 s",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.my_day",
+            "migration": "0010a"
+          },
+          {
+            "object": "cma.workday_actual_of",
+            "migration": "0010a"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/components/MyDayPanel.tsx",
+            "export": "MyDayPanel"
+          },
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getMyDay"
+          }
+        ]
+      },
+      "verify_sql": "-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_day reads both;\n-- :user_id the person (holding workday.own), :from the date (null: today in the person's zone)\nwith ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)\nselect a ->> 'code' as code, a ->> 'hoursMarket' as hours_market, a ->> 'fromAt' as from_at, a ->> 'toAt' as to_at, (a ->> 'deviates')::boolean as deviates\nfrom (select cma.my_day(:from) as j from ctx) p cross join lateral jsonb_array_elements(p.j -> 'actual') a",
+      "fixture_check": "Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.",
+      "prerequisites": [],
+      "docs": [
+        "api.md, GET /api/v1/me/day/plan",
+        "decisions.md 26 Nov 2026 (E1 to E10; addition 0010a)",
+        "data-model/0008.md, the roster drives the day (0010a)"
+      ],
+      "status": [
+        "verified"
+      ],
+      "notes": "The marks under the lane (\"CC SE (planned GO SE)\") come from the same deviates flag."
+    },
+    {
+      "key": "my_day.off_plan",
+      "surface": "agent",
+      "page": "/day",
+      "tile": null,
+      "title": {
+        "en": "Off plan",
+        "nl": "Buiten planning"
+      },
+      "definition": "Whether the person is now on another assignment or hours market than the work or pause block planned now (after their own Switch, or a Clock in that started elsewhere); with the block planned now and the next roster switch (\"Planned now: GO · SE General Ops since 11:15. At 12:15 your roster switches you to GO · DE.\") and the Back to plan button.",
+      "formula": "offPlan = an object (null when on plan): set when the open workday's latest effective event differs from the work or pause block of cma.roster_plan_of in force now in assignment or hours market; it names that block (code, hoursMarket, since) and the next one (nextAt, nextCode, nextHoursMarket).",
+      "unit": "flag",
+      "grain": [
+        "now"
+      ],
+      "sources": [
+        {
+          "table": "cma.time_event",
+          "columns": [
+            "kind",
+            "status_id",
+            "assignment_type_id",
+            "hours_market_code",
+            "occurred_at",
+            "recorded_at",
+            "supersedes_event_id",
+            "source"
+          ],
+          "owner": "CMA",
+          "fed_by": "the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep",
+          "cadence": "immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly"
+        },
+        {
+          "table": "cma.work_status",
+          "columns": [
+            "is_working",
+            "work_area"
+          ],
+          "owner": "CMA",
+          "fed_by": "migration seed + tenant seed 02; the Statuses screen",
+          "cadence": "on configuration change"
+        },
+        {
+          "table": "cma.assignment_type",
+          "columns": [
+            "code",
+            "name",
+            "kind",
+            "work_status_id",
+            "is_extra"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant seed 02; the Assignment types configuration",
+          "cadence": "on configuration change"
+        },
+        {
+          "table": "cma.roster_entry",
+          "columns": [
+            "user_id",
+            "business_date",
+            "kind",
+            "start_time",
+            "end_time"
+          ],
+          "owner": "CMA",
+          "fed_by": "the planner (roster_set_cell, roster_set_entry) and Publish (roster_publish), through the published views",
+          "cadence": "on publish"
+        },
+        {
+          "table": "cma.roster_assignment",
+          "columns": [
+            "assignment_type_id",
+            "absence_type_id",
+            "hours_market_code",
+            "start_time",
+            "end_time"
+          ],
+          "owner": "CMA",
+          "fed_by": "the planner (roster_put_assignments), published with the week",
+          "cadence": "on publish"
+        }
+      ],
+      "filters": [
+        "tenant: RLS (cma.current_tenant_id)",
+        "own day only (the acting user)",
+        "the date in the person's zone (today by default)",
+        "only while a workday is open and inside the shift"
+      ],
+      "time": "Block times are local times on the business date in the person's zone, drawn as instants; the Now marker is the browser's clock.",
+      "comparison": null,
+      "settings": [],
+      "permissions": {
+        "anyOf": [
+          "workday.own"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load, a 30-second poll, on becoming visible after more than 10 s, and at the next block boundary plus 65 s",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.my_day",
+            "migration": "0010a"
+          },
+          {
+            "object": "cma.roster_plan_of",
+            "migration": "0010a"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/components/MyDayPanel.tsx",
+            "export": "MyDayPanel"
+          },
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getMyDay"
+          }
+        ]
+      },
+      "verify_sql": "-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_day reads both;\n-- :user_id the person (holding workday.own), :from the date (null: today in the person's zone)\nwith ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)\nselect p.j -> 'offPlan' is not null as off_plan, p.j -> 'offPlan' ->> 'code' as planned_code, p.j -> 'offPlan' ->> 'hoursMarket' as planned_hours_market, p.j -> 'offPlan' ->> 'nextAt' as next_at, p.j -> 'offPlan' ->> 'nextCode' as next_code\nfrom (select cma.my_day(null) as j from ctx) p",
+      "fixture_check": "Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.",
+      "prerequisites": [],
+      "docs": [
+        "api.md, GET /api/v1/me/day/plan",
+        "decisions.md 26 Nov 2026 (E1 to E10; addition 0010a)",
+        "data-model/0008.md, the roster drives the day (0010a)"
+      ],
+      "status": [
+        "verified"
+      ],
+      "notes": "The next roster boundary always takes over again (E7); after the shift there is no roster switch (E8)."
+    },
+    {
+      "key": "my_day.roster_notice",
+      "surface": "agent",
+      "page": "/day",
+      "tile": null,
+      "title": {
+        "en": "Roster switch notice",
+        "nl": "Melding roosterwissel"
+      },
+      "definition": "The notice after the roster's minute job switched the person: \"Your roster switched you to SB Short break at 11:00.\", shown for roster.switch_notice_minutes after the switch and gone earlier at the person's own Switch or the next roster switch.",
+      "formula": "notice = the open workday's latest effective event when it is a status event with source roster and occurred_at > now() - roster.switch_notice_minutes; until = occurred_at + those minutes. A later event (the person's own Switch, the next roster switch) replaces it as the latest.",
+      "unit": "text",
+      "grain": [
+        "now"
+      ],
+      "sources": [
+        {
+          "table": "cma.time_event",
+          "columns": [
+            "kind",
+            "status_id",
+            "assignment_type_id",
+            "hours_market_code",
+            "occurred_at",
+            "recorded_at",
+            "supersedes_event_id",
+            "source"
+          ],
+          "owner": "CMA",
+          "fed_by": "the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep",
+          "cadence": "immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly"
+        },
+        {
+          "table": "cma.work_status",
+          "columns": [
+            "is_working",
+            "work_area"
+          ],
+          "owner": "CMA",
+          "fed_by": "migration seed + tenant seed 02; the Statuses screen",
+          "cadence": "on configuration change"
+        },
+        {
+          "table": "cma.assignment_type",
+          "columns": [
+            "code",
+            "name",
+            "kind",
+            "work_status_id",
+            "is_extra"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant seed 02; the Assignment types configuration",
+          "cadence": "on configuration change"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "cma.set_tenant_setting() (Configuration); seed 02",
+          "cadence": "on configuration change"
+        }
+      ],
+      "filters": [
+        "tenant: RLS (cma.current_tenant_id)",
+        "own day only (the acting user)",
+        "the date in the person's zone (today by default)",
+        "only while a workday is open"
+      ],
+      "time": "The browser hides the notice at its until instant by its own clock.",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "roster.switch_notice_minutes",
+          "default": "5"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "workday.own"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load, a 30-second poll, on becoming visible after more than 10 s, and at the next block boundary plus 65 s",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.my_day",
+            "migration": "0010a"
+          },
+          {
+            "object": "cma.roster_plan_of",
+            "migration": "0010a"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/components/MyDayPanel.tsx",
+            "export": "MyDayPanel"
+          },
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getMyDay"
+          }
+        ]
+      },
+      "verify_sql": "-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_day reads both;\n-- :user_id the person (holding workday.own), :from the date (null: today in the person's zone)\nwith ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)\nselect p.j -> 'notice' as notice from (select cma.my_day(null) as j from ctx) p",
+      "fixture_check": "Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.",
+      "prerequisites": [],
+      "docs": [
+        "api.md, GET /api/v1/me/day/plan",
+        "decisions.md 26 Nov 2026 (E1 to E10; addition 0010a)",
+        "data-model/0008.md, the roster drives the day (0010a)"
+      ],
+      "status": [
+        "verified"
+      ],
+      "notes": "E3 names the push service; until there is one, My day polls (decisions.md, 26 Nov 2026)."
+    },
+    {
+      "key": "my_hours.date",
+      "surface": "api",
+      "page": "/api/v1/me/hours",
       "tile": "Date",
       "title": {
         "en": "Date",
@@ -71344,7 +71850,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load",
+      "refresh": "on each request",
       "computed_in": {
         "sql": [
           {
@@ -71353,10 +71859,6 @@
           }
         ],
         "ts": [
-          {
-            "file": "src/app/hours/page.tsx",
-            "export": "MyHoursPage"
-          },
           {
             "file": "src/lib/data/postgres.ts",
             "export": "getHours"
@@ -71374,12 +71876,12 @@
       "status": [
         "verified"
       ],
-      "notes": "The shift belongs to the business day it started on (features.md §1); no shifts past midnight at Pulse4all (decision 7 Oct 2026). Empty state: 'No hours in this period yet'. A withdrawn imported day (no effective start) is no day (0008d) and never lists."
+      "notes": "The shift belongs to the business day it started on (features.md §1); no shifts past midnight at Pulse4all (decision 7 Oct 2026). Empty state: 'No hours in this period yet'. A withdrawn imported day (no effective start) is no day (0008d) and never lists. Since addition 0010a (brief B, 26 Nov 2026) the My hours page shows the person's week per assignment and hours market (my_hours.week_*, my_hours.day_*); this period figure is no longer on the page and stays on GET /api/v1/me/hours, computed as before."
     },
     {
       "key": "my_hours.start",
-      "surface": "agent",
-      "page": "/hours",
+      "surface": "api",
+      "page": "/api/v1/me/hours",
       "tile": "Start",
       "title": {
         "en": "Start",
@@ -71416,7 +71918,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load",
+      "refresh": "on each request",
       "computed_in": {
         "sql": [
           {
@@ -71425,10 +71927,6 @@
           }
         ],
         "ts": [
-          {
-            "file": "src/app/hours/page.tsx",
-            "export": "MyHoursPage"
-          },
           {
             "file": "src/lib/time.ts",
             "export": "fmtTime"
@@ -71445,12 +71943,12 @@
       "status": [
         "discrepancy"
       ],
-      "notes": "Team hours and both CSVs show the same instant in the day's own snapshot zone; My hours uses the viewer's current zone. For a person whose zone never changes the clock times agree; after a zone change (personal, employer or tenant) the same day reads differently on My hours than on Team hours. See finding. A day of several sessions shows '2 sessions' next to the date; the start stays the first session's."
+      "notes": "Team hours and both CSVs show the same instant in the day's own snapshot zone; My hours uses the viewer's current zone. For a person whose zone never changes the clock times agree; after a zone change (personal, employer or tenant) the same day reads differently on My hours than on Team hours. See finding. A day of several sessions shows '2 sessions' next to the date; the start stays the first session's. Since addition 0010a (brief B, 26 Nov 2026) the My hours page shows the person's week per assignment and hours market (my_hours.week_*, my_hours.day_*); this period figure is no longer on the page and stays on GET /api/v1/me/hours, computed as before."
     },
     {
       "key": "my_hours.end",
-      "surface": "agent",
-      "page": "/hours",
+      "surface": "api",
+      "page": "/api/v1/me/hours",
       "tile": "End",
       "title": {
         "en": "End",
@@ -71488,7 +71986,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load",
+      "refresh": "on each request",
       "computed_in": {
         "sql": [
           {
@@ -71498,8 +71996,8 @@
         ],
         "ts": [
           {
-            "file": "src/app/hours/page.tsx",
-            "export": "MyHoursPage"
+            "file": "src/lib/data/postgres.ts",
+            "export": "getHours"
           }
         ]
       },
@@ -71512,12 +72010,12 @@
       "status": [
         "discrepancy"
       ],
-      "notes": "A forgotten clock-out of an earlier day also reads 'still working' here (the day is open past its window end until the sweep or a correction ends it), while Team hours flags it 'Not clocked out' — a mild wrong-empty-state for the agent. See finding. Once the sweep has closed it, the end shown is the system end."
+      "notes": "A forgotten clock-out of an earlier day also reads 'still working' here (the day is open past its window end until the sweep or a correction ends it), while Team hours flags it 'Not clocked out' — a mild wrong-empty-state for the agent. See finding. Once the sweep has closed it, the end shown is the system end. Since addition 0010a (brief B, 26 Nov 2026) the My hours page shows the person's week per assignment and hours market (my_hours.week_*, my_hours.day_*); this period figure is no longer on the page and stays on GET /api/v1/me/hours, computed as before."
     },
     {
       "key": "my_hours.pauses",
-      "surface": "agent",
-      "page": "/hours",
+      "surface": "api",
+      "page": "/api/v1/me/hours",
       "tile": "Pauses",
       "title": {
         "en": "Pauses",
@@ -71573,7 +72071,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load",
+      "refresh": "on each request",
       "computed_in": {
         "sql": [
           {
@@ -71585,10 +72083,6 @@
           {
             "file": "src/lib/data/postgres.ts",
             "export": "getHours"
-          },
-          {
-            "file": "src/app/hours/page.tsx",
-            "export": "MyHoursPage"
           }
         ]
       },
@@ -71602,12 +72096,12 @@
       "status": [
         "verified"
       ],
-      "notes": "Pauses and Duration are floored to minutes independently, so pauses + duration can fall one minute short of the clocked time. On a day of several sessions the time between sessions is in neither, so pauses + duration is shorter than the span from first start to last end by that gap. 0m shows for a day without pauses (a true zero, correct)."
+      "notes": "Pauses and Duration are floored to minutes independently, so pauses + duration can fall one minute short of the clocked time. On a day of several sessions the time between sessions is in neither, so pauses + duration is shorter than the span from first start to last end by that gap. 0m shows for a day without pauses (a true zero, correct). Since addition 0010a (brief B, 26 Nov 2026) the My hours page shows the person's week per assignment and hours market (my_hours.week_*, my_hours.day_*); this period figure is no longer on the page and stays on GET /api/v1/me/hours, computed as before."
     },
     {
       "key": "my_hours.duration",
-      "surface": "agent",
-      "page": "/hours",
+      "surface": "api",
+      "page": "/api/v1/me/hours",
       "tile": "Duration",
       "title": {
         "en": "Duration",
@@ -71674,7 +72168,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load",
+      "refresh": "on each request",
       "computed_in": {
         "sql": [
           {
@@ -71704,12 +72198,12 @@
       "status": [
         "verified"
       ],
-      "notes": "Which hours the agent sees is decided (working time, 7 Oct 2026); switching to paid is the one line minutesOf (postgres.ts:380-386). Same flooring as Team hours' Worked column, so supervisor and agent see the same figure for the same day (ownHoursOnly copy says so). The time between two sessions counts in no figure."
+      "notes": "Which hours the agent sees is decided (working time, 7 Oct 2026); switching to paid is the one line minutesOf (postgres.ts:380-386). Same flooring as Team hours' Worked column, so supervisor and agent see the same figure for the same day (ownHoursOnly copy says so). The time between two sessions counts in no figure. Since addition 0010a (brief B, 26 Nov 2026) the My hours page shows the person's week per assignment and hours market (my_hours.week_*, my_hours.day_*); this period figure is no longer on the page and stays on GET /api/v1/me/hours, computed as before."
     },
     {
       "key": "my_hours.total_duration",
-      "surface": "agent",
-      "page": "/hours",
+      "surface": "api",
+      "page": "/api/v1/me/hours",
       "tile": "Total",
       "title": {
         "en": "Total (duration)",
@@ -71760,7 +72254,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load",
+      "refresh": "on each request",
       "computed_in": {
         "sql": [
           {
@@ -71772,10 +72266,6 @@
           {
             "file": "src/lib/data/postgres.ts",
             "export": "getHours"
-          },
-          {
-            "file": "src/app/hours/page.tsx",
-            "export": "MyHoursPage"
           }
         ]
       },
@@ -71788,12 +72278,12 @@
       "status": [
         "verified"
       ],
-      "notes": "Per-day flooring first, then the sum: the same rule as the Dashboard's Worked tile and Team hours' Total, so the three totals agree for the same person and period."
+      "notes": "Per-day flooring first, then the sum: the same rule as the Dashboard's Worked tile and Team hours' Total, so the three totals agree for the same person and period. Since addition 0010a (brief B, 26 Nov 2026) the My hours page shows the person's week per assignment and hours market (my_hours.week_*, my_hours.day_*); this period figure is no longer on the page and stays on GET /api/v1/me/hours, computed as before."
     },
     {
       "key": "my_hours.total_pauses",
-      "surface": "agent",
-      "page": "/hours",
+      "surface": "api",
+      "page": "/api/v1/me/hours",
       "tile": "Total",
       "title": {
         "en": "Total (pauses)",
@@ -71844,7 +72334,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load",
+      "refresh": "on each request",
       "computed_in": {
         "sql": [
           {
@@ -71854,8 +72344,8 @@
         ],
         "ts": [
           {
-            "file": "src/app/hours/page.tsx",
-            "export": "MyHoursPage"
+            "file": "src/lib/data/postgres.ts",
+            "export": "getHours"
           }
         ]
       },
@@ -71868,7 +72358,654 @@
       "status": [
         "verified"
       ],
-      "notes": "Both totals sit in one Total row (colspan 3, then pauses, then duration)."
+      "notes": "Both totals sit in one Total row (colspan 3, then pauses, then duration). Since addition 0010a (brief B, 26 Nov 2026) the My hours page shows the person's week per assignment and hours market (my_hours.week_*, my_hours.day_*); this period figure is no longer on the page and stays on GET /api/v1/me/hours, computed as before."
+    },
+    {
+      "key": "my_hours.week_worked",
+      "surface": "agent",
+      "page": "/hours",
+      "tile": null,
+      "title": {
+        "en": "Worked this week",
+        "nl": "Deze week gewerkt"
+      },
+      "definition": "The person's time worked in the week: every stretch in a working status, summed over the week's days and sessions. Pauses and the time between sessions are not counted.",
+      "formula": "workedSeconds = sum(seconds) over cma.workday_actual_of(workday) for the week's workdays where is_working; shown as \"4h 05m\" (lib/my-day hoursMinutes, floored to the minute).",
+      "unit": "seconds",
+      "grain": [
+        "per_iso_week"
+      ],
+      "sources": [
+        {
+          "table": "cma.time_event",
+          "columns": [
+            "kind",
+            "status_id",
+            "assignment_type_id",
+            "hours_market_code",
+            "occurred_at",
+            "recorded_at",
+            "supersedes_event_id",
+            "source"
+          ],
+          "owner": "CMA",
+          "fed_by": "the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep",
+          "cadence": "immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly"
+        },
+        {
+          "table": "cma.work_status",
+          "columns": [
+            "is_working",
+            "work_area"
+          ],
+          "owner": "CMA",
+          "fed_by": "migration seed + tenant seed 02; the Statuses screen",
+          "cadence": "on configuration change"
+        },
+        {
+          "table": "cma.assignment_type",
+          "columns": [
+            "code",
+            "name",
+            "kind",
+            "work_status_id",
+            "is_extra"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant seed 02; the Assignment types configuration",
+          "cadence": "on configuration change"
+        }
+      ],
+      "filters": [
+        "tenant: RLS (cma.current_tenant_id)",
+        "own days only (the acting user; no user parameter)",
+        "the business dates of the ISO week, Monday to Sunday, in the person's zone",
+        "working statuses only"
+      ],
+      "time": "Business dates in the person's own zone; a stretch's seconds as cma.workday_actual_of counts them (from one event to the next, a running stretch to now); the week from :from (a Monday).",
+      "comparison": null,
+      "settings": [],
+      "permissions": {
+        "anyOf": [
+          "workday.own"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.my_hours",
+            "migration": "0010a"
+          },
+          {
+            "object": "cma.workday_actual_of",
+            "migration": "0010a"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/app/(shell)/hours/page.tsx",
+            "export": "default"
+          },
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getMyHoursWeek"
+          }
+        ]
+      },
+      "verify_sql": "-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_hours reads both;\n-- :user_id the person (holding workday.own), :from the Monday of the week\nwith ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)\nselect (cma.my_hours(:from) ->> 'workedSeconds')::bigint as worked_seconds from ctx",
+      "fixture_check": "Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.",
+      "prerequisites": [],
+      "docs": [
+        "api.md, GET /api/v1/me/hours/week",
+        "decisions.md 26 Nov 2026 (E1, E11; addition 0010a)",
+        "data-model/0008.md, the roster drives the day (0010a)"
+      ],
+      "status": [
+        "verified"
+      ],
+      "notes": "Equal to the sum of the rows (my_hours.worked_per_assignment) and of the days (my_hours.day_worked) by construction."
+    },
+    {
+      "key": "my_hours.week_planned",
+      "surface": "agent",
+      "page": "/hours",
+      "tile": null,
+      "title": {
+        "en": "Planned this week",
+        "nl": "Deze week gepland"
+      },
+      "definition": "The person's planned time in the week from the published roster: the work blocks of each published shift (an extra block included, pauses and absence blocks not); a published shift without any block counts whole, as Planned (roster) counts it.",
+      "formula": "plannedMinutes = sum over the week's dates of: shift without blocks → end - start of the shift; else sum(end - start) of cma.roster_plan_of(user, date) where kind = 'work'.",
+      "unit": "minutes",
+      "grain": [
+        "per_iso_week"
+      ],
+      "sources": [
+        {
+          "table": "cma.roster_entry",
+          "columns": [
+            "user_id",
+            "business_date",
+            "kind",
+            "start_time",
+            "end_time"
+          ],
+          "owner": "CMA",
+          "fed_by": "the planner (roster_set_cell, roster_set_entry) and Publish (roster_publish), through the published views",
+          "cadence": "on publish"
+        },
+        {
+          "table": "cma.roster_assignment",
+          "columns": [
+            "assignment_type_id",
+            "absence_type_id",
+            "hours_market_code",
+            "start_time",
+            "end_time"
+          ],
+          "owner": "CMA",
+          "fed_by": "the planner (roster_put_assignments), published with the week",
+          "cadence": "on publish"
+        },
+        {
+          "table": "cma.assignment_type",
+          "columns": [
+            "code",
+            "name",
+            "kind",
+            "work_status_id",
+            "is_extra"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant seed 02; the Assignment types configuration",
+          "cadence": "on configuration change"
+        }
+      ],
+      "filters": [
+        "tenant: RLS (cma.current_tenant_id)",
+        "own days only (the acting user; no user parameter)",
+        "the business dates of the ISO week, Monday to Sunday, in the person's zone",
+        "the latest published entry per date",
+        "work blocks only (pause and absence blocks excluded)"
+      ],
+      "time": "Block times are local times on the business date in the person's zone.",
+      "comparison": null,
+      "settings": [],
+      "permissions": {
+        "anyOf": [
+          "workday.own"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.my_hours",
+            "migration": "0010a"
+          },
+          {
+            "object": "cma.roster_plan_of",
+            "migration": "0010a"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/app/(shell)/hours/page.tsx",
+            "export": "default"
+          },
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getMyHoursWeek"
+          }
+        ]
+      },
+      "verify_sql": "-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_hours reads both;\n-- :user_id the person (holding workday.own), :from the Monday of the week\nwith ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)\nselect (cma.my_hours(:from) ->> 'plannedMinutes')::integer as planned_minutes from ctx",
+      "fixture_check": "Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.",
+      "prerequisites": [],
+      "docs": [
+        "api.md, GET /api/v1/me/hours/week",
+        "decisions.md 26 Nov 2026 (E1, E11; addition 0010a)",
+        "data-model/0008.md, the roster drives the day (0010a)",
+        "definitions.md, Planned (roster)"
+      ],
+      "status": [
+        "verified"
+      ],
+      "notes": "Shown beside Worked as \"{worked} worked of {planned} planned\"."
+    },
+    {
+      "key": "my_hours.worked_per_assignment",
+      "surface": "agent",
+      "page": "/hours",
+      "tile": null,
+      "title": {
+        "en": "Worked per assignment and hours market",
+        "nl": "Gewerkt per inzet en urenmarkt"
+      },
+      "definition": "The week's worked time per assignment and hours market: one row per assignment code (or, for a working status without an assignment, the status's name) and hours market, with a bar against the largest row.",
+      "formula": "rows = group by (code or status name, hours_market_code) of sum(seconds) over the week's stretches where is_working; ordered by seconds descending.",
+      "unit": "seconds",
+      "grain": [
+        "per_iso_week",
+        "per_market"
+      ],
+      "sources": [
+        {
+          "table": "cma.time_event",
+          "columns": [
+            "kind",
+            "status_id",
+            "assignment_type_id",
+            "hours_market_code",
+            "occurred_at",
+            "recorded_at",
+            "supersedes_event_id",
+            "source"
+          ],
+          "owner": "CMA",
+          "fed_by": "the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep",
+          "cadence": "immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly"
+        },
+        {
+          "table": "cma.work_status",
+          "columns": [
+            "is_working",
+            "work_area"
+          ],
+          "owner": "CMA",
+          "fed_by": "migration seed + tenant seed 02; the Statuses screen",
+          "cadence": "on configuration change"
+        },
+        {
+          "table": "cma.assignment_type",
+          "columns": [
+            "code",
+            "name",
+            "kind",
+            "work_status_id",
+            "is_extra"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant seed 02; the Assignment types configuration",
+          "cadence": "on configuration change"
+        }
+      ],
+      "filters": [
+        "tenant: RLS (cma.current_tenant_id)",
+        "own days only (the acting user; no user parameter)",
+        "the business dates of the ISO week, Monday to Sunday, in the person's zone",
+        "working statuses only"
+      ],
+      "time": "Business dates in the person's own zone; a stretch's seconds as cma.workday_actual_of counts them (from one event to the next, a running stretch to now); the week from :from (a Monday).",
+      "comparison": null,
+      "settings": [],
+      "permissions": {
+        "anyOf": [
+          "workday.own"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.my_hours",
+            "migration": "0010a"
+          },
+          {
+            "object": "cma.workday_actual_of",
+            "migration": "0010a"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/app/(shell)/hours/page.tsx",
+            "export": "default"
+          },
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getMyHoursWeek"
+          }
+        ]
+      },
+      "verify_sql": "-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_hours reads both;\n-- :user_id the person (holding workday.own), :from the Monday of the week\nwith ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)\nselect r ->> 'code' as code, r ->> 'name' as name, r ->> 'hoursMarket' as hours_market, (r ->> 'seconds')::bigint as seconds\nfrom (select cma.my_hours(:from) as j from ctx) p cross join lateral jsonb_array_elements(p.j -> 'rows') r",
+      "fixture_check": "Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.",
+      "prerequisites": [],
+      "docs": [
+        "api.md, GET /api/v1/me/hours/week",
+        "decisions.md 26 Nov 2026 (E1, E11; addition 0010a)",
+        "data-model/0008.md, the roster drives the day (0010a)"
+      ],
+      "status": [
+        "verified"
+      ],
+      "notes": "The hours market is the one the event carries (E1); Training, Meeting and Coaching show their name and no market."
+    },
+    {
+      "key": "my_hours.pauses_per_type",
+      "surface": "agent",
+      "page": "/hours",
+      "tile": null,
+      "title": {
+        "en": "Pauses, not worked",
+        "nl": "Pauzes, niet gewerkt"
+      },
+      "definition": "The week's time in pauses and other non-working statuses, per pause type (its code and name) or status, shown apart and not counted as worked.",
+      "formula": "pauses = group by (code or status name) of sum(seconds) over the week's stretches where not is_working.",
+      "unit": "seconds",
+      "grain": [
+        "per_iso_week",
+        "per_status"
+      ],
+      "sources": [
+        {
+          "table": "cma.time_event",
+          "columns": [
+            "kind",
+            "status_id",
+            "assignment_type_id",
+            "hours_market_code",
+            "occurred_at",
+            "recorded_at",
+            "supersedes_event_id",
+            "source"
+          ],
+          "owner": "CMA",
+          "fed_by": "the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep",
+          "cadence": "immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly"
+        },
+        {
+          "table": "cma.work_status",
+          "columns": [
+            "is_working",
+            "work_area"
+          ],
+          "owner": "CMA",
+          "fed_by": "migration seed + tenant seed 02; the Statuses screen",
+          "cadence": "on configuration change"
+        },
+        {
+          "table": "cma.assignment_type",
+          "columns": [
+            "code",
+            "name",
+            "kind",
+            "work_status_id",
+            "is_extra"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant seed 02; the Assignment types configuration",
+          "cadence": "on configuration change"
+        }
+      ],
+      "filters": [
+        "tenant: RLS (cma.current_tenant_id)",
+        "own days only (the acting user; no user parameter)",
+        "the business dates of the ISO week, Monday to Sunday, in the person's zone",
+        "non-working statuses only"
+      ],
+      "time": "Business dates in the person's own zone; a stretch's seconds as cma.workday_actual_of counts them (from one event to the next, a running stretch to now); the week from :from (a Monday).",
+      "comparison": null,
+      "settings": [],
+      "permissions": {
+        "anyOf": [
+          "workday.own"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.my_hours",
+            "migration": "0010a"
+          },
+          {
+            "object": "cma.workday_actual_of",
+            "migration": "0010a"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/app/(shell)/hours/page.tsx",
+            "export": "default"
+          },
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getMyHoursWeek"
+          }
+        ]
+      },
+      "verify_sql": "-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_hours reads both;\n-- :user_id the person (holding workday.own), :from the Monday of the week\nwith ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)\nselect r ->> 'code' as code, r ->> 'name' as name, (r ->> 'seconds')::bigint as seconds\nfrom (select cma.my_hours(:from) as j from ctx) p cross join lateral jsonb_array_elements(p.j -> 'pauses') r",
+      "fixture_check": "Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.",
+      "prerequisites": [],
+      "docs": [
+        "api.md, GET /api/v1/me/hours/week",
+        "decisions.md 26 Nov 2026 (E1, E11; addition 0010a)",
+        "data-model/0008.md, the roster drives the day (0010a)"
+      ],
+      "status": [
+        "verified"
+      ],
+      "notes": "A pause carries no hours market (E1)."
+    },
+    {
+      "key": "my_hours.day_worked",
+      "surface": "agent",
+      "page": "/hours",
+      "tile": null,
+      "title": {
+        "en": "Worked per day",
+        "nl": "Gewerkt per dag"
+      },
+      "definition": "Per day of the week, the time worked that day (working statuses, all sessions); today reads \"Today, so far\"; a day without time reads \"No time kept\".",
+      "formula": "days[].workedSeconds = sum(seconds) over that date's stretches where is_working.",
+      "unit": "seconds",
+      "grain": [
+        "per_day"
+      ],
+      "sources": [
+        {
+          "table": "cma.time_event",
+          "columns": [
+            "kind",
+            "status_id",
+            "assignment_type_id",
+            "hours_market_code",
+            "occurred_at",
+            "recorded_at",
+            "supersedes_event_id",
+            "source"
+          ],
+          "owner": "CMA",
+          "fed_by": "the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep",
+          "cadence": "immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly"
+        },
+        {
+          "table": "cma.work_status",
+          "columns": [
+            "is_working",
+            "work_area"
+          ],
+          "owner": "CMA",
+          "fed_by": "migration seed + tenant seed 02; the Statuses screen",
+          "cadence": "on configuration change"
+        },
+        {
+          "table": "cma.assignment_type",
+          "columns": [
+            "code",
+            "name",
+            "kind",
+            "work_status_id",
+            "is_extra"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant seed 02; the Assignment types configuration",
+          "cadence": "on configuration change"
+        }
+      ],
+      "filters": [
+        "tenant: RLS (cma.current_tenant_id)",
+        "own days only (the acting user; no user parameter)",
+        "the business dates of the ISO week, Monday to Sunday, in the person's zone",
+        "working statuses only"
+      ],
+      "time": "Business dates in the person's own zone; a stretch's seconds as cma.workday_actual_of counts them (from one event to the next, a running stretch to now); the week from :from (a Monday).",
+      "comparison": null,
+      "settings": [],
+      "permissions": {
+        "anyOf": [
+          "workday.own"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.my_hours",
+            "migration": "0010a"
+          },
+          {
+            "object": "cma.workday_actual_of",
+            "migration": "0010a"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/app/(shell)/hours/page.tsx",
+            "export": "default"
+          },
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getMyHoursWeek"
+          }
+        ]
+      },
+      "verify_sql": "-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_hours reads both;\n-- :user_id the person (holding workday.own), :from the Monday of the week\nwith ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)\nselect d ->> 'date' as date, (d ->> 'hasTime')::boolean as has_time, (d ->> 'workedSeconds')::bigint as worked_seconds\nfrom (select cma.my_hours(:from) as j from ctx) p cross join lateral jsonb_array_elements(p.j -> 'days') d",
+      "fixture_check": "Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.",
+      "prerequisites": [],
+      "docs": [
+        "api.md, GET /api/v1/me/hours/week",
+        "decisions.md 26 Nov 2026 (E1, E11; addition 0010a)",
+        "data-model/0008.md, the roster drives the day (0010a)"
+      ],
+      "status": [
+        "verified"
+      ],
+      "notes": "The days add up to my_hours.week_worked; the split under each day (my_hours.day_split) adds up to the day."
+    },
+    {
+      "key": "my_hours.day_split",
+      "surface": "agent",
+      "page": "/hours",
+      "tile": null,
+      "title": {
+        "en": "Split per assignment and hours market",
+        "nl": "Verdeling per inzet en urenmarkt"
+      },
+      "definition": "Per day, the Actual lane (each stretch as CODE · MARKET, a pause its code, a status without an assignment its name) and below it the worked time split per assignment and hours market, \"MC SE 30m · SL SE 4h 05m\".",
+      "formula": "days[].segments = the date's stretches in time order; days[].split = group by (code or status name, hours_market_code) of sum(seconds) where is_working, in the order first worked.",
+      "unit": "seconds",
+      "grain": [
+        "per_day",
+        "per_market"
+      ],
+      "sources": [
+        {
+          "table": "cma.time_event",
+          "columns": [
+            "kind",
+            "status_id",
+            "assignment_type_id",
+            "hours_market_code",
+            "occurred_at",
+            "recorded_at",
+            "supersedes_event_id",
+            "source"
+          ],
+          "owner": "CMA",
+          "fed_by": "the Workspace's own write paths (open_workday, set_status with Switch and Back to plan, end_workday, correct_workday); the roster's minute job (cma.roster_switch_all, source roster, 0010a); the scheduler sweep",
+          "cadence": "immediately on each click; the roster job every minute (docs/scheduler/deploy-roster-switch.sh); the sweep hourly"
+        },
+        {
+          "table": "cma.work_status",
+          "columns": [
+            "is_working",
+            "work_area"
+          ],
+          "owner": "CMA",
+          "fed_by": "migration seed + tenant seed 02; the Statuses screen",
+          "cadence": "on configuration change"
+        },
+        {
+          "table": "cma.assignment_type",
+          "columns": [
+            "code",
+            "name",
+            "kind",
+            "work_status_id",
+            "is_extra"
+          ],
+          "owner": "CMA",
+          "fed_by": "tenant seed 02; the Assignment types configuration",
+          "cadence": "on configuration change"
+        }
+      ],
+      "filters": [
+        "tenant: RLS (cma.current_tenant_id)",
+        "own days only (the acting user; no user parameter)",
+        "the business dates of the ISO week, Monday to Sunday, in the person's zone",
+        "the split: working statuses only"
+      ],
+      "time": "Business dates in the person's own zone; a stretch's seconds as cma.workday_actual_of counts them (from one event to the next, a running stretch to now); the week from :from (a Monday).",
+      "comparison": null,
+      "settings": [],
+      "permissions": {
+        "anyOf": [
+          "workday.own"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.my_hours",
+            "migration": "0010a"
+          },
+          {
+            "object": "cma.workday_actual_of",
+            "migration": "0010a"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/app/(shell)/hours/page.tsx",
+            "export": "default"
+          },
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getMyHoursWeek"
+          }
+        ]
+      },
+      "verify_sql": "-- sets app.tenant_id and app.user_id itself, for its own transaction (run it on its own): cma.my_hours reads both;\n-- :user_id the person (holding workday.own), :from the Monday of the week\nwith ctx as materialized (select set_config('app.tenant_id', (:tenant_id)::text, true) as tenant, set_config('app.user_id', (:user_id)::text, true) as acting_user)\nselect d ->> 'date' as date, s ->> 'code' as code, s ->> 'hoursMarket' as hours_market, (s ->> 'seconds')::bigint as seconds\nfrom (select cma.my_hours(:from) as j from ctx) p cross join lateral jsonb_array_elements(p.j -> 'days') d cross join lateral jsonb_array_elements(d -> 'split') s",
+      "fixture_check": "Not run against the local fixture database here: it has no published roster with assignments and no time event with an assignment. db/255_verify_roster_drives_the_day.sql checks the read on a fixed scenario (B1 to B10); Martin compares the query with the page in Studio after 0010a in dev.",
+      "prerequisites": [],
+      "docs": [
+        "api.md, GET /api/v1/me/hours/week",
+        "decisions.md 26 Nov 2026 (E1, E11; addition 0010a)",
+        "data-model/0008.md, the roster drives the day (0010a)"
+      ],
+      "status": [
+        "verified"
+      ],
+      "notes": "The split of a day adds up to my_hours.day_worked."
     },
     {
       "key": "my_schedule.planned_total",
