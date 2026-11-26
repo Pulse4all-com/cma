@@ -14115,7 +14115,7 @@
         "nl": "Gesprekken per tag, hele periode"
       },
       "definition": "Every call in scope per current tag, by direction (Outbound, Inbound, Total), over the whole period: a call with two tags counts under each, a call without a current tag under Untagged, missed inbound calls included (Calls per tag).",
-      "formula": "per current tag (telephony_call_tag with untagged_at null; any tag, counted or not): outbound = count(outbound calls carrying it), inbound = count(inbound calls carrying it), calls = count(*); Untagged = the calls with no current tag (cma.calls_figures_of's untagged), by direction; share per cell = count / that column's calls in scope (the Total row), null-dash when 0. Total row = cma.calls_figures_of's outbound, inbound and calls (the overview's total on the page; the API's total row), NOT the sum of the rows. A removed tag does not count. Rows by calls desc, then name; Untagged last, then Total. Whole period only: Group by does not split it.",
+      "formula": "per current tag (telephony_call_tag with untagged_at null; any tag, counted or not): outbound = count(outbound calls carrying it), inbound = count(inbound calls carrying it), calls = count(*); Untagged = the calls with no current tag (cma.calls_figures_of's untagged), by direction; share per cell = count / that column's calls in scope (the Total row), null-dash when 0. Total row = every call of the same set by direction (the API's total row, counted in the same pass by cma.calls_per_tag_rows_of; on the page the overview's total, cma.calls_figures_of's, the same numbers, which db/247 E4 checks), NOT the sum of the rows. A removed tag does not count. Rows by calls desc, then name; Untagged last, then Total. Whole period only: Group by does not split it.",
       "unit": "count",
       "grain": [
         "period",
@@ -14208,6 +14208,10 @@
         "sql": [
           {
             "object": "cma.calls_per_tag",
+            "migration": "0009zw"
+          },
+          {
+            "object": "cma.calls_per_tag_rows_of",
             "migration": "0009zw"
           },
           {

@@ -3700,7 +3700,8 @@ export const postgresData: CmaData = {
     const withConnections = opts?.withConnections ?? true;
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
-      // the function checks the permission, the range and the filters first; its total row is cma.calls_figures_of's
+      // the function checks the permission, the range and the filters first; its total row counts the same calls as its
+      // tag rows (one pass), equal to cma.calls_figures_of's (db/247 E4)
       const r = await q.query<{ row_kind: "tag" | "untagged" | "total"; tag_key: string | null; tag_name: string | null; meaning: TagMeaning | null;
         is_counted: boolean | null; outbound: number; inbound: number; calls: number }>(
         `select * from cma.calls_per_tag($1::date, $2::date, $3, $4, $5)`, [range.from, range.to, filter.market, filter.line, withTotals]);

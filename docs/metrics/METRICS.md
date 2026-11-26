@@ -6965,7 +6965,7 @@ Every call in scope per current tag, by direction (Outbound, Inbound, Total), ov
 **Formula as computed**
 
 ```
-per current tag (telephony_call_tag with untagged_at null; any tag, counted or not): outbound = count(outbound calls carrying it), inbound = count(inbound calls carrying it), calls = count(*); Untagged = the calls with no current tag (cma.calls_figures_of's untagged), by direction; share per cell = count / that column's calls in scope (the Total row), null-dash when 0. Total row = cma.calls_figures_of's outbound, inbound and calls (the overview's total on the page; the API's total row), NOT the sum of the rows. A removed tag does not count. Rows by calls desc, then name; Untagged last, then Total. Whole period only: Group by does not split it.
+per current tag (telephony_call_tag with untagged_at null; any tag, counted or not): outbound = count(outbound calls carrying it), inbound = count(inbound calls carrying it), calls = count(*); Untagged = the calls with no current tag (cma.calls_figures_of's untagged), by direction; share per cell = count / that column's calls in scope (the Total row), null-dash when 0. Total row = every call of the same set by direction (the API's total row, counted in the same pass by cma.calls_per_tag_rows_of; on the page the overview's total, cma.calls_figures_of's, the same numbers, which db/247 E4 checks), NOT the sum of the rows. A removed tag does not count. Rows by calls desc, then name; Untagged last, then Total. Whole period only: Group by does not split it.
 ```
 
 **Unit** count · **Grain** period, per_tag · **Status** verified, cadence_unconfirmed
@@ -6996,7 +6996,7 @@ per current tag (telephony_call_tag with untagged_at null; any tag, counted or n
 
 **Refresh** On page load (server component), streamed after the first paint (the read starts once the overview and the tag use have answered); the API route GET /api/v1/reports/calls/tags computes on request from live tables (no snapshot)
 
-**Computed in** `cma.calls_per_tag` (0009zw); `cma.calls_per_tag_of` (0009zw); `cma.calls_of` (0009b); `cma.calls_figures_of` (0008zc); `callsPerTag` in src/lib/reports.ts; `CallsPerTagTable` in src/components/CallsParts.tsx
+**Computed in** `cma.calls_per_tag` (0009zw); `cma.calls_per_tag_rows_of` (0009zw); `cma.calls_per_tag_of` (0009zw); `cma.calls_of` (0009b); `cma.calls_figures_of` (0008zc); `callsPerTag` in src/lib/reports.ts; `CallsPerTagTable` in src/components/CallsParts.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 

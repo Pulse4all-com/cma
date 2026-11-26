@@ -13,14 +13,17 @@
 -- its checks as FAIL; the verdict is reached only when the client goes on after an error (psql -v ON_ERROR_STOP=0, as the
 -- provoked run does; with ON_ERROR_STOP=1, and in Studio, the run ends at the first FAIL, which names the check).
 --
---   S1  0009zw recorded, after 0009zv; cma.calls_per_tag_of a stable SQL function with jit off and 50 rows, its columns
---       tag_key, tag_name, meaning, is_counted, outbound, inbound, calls; cma.calls_per_tag a stable plpgsql function with
---       50 rows and row_kind first; both invoker, owned by cma_owner, executable by cma_app only (not cma_readonly, not PUBLIC)
+--   S1  0009zw recorded, after 0009zv; cma.calls_per_tag_rows_of a stable SQL function with jit off and 50 rows, row_kind
+--       first; cma.calls_per_tag_of the same with the columns tag_key, tag_name, meaning, is_counted, outbound, inbound,
+--       calls; cma.calls_per_tag a stable plpgsql function with 50 rows and row_kind first, which reads the one pass and
+--       not cma.calls_figures_of (Martin, 26 November 2026: the API's totals from the calls the read already holds); all
+--       three invoker, owned by cma_owner, executable by cma_app only (not cma_readonly, not PUBLIC)
 --   B1  per current tag on the synthetic date: a call with two tags under each, a missed inbound call with a tag under it,
 --       a tag that does not count listed (is_counted false) with its meaning, a removed tag not counted and its call
 --       untagged, a call of the next date left out; tags by calls, most first; Untagged last with tag_key null
---   B2  the application's read (an analyst): the tag rows, the Untagged row, then the total row with cma.calls_figures_of's
---       calls, inbound and outbound; with totals false no total row; a line without calls: only the Untagged row, 0 0 0
+--   B2  the application's read (an analyst): the tag rows, the Untagged row, then the total row, counted from the same
+--       calls and equal to cma.calls_figures_of's calls, inbound and outbound; with totals false no total row; a line
+--       without calls: only the Untagged row and the total, each 0 0 0
 --   B3  the Untagged row equals cma.calls_figures_of's untagged; every tag's calls at least its conversations in
 --       cma.calls_tag_use_of
 --   B4  refused: an agent (CMA06), a range over 92 days and a malformed line (CMA04)
@@ -30,7 +33,8 @@
 --   E2  the same dates: the Untagged row's outbound and inbound plus the distinct tagged calls per direction (cma.calls_of)
 --       equal cma.calls_figures_of's outbound and inbound
 --   E3  the same dates: every tag's calls at least its conversations in cma.calls_tag_use_of (whole period, group_key null)
---   E4  the same dates through the application's read: the total row equals cma.calls_figures_of's calls, inbound and
+--   E4  the same dates through the application's read: the total row (counted from the read's own calls) equals
+--       cma.calls_figures_of's calls, inbound and
 --       outbound (row-level security keeps the read to the tenant)
 -- Provoke: set provoke below to true; every block must then stop with FAIL, and the verdict says PROVOKED, NOT A PASS.
 -- =============================================================================================
@@ -79,6 +83,7 @@ declare
   v_provoke boolean := current_setting('verify.provoke')::boolean;
   v_of      text := 'cma.calls_per_tag_of(uuid,date,date,text,text)';
   v_app     text := 'cma.calls_per_tag(date,date,text,text,boolean)';
+  v_rows_of text := 'cma.calls_per_tag_rows_of(uuid,date,date,text,text)';
   f         text;
   p         pg_proc;
 begin
@@ -87,10 +92,10 @@ begin
         < (select applied_at from cma.schema_migration where version = '0009zv') then
     raise exception 'FAIL S1: addition 0009zw not recorded after 0009zv';
   end if;
-  foreach f in array array[v_of, v_app] loop
+  foreach f in array array[v_rows_of, v_of, v_app] loop
     select * into p from pg_proc where oid = to_regprocedure(f);
     if p.oid is null or p.prosecdef or p.provolatile <> 's'
-       or (select l.lanname from pg_language l where l.oid = p.prolang) <> (case when f = v_of then 'sql' else 'plpgsql' end)
+       or (select l.lanname from pg_language l where l.oid = p.prolang) <> (case when f = v_app then 'plpgsql' else 'sql' end)
        or p.proowner <> 'cma_owner'::regrole::oid
        or not has_function_privilege('cma_app', f, 'execute') or has_function_privilege('cma_readonly', f, 'execute')
        or exists (select 1 from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where a.grantee = 0) then
@@ -102,12 +107,21 @@ begin
      or array_to_string(p.proargnames[6:], ',') <> 'tag_key,tag_name,meaning,is_counted,outbound,inbound,calls' then
     raise exception 'FAIL S1: % without rows 50, jit off or its seven columns (%; %; %)', v_of, p.prorows, p.proconfig, p.proargnames;
   end if;
+  select * into p from pg_proc where oid = to_regprocedure(v_rows_of);
+  if p.prorows <> 50 or not coalesce('jit=off' = any(p.proconfig), false)
+     or array_to_string(p.proargnames[6:], ',') <> 'row_kind,tag_key,tag_name,meaning,is_counted,outbound,inbound,calls' then
+    raise exception 'FAIL S1: % without rows 50, jit off or its eight columns (%; %; %)', v_rows_of, p.prorows, p.proconfig, p.proargnames;
+  end if;
   select * into p from pg_proc where oid = to_regprocedure(v_app);
   if p.prorows <> 50 or array_to_string(p.proargnames[6:], ',') <> 'row_kind,tag_key,tag_name,meaning,is_counted,outbound,inbound,calls' then
     raise exception 'FAIL S1: % without rows 50 or its columns (%; %)', v_app, p.prorows, p.proargnames;
   end if;
+  if pg_get_functiondef(to_regprocedure(v_app)) like '%calls_figures_of%'
+     or pg_get_functiondef(to_regprocedure(v_app)) not like '%calls_per_tag_rows_of%' then
+    raise exception 'FAIL S1: % does not count its total from its own calls (it reads cma.calls_figures_of, or not the one pass)', v_app;
+  end if;
   insert into verify_0009zw values (1, 'S1 addition, functions and rights', 'PASS',
-    'calls_per_tag_of: stable sql, jit off, rows 50; calls_per_tag: stable plpgsql, rows 50, row_kind first; invoker, cma_owner, cma_app only');
+    'calls_per_tag_rows_of and calls_per_tag_of: stable sql, jit off, rows 50; calls_per_tag: stable plpgsql, rows 50, row_kind first, the total from the one pass; invoker, cma_owner, cma_app only');
 end
 $$;
 
@@ -182,7 +196,8 @@ begin
     end if;
     v_rows := v_rows || array['11', 'B1 per tag by direction: two tags under each, a missed call under its tag, a tag that does not count listed, a removed tag not counted, the next date left out; Untagged last', 'PASS', v_txt];
 
-    -- B2. the application's read: tag rows, Untagged, the total (cma.calls_figures_of's); totals false; a line without calls
+    -- B2. the application's read: tag rows, Untagged, the total (from the same calls, as cma.calls_figures_of's); totals
+    --     false; a line without calls
     select string_agg(c.row_kind || coalesce(':' || c.tag_name, '') || ':' || c.outbound || '/' || c.inbound || '/' || c.calls, ' | ' order by c.n)
       into v_txt
     from cma.calls_per_tag(v_day, v_day, null, null) with ordinality c(row_kind, tag_key, tag_name, meaning, is_counted, outbound, inbound, calls, n);
@@ -191,10 +206,10 @@ begin
     from cma.calls_per_tag(v_day, v_day, null, null, false) with ordinality c(row_kind, tag_key, tag_name, meaning, is_counted, outbound, inbound, calls, n);
     select v_txt || ' || ' || string_agg(c.row_kind || ':' || c.outbound || '/' || c.inbound || '/' || c.calls, ',' order by c.n)
       into v_txt
-    from cma.calls_per_tag(v_day, v_day, null, v_tel::text || ':n-none', false) with ordinality c(row_kind, tag_key, tag_name, meaning, is_counted, outbound, inbound, calls, n);
+    from cma.calls_per_tag(v_day, v_day, null, v_tel::text || ':n-none', true) with ordinality c(row_kind, tag_key, tag_name, meaning, is_counted, outbound, inbound, calls, n);
     select v_txt || ' || figures ' || f.outbound || '/' || f.inbound || '/' || f.calls into v_txt
     from cma.calls_figures_of(v_t, v_day, v_day, null, null, 'day') f where f.group_key is null;
-    v_exp := 'tag:Not Reached:2/1/3 | tag:Type:1/1/2 | tag:Wrong Number:1/0/1 | untagged:2/1/3 | total:5/3/8 || tag,tag,tag,untagged || untagged:0/0/0 || figures 5/3/8';
+    v_exp := 'tag:Not Reached:2/1/3 | tag:Type:1/1/2 | tag:Wrong Number:1/0/1 | untagged:2/1/3 | total:5/3/8 || tag,tag,tag,untagged || untagged:0/0/0,total:0/0/0 || figures 5/3/8';
     if v_provoke or v_txt is distinct from v_exp then
       raise exception 'FAIL B2: % (expected %)', coalesce(v_txt, 'no rows'), v_exp;
     end if;
@@ -327,7 +342,8 @@ begin
 end
 $$;
 
--- E4. The application's read per active tenant: the total row is cma.calls_figures_of's (as a person holding reports.view)
+-- E4. The application's read per active tenant: the total row, counted from the read's own calls, equals
+-- cma.calls_figures_of's (as a person holding reports.view): a drift between the two scopes fails here
 do $$
 declare
   v_provoke boolean := current_setting('verify.provoke')::boolean;

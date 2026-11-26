@@ -11,7 +11,8 @@ export const dynamic = "force-dynamic";
  * database would refuse is a 400): every call in scope per current tag (any tag, with its name, meaning and whether it
  * counts) by direction, `outbound`, `inbound` and `calls`, a call with two tags under each, by calls; `untagged` the calls
  * without a current tag, missed calls included (the overview's untagged); `totals` the calls in scope, the overview's
- * calls, inbound and outbound (cma.calls_figures_of), not the sum of the rows. Whole period only. `telephony` false: no
+ * calls, inbound and outbound, counted from the same calls the rows read (Martin, 26 November 2026; the overview's
+ * cma.calls_figures_of gives the same numbers, which db/247 E4 checks), not the sum of the rows. Whole period only. `telephony` false: no
  * telephony connected, and no rows. Needs reports.view or performance.team, here and again in the database. Tag names
  * and counts only, never a call id, a number or a hash.
  */

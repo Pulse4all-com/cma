@@ -1462,8 +1462,9 @@ export interface CallsPerTag {
   rows: CallsPerTagRow[];
   untagged: CallsByDirection;
   /**
-   * The calls in scope (cma.calls_figures_of's calls, inbound and outbound, as /api/v1/reports/calls answers them), not
-   * the sum of the rows; null when the caller asked without them (Reports → Calls takes them from its overview)
+   * The calls in scope, counted from the same calls as the rows (equal to cma.calls_figures_of's calls, inbound and
+   * outbound, as /api/v1/reports/calls answers them), not the sum of the rows; null when the caller asked without them
+   * (Reports → Calls takes them from its overview)
    */
   totals: CallsByDirection | null;
 }
