@@ -35,7 +35,8 @@
 --   R1  per tenant: roster_people (the whole tenant and each team, this week and next) = 0005's definition narrowed to
 --       people holding roster.planned
 --   R2  per tenant: roster_entries (the same weeks and rosters) = 0005's definition narrowed to people on the roster
---   R3  per tenant: roster_today = 0005's definition narrowed to people on the roster
+--   R3  per tenant: roster_today = 0005's definition narrowed to people on the roster (0005's columns by name: addition 0009zx
+--       appends assignments to roster_today, and default_hours_market_code to roster_people for R1)
 --       R1 to R3 report the rows compared; provoked, 0005's side loses a row, so the comparison itself must find the
 --       difference (a compare of no rows reads FAIL under the switch)
 --   D4  per tenant, for information: current entries of this week and later whose person is not on the roster (kept, D4),
@@ -466,15 +467,16 @@ begin
         foreach wk in array array[v_this, v_this + 7] loop
           for tk in select null::text union all select x.key::text from cma.team x where x.tenant_id = t.id and x.valid_to is null loop
             v_cmp := v_cmp + 1;
-            -- R1: the people, against 0005's narrowed to roster.planned (provoked: 0005's side loses a row)
+            -- R1: the people, against 0005's narrowed to roster.planned (provoked: 0005's side loses a row); 0005's columns by
+            -- name, as addition 0009zx appends default_hours_market_code
             select count(*) into v_n from cma.roster_people(wk, tk);
             v_n1 := v_n1 + v_n;
-            if exists ((select * from cma.roster_people(wk, tk))
+            if exists ((select r.user_id, r.display_name, r.organisation_name, r.timezone, r.team_keys, r.work_type_keys from cma.roster_people(wk, tk) r)
                        except all
                        (select * from pg_temp.v0009y_people_0005(wk, tk) p where cma.has_permission(p.user_id, 'roster.planned') offset v_o1))
                or exists ((select * from pg_temp.v0009y_people_0005(wk, tk) p where cma.has_permission(p.user_id, 'roster.planned') offset v_o1)
                           except all
-                          (select * from cma.roster_people(wk, tk))) then
+                          (select r.user_id, r.display_name, r.organisation_name, r.timezone, r.team_keys, r.work_type_keys from cma.roster_people(wk, tk) r)) then
               v_r1 := v_r1 || wk || '/' || coalesce(tk, 'tenant') || ' ';
             end if;
             -- R2: the entries, against 0005's narrowed to the people on the roster (provoked: 0005's side loses a row)
@@ -494,10 +496,10 @@ begin
       if v_live is not null then
         perform set_config('app.user_id', v_live::text, true);
         select count(*) into v_n3 from cma.roster_today();
-        v_r3 := case when exists ((select * from cma.roster_today())
+        v_r3 := case when exists ((select r.user_id, r.business_date, r.is_published, r.kind, r.start_time, r.end_time, r.absence_name from cma.roster_today() r)
                                   except all (select * from pg_temp.v0009y_today_0005() x where cma.on_roster(x.user_id) offset v_o3))
                        or exists ((select * from pg_temp.v0009y_today_0005() x where cma.on_roster(x.user_id) offset v_o3)
-                                  except all (select * from cma.roster_today()))
+                                  except all (select r.user_id, r.business_date, r.is_published, r.kind, r.start_time, r.end_time, r.absence_name from cma.roster_today() r))
                      then 'differs' else 'equal' end;
       end if;
       -- D4: current entries of this week and later whose person is not on the roster (kept as stored), and the people

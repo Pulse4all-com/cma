@@ -15,6 +15,11 @@
  * reverts the cell, P, W and N move between weeks (links), T picks the team, U publishes,
  * C copies the previous week, X opens the print view.
  *
+ * Assignments (addition 0009zx, brief A): a Week | Day switch. Week keeps this grid, each cell with a thin bar of the
+ * day's assignments in their colours (D13); Day is Arno's layout (RosterDay). The week bar adds Copy week, Apply standard
+ * week and Save as standard week, each with its report (D9, D10), and Publish shows the plan check first (two warnings,
+ * never blocking).
+ *
  * One team per page view (brief B41, D2): the page resolves the team once and keys this component by the week and
  * the team, so the select, the header, the grid, People on shift, Planned, the coverage, the saved weeks, print, copy,
  * publish and the shortcuts all show and write that one team; another team or week is a new grid that appears whole
@@ -22,9 +27,14 @@
  * of the same week (after Publish or Copy previous week) brings the cells and the header from the database again.
  */
 import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
-import type { AbsenceType, RosterEntry, RosterWeek, RosterWeekSummary, TeamInfo } from "@/lib/data";
+import type { AbsenceType, AssignmentBlock, RosterEntry, RosterReportRow, RosterWeekSummary, TeamInfo } from "@/lib/data";
+import dynamic from "next/dynamic";
+import { pct, planCheck, toMinutes, toneOf, TONE_CLASS, type Block, type PlannerWeek } from "@/lib/assignments";
+// The Day view's code comes with the Day view only: the Week view's page carries none of it (web/verify/perf.json)
+const RosterDay = dynamic(() => import("./RosterDay").then((m) => m.RosterDay));
 import {
   absenceKeywordList, cellLabel, coverageGrid, EVERYONE, headcountByDate, isoWeek, parseCell, plannedMinutesByUser, plannerSearch, plannerTeamOfHeader, rosterTeamArg, weekDays,
   type Cell, type CellProblem, type CoverageState,
@@ -52,8 +62,11 @@ export function RosterPlanner({
   viewerZone,
   copy,
   locale,
+  view = "week",
+  day,
 }: {
-  week: RosterWeek;
+  /** The week with its blocks compacted (lib/assignments plannerWeek) */
+  week: PlannerWeek;
   weeks: RosterWeekSummary[];
   teams: TeamInfo[];
   /** The team on screen as the page resolved it: a team's key or "all" for Everyone (lib/roster, plannerTeam) */
@@ -63,9 +76,15 @@ export function RosterPlanner({
   today: string;
   thisWeek: string;
   viewerZone: string;
-  copy: Pick<Copy, "dayEditor" | "roster">;
+  /** The Day view's words (assignmentsDay) only when the page shows the Day view: the Week view's page stays lighter */
+  copy: Pick<Copy, "dayEditor" | "roster" | "assignments"> & Partial<Pick<Copy, "assignmentsDay">>;
   locale: Locale;
+  /** Week (the cells) or Day (Arno's layout of one date, addition 0009zx) */
+  view?: "week" | "day";
+  /** The Day view's date, in the week */
+  day?: string;
 }) {
+  const ta = copy.assignments;
   const t = copy.roster;
   const router = useRouter();
   // the team and the week navigate as a transition: the row says it is busy and the team select shows the choice at once
@@ -76,7 +95,7 @@ export function RosterPlanner({
   const weekStart = week.header.weekStart;
   const days = useMemo(() => weekDays(weekStart), [weekStart]);
   const keep = { team };
-  const entryMap = (w: RosterWeek) => new Map(w.entries.map((e) => [`${e.userId}:${e.date}`, e]));
+  const entryMap = (w: PlannerWeek) => new Map(w.entries.map((e) => [`${e.userId}:${e.date}`, e]));
   const [saved, setEntries] = useState<Map<string, RosterEntry>>(() => entryMap(week));
   /**
    * A cell saved shows its new value at once (night N07, decision D3): the entry, the person's planned hours, the day's
@@ -92,12 +111,17 @@ export function RosterPlanner({
   const [drafts, setDrafts] = useState<Map<string, string>>(new Map());
   const [states, setStates] = useState<Map<string, CellState>>(new Map());
   const [header, setHeader] = useState(week.header);
+  // The week's blocks per cell, for the thin bar under each cell (addition 0009zx)
+  const blockMap = (w: PlannerWeek) => new Map(Object.entries(w.blocks).map(([k, list]) =>
+    [k, list.map(([code, start, end, hoursMarket, note]): AssignmentBlock => ({ assignmentId: "", code, start, end, hoursMarket, note }))]));
+  const [cellBlocks, setCellBlocks] = useState(() => blockMap(week));
   // A refresh of this week and team (Publish, Copy previous week) brings a new answer: the cells and the header follow it
   const [answer, setAnswer] = useState(week);
   if (answer !== week) {
     setAnswer(week);
     setEntries(entryMap(week));
     setHeader(week.header);
+    setCellBlocks(blockMap(week));
   }
 
   // The address always carries the team on screen (D2): a load without ?team= (the rail) or with one that named no
@@ -107,7 +131,8 @@ export function RosterPlanner({
       window.history.replaceState(null, "", plannerSearch(window.location.search, team));
     }
   }, [team]);
-  const [confirm, setConfirm] = useState<"publish" | "copy" | null>(null);
+  const [confirm, setConfirm] = useState<"publish" | "copy" | "copyWeek" | "apply" | "save" | null>(null);
+  const [copyFrom, setCopyFrom] = useState(() => weeks.filter((w) => w.weekStart !== week.header.weekStart).at(-1)?.weekStart ?? addDays(week.header.weekStart, -7));
   const [notice, setNotice] = useState<string | null>(null);
   const grid = useRef<HTMLTableSectionElement>(null);
 
@@ -122,7 +147,10 @@ export function RosterPlanner({
   /** The person's own today decides which cells are in the past (the database uses the same rule) */
   const todayOf = (zone: string) => new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
-  function save(userId: string, date: string, text: string) {
+  /** A cell of today waiting for the planner's yes (D8): the week holds other unpublished changes that would go with it */
+  const [cellConfirm, setCellConfirm] = useState<{ userId: string; date: string; text: string; others: number } | null>(null);
+
+  function save(userId: string, date: string, text: string, publishOthers = false) {
     const k = key(userId, date);
     const current = entries.get(k) ?? null;
     if (text.trim() === cellLabel(current)) {
@@ -146,7 +174,7 @@ export function RosterPlanner({
       } });
       const body = cell.kind === "shift" ? { kind: "shift", start: cell.start, end: cell.end, note: current?.note ?? null }
         : cell.kind === "absence" ? { kind: "absence", absenceKey: cell.key, note: current?.note ?? null } : { kind: "clear" };
-      const res = await send("PUT", `/api/v1/roster/weeks/${weekStart}/cells`, { team: teamArg, userId, date, cell: body });
+      const res = await send("PUT", `/api/v1/roster/weeks/${weekStart}/cells`, { team: teamArg, userId, date, cell: body, publishOthers });
       if (!res.ok) {
         const err = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
         const m = err?.error?.message ?? "";
@@ -154,11 +182,29 @@ export function RosterPlanner({
         setState(k, { status: "problem", problem });
         return;
       }
-      const stored = ((await res.json()) as { data: RosterEntry | null }).data;
+      const answer = ((await res.json()) as { data: (RosterEntry & { assignments: AssignmentBlock[]; endedAssignments: number; published: boolean }) | { status: "confirm"; otherChanges: number } | null }).data;
+      if (answer && "status" in answer && answer.status === "confirm") {
+        // today in a published week with other changes waiting (D8): nothing was written; the cell keeps its text until
+        // the planner says yes (the optimistic value drops when this transition ends)
+        setState(k, { status: "idle" });
+        setCellConfirm({ userId, date, text, others: answer.otherChanges });
+        return;
+      }
+      const stored = answer as (RosterEntry & { assignments: AssignmentBlock[]; endedAssignments: number; published: boolean }) | null;
       setEntries((m) => { const n = new Map(m); if (stored) n.set(k, stored); else n.delete(k); return n; });
+      // the blocks outside the new shift ended with it (addition 0009zx); a clear ends every block of the day
+      const endedNow = stored ? stored.endedAssignments : (cellBlocks.get(k) ?? []).length;
+      setCellBlocks((m) => new Map(m).set(k, stored?.assignments ?? []));
+      if (endedNow > 0) setNotice(ta.endedWithShift.replace("{n}", String(endedNow)));
       setDrafts((m) => { const n = new Map(m); n.delete(k); return n; });
       setState(k, { status: "saved" });
       setHeader((h) => ({ ...h, changedSincePublish: h.status === "published", entryCount: h.entryCount + (stored ? (current ? 0 : 1) : current ? -1 : 0) }));
+      if (stored?.published || (publishOthers && !stored)) {
+        // the person's today in a published week: published at once (D8), so the header is read again now
+        setNotice(ta.publishedNow);
+        router.refresh();
+        return;
+      }
       refreshSoon();
     });
   }
@@ -207,17 +253,59 @@ export function RosterPlanner({
     });
   }
 
-  function copyPrevious() {
+  /** What Copy week, Apply standard week and Save as standard week did and skipped, and why (D9, D10), in one line */
+  function reportLine(done: string, rows: RosterReportRow[]): string {
+    const skipped = rows.filter((r) => r.outcome === "skipped");
+    const reasons = new Map<string, number>();
+    for (const r of skipped) reasons.set(r.reason ?? "", (reasons.get(r.reason ?? "") ?? 0) + 1);
+    const why = [...reasons].map(([r, n]) => `${n} ${ta[`reason_${r}` as keyof typeof ta] ?? r}`).join(", ");
+    const dropped = rows.reduce((n, r) => n + r.blocksDropped, 0);
+    return [
+      done.replace("{n}", String(rows.filter((r) => r.outcome === "done").length)),
+      skipped.length ? ta.reportSkipped.replace("{n}", String(skipped.length)).replace("{reasons}", why) : null,
+      dropped ? ta.reportDropped.replace("{n}", String(dropped)) : null,
+    ].filter(Boolean).join(". ");
+  }
+
+  function copyPrevious(from = addDays(weekStart, -7)) {
     setConfirm(null);
     setNotice(null);
     startTransition(async () => {
-      const res = await send("POST", `/api/v1/roster/weeks/${weekStart}/copy`, { team: teamArg, from: addDays(weekStart, -7) });
+      const res = await send("POST", `/api/v1/roster/weeks/${weekStart}/copy`, { team: teamArg, from });
       if (!res.ok) { setNotice(t.copyFailed); return; }
-      const { copied } = ((await res.json()) as { data: { copied: number } }).data;
-      setNotice(t.copied.replace("{n}", String(copied)));
+      const { report } = ((await res.json()) as { data: { copied: number; report: RosterReportRow[] } }).data;
+      setNotice(reportLine(ta.reportCopied, report));
       router.refresh();
     });
   }
+
+  function standardWeek(action: "apply" | "save") {
+    setConfirm(null);
+    setNotice(null);
+    startTransition(async () => {
+      const res = await send("POST", `/api/v1/roster/weeks/${weekStart}/${action === "apply" ? "apply-standard-week" : "standard-week"}`, { team: teamArg });
+      if (!res.ok) { setNotice(ta.reportFailed); return; }
+      const report = ((await res.json()) as { data: RosterReportRow[] }).data;
+      setNotice(reportLine(action === "apply" ? ta.reportApplied : ta.reportSaved, report));
+      if (action === "apply") router.refresh();
+    });
+  }
+
+  // The plan check before Publish (brief A): two warnings that never block, over the week's shifts that hold blocks
+  const kinds = useMemo(() => new Map(week.planner.types.map((x) => [x.code, x.kind])), [week.planner.types]);
+  const typeOf = useMemo(() => new Map(week.planner.types.map((x) => [x.code, x])), [week.planner.types]);
+  const warnings = confirm === "publish" ? [...entries.values()].flatMap((e) => {
+    if (e.kind !== "shift" || !e.start || !e.end) return [];
+    const blocks: Block[] = (cellBlocks.get(`${e.userId}:${e.date}`) ?? []).map((b) => ({ code: b.code, start: toMinutes(b.start), end: toMinutes(b.end), market: b.hoursMarket, note: b.note }));
+    const name = week.people.find((p) => p.userId === e.userId)?.displayName ?? "";
+    return planCheck({ start: toMinutes(e.start), end: toMinutes(e.end) }, blocks, week.planner.lunchAfterMinutes, week.planner.lunchTypeCode, kinds).map((w) =>
+      w.kind === "lunch"
+        ? ta.checkLunch.replace("{name}", name).replace("{date}", fmtDate(e.date, locale, "compact")).replace("{hours}", fmtMinutes(week.planner.lunchAfterMinutes))
+        : ta.checkGap.replace("{name}", name).replace("{date}", fmtDate(e.date, locale, "compact")).replace("{from}", `${String(Math.floor(w.start / 60)).padStart(2, "0")}:${String(w.start % 60).padStart(2, "0")}`).replace("{to}", `${String(Math.floor(w.end / 60)).padStart(2, "0")}:${String(w.end % 60).padStart(2, "0")}`));
+  }) : [];
+  const dayHref = (d: string) => `/roster/planner?week=${weekStart}&team=${encodeURIComponent(team)}&view=day&date=${d}`;
+  const weekHref = `/roster/planner?week=${weekStart}&team=${encodeURIComponent(team)}`;
+  const shownDay = day && days.includes(day) ? day : days.includes(today) ? today : weekStart;
 
   const liveEntries = [...entries.values()];
   const planned = plannedMinutesByUser(liveEntries);
@@ -273,7 +361,7 @@ export function RosterPlanner({
         </form>
       </WeekBar>
 
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3 text-small" data-testid="roster-status" data-status={header.status} data-team={plannerTeamOfHeader(header)}>
           <Badge tone={header.status === "published" ? "success" : "neutral"}>{header.status === "published" ? t.published : t.draft}</Badge>
           {header.status === "published" ? (
@@ -285,7 +373,10 @@ export function RosterPlanner({
           )}
           {header.changedSincePublish ? <Badge tone="warning">{t.changedSincePublish}</Badge> : null}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <Button variant="outlined" disabled={pending} onClick={() => setConfirm("copyWeek")} data-testid="roster-copy-week">{ta.copyWeek}</Button>
+          <Button variant="outlined" disabled={pending} onClick={() => setConfirm("apply")} data-testid="roster-apply-standard">{ta.applyStandard}</Button>
+          <Button variant="outlined" disabled={pending} onClick={() => setConfirm("save")} data-testid="roster-save-standard">{ta.saveStandard}</Button>
           <LinkButton href={printHref} target="_blank" rel="noopener" shortcut="X" data-shortcut="x" title={t.printHint}>
             {t.print}
           </LinkButton>
@@ -300,7 +391,22 @@ export function RosterPlanner({
 
       {notice ? <Notice tone="info">{notice}</Notice> : null}
 
-      {week.people.length === 0 ? (
+      <nav aria-label={ta.view} className="flex flex-wrap items-center gap-2" data-testid="roster-view">
+        <Link href={weekHref} aria-current={view === "week" ? "page" : undefined}
+          className={`inline-flex h-10 items-center rounded-button border px-4 font-semibold ${view === "week" ? "border-p4a-deepblue bg-p4a-deepblue text-white" : "border-p4a-border text-p4a-deepblue hover:bg-p4a-bgblue"}`}>{ta.viewWeek}</Link>
+        <Link href={dayHref(shownDay)} aria-current={view === "day" ? "page" : undefined}
+          className={`inline-flex h-10 items-center rounded-button border px-4 font-semibold ${view === "day" ? "border-p4a-deepblue bg-p4a-deepblue text-white" : "border-p4a-border text-p4a-deepblue hover:bg-p4a-bgblue"}`}>{ta.viewDay}</Link>
+        {view === "day" ? days.map((d) => (
+          <Link key={d} href={dayHref(d)} aria-current={d === shownDay ? "date" : undefined}
+            className={`inline-flex h-10 items-center rounded-button px-3 text-body ${d === shownDay ? "bg-p4a-bgblue font-semibold text-p4a-deepblue" : "text-p4a-deepblue hover:underline"}`}>
+            {fmtDate(d, locale, "compact")}
+          </Link>
+        )) : null}
+      </nav>
+
+      {view === "day" && copy.assignmentsDay ? (
+        <RosterDay key={shownDay} week={week} date={shownDay} teamArg={teamArg} copy={{ ...copy, assignmentsDay: copy.assignmentsDay }} locale={locale} onPublishedNow={() => startTransition(() => router.refresh())} />
+      ) : week.people.length === 0 ? (
         <p className="text-body text-p4a-muted">{t.noPeople}</p>
       ) : (
         <div className="overflow-x-auto">
@@ -352,6 +458,7 @@ export function RosterPlanner({
                               ].join(" ")}
                             />
                           )}
+                          <CellBar entry={entry} blocks={cellBlocks.get(k) ?? []} typeOf={typeOf} />
                           {st.status === "problem" ? <p className="mt-1 max-w-32 text-caption text-p4a-error">{problemText[st.problem]}</p> : null}
                           {st.status === "saving" ? <p className="mt-1 text-caption text-p4a-grey">{t.cellSaving}</p> : null}
                           {st.status === "saved" ? <p className="mt-1 text-caption text-p4a-success">{t.cellSaved}</p> : null}
@@ -376,7 +483,7 @@ export function RosterPlanner({
         </div>
       )}
 
-      <section className="rounded-card border border-p4a-border bg-white p-6" data-testid="roster-coverage">
+      {view === "week" ? <section className="rounded-card border border-p4a-border bg-white p-6" data-testid="roster-coverage">
         <h2 className="mb-1 text-panel font-semibold text-p4a-heading">{t.coverage}</h2>
         <p className="mb-4 max-w-3xl text-small text-p4a-muted">{t.coverageIntro}</p>
         {coverage.length === 0 ? (
@@ -405,20 +512,87 @@ export function RosterPlanner({
             </tbody>
           </table>
         )}
-      </section>
+      </section> : null}
+
+      <ConfirmDialog
+        open={cellConfirm !== null}
+        title={ta.confirmTodayTitle}
+        confirmLabel={ta.confirmTodayButton}
+        cancelLabel={copy.dayEditor.cancel}
+        onConfirm={() => { const c = cellConfirm!; setCellConfirm(null); save(c.userId, c.date, c.text, true); }}
+        onCancel={() => setCellConfirm(null)}
+        busy={pending}
+      >
+        {cellConfirm?.others === 1 ? ta.confirmTodayOne : ta.confirmToday.replace("{n}", String(cellConfirm?.others ?? 0))}
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={confirm !== null}
-        title={confirm === "copy" ? t.copyPrevious : header.status === "published" ? t.publishAgain : t.publish}
-        confirmLabel={confirm === "copy" ? t.copyPrevious : t.publish}
+        title={confirm === "copy" ? t.copyPrevious : confirm === "copyWeek" ? ta.copyWeekTitle : confirm === "apply" ? ta.applyStandard : confirm === "save" ? ta.saveStandard : header.status === "published" ? t.publishAgain : t.publish}
+        confirmLabel={confirm === "copy" ? t.copyPrevious : confirm === "copyWeek" ? ta.copyWeek : confirm === "apply" ? ta.applyStandard : confirm === "save" ? ta.saveStandard : t.publish}
         cancelLabel={copy.dayEditor.cancel}
-        onConfirm={confirm === "copy" ? copyPrevious : publish}
+        onConfirm={confirm === "copy" ? () => copyPrevious() : confirm === "copyWeek" ? () => copyPrevious(copyFrom) : confirm === "apply" ? () => standardWeek("apply") : confirm === "save" ? () => standardWeek("save") : publish}
         onCancel={() => setConfirm(null)}
         busy={pending}
-        irreversible={confirm === "copy"}
+        irreversible={confirm === "copy" || confirm === "copyWeek" || confirm === "save"}
+        confirmDisabled={confirm === "copyWeek" && copyFrom === weekStart}
       >
-        {confirm === "copy" ? t.copyConfirm : t.publishConfirm}
+        {confirm === "copy" ? t.copyConfirm : confirm === "apply" ? ta.applyConfirm : confirm === "save" ? ta.saveConfirm : confirm === "copyWeek" ? (
+          <span className="flex flex-col gap-3">
+            <span>{ta.copyWeekBody}</span>
+            <label className="flex flex-col gap-2 text-small font-semibold">
+              {ta.copyWeekFrom}
+              <input type="date" value={copyFrom} step={7} onChange={(e) => setCopyFrom(e.target.value ? startOfWeekKey(e.target.value) : copyFrom)}
+                className="h-10 rounded-input border border-p4a-border bg-white px-3 font-normal text-body" data-testid="roster-copy-from" />
+            </label>
+          </span>
+        ) : (
+          <span className="flex flex-col gap-3">
+            <span>{t.publishConfirm}</span>
+            <span className="font-semibold text-p4a-heading">{ta.checkTitle}</span>
+            {warnings.length === 0 ? <span>{ta.checkNone}</span> : (
+              <span className="flex flex-col gap-1 text-small" data-testid="roster-plan-check">
+                {warnings.slice(0, 8).map((w) => <span key={w}>{w}</span>)}
+                {warnings.length > 8 ? <span>{ta.checkMore.replace("{n}", String(warnings.length - 8))}</span> : null}
+              </span>
+            )}
+            <span className="text-small text-p4a-muted">{ta.checkHint}</span>
+          </span>
+        )}
       </ConfirmDialog>
+    </div>
+  );
+}
+
+/** The Monday of a date's week */
+function startOfWeekKey(d: string): string {
+  const x = new Date(`${d}T00:00:00Z`);
+  x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7));
+  return x.toISOString().slice(0, 10);
+}
+
+/**
+ * The thin bar under a week cell (addition 0009zx, D13): the day's blocks in their colours across the shift, a gap in the
+ * page's background; an absence a Background Blue bar. The code is the title, so colour never carries meaning alone
+ */
+function CellBar({ entry, blocks, typeOf }: {
+  entry: RosterEntry | null;
+  blocks: AssignmentBlock[];
+  typeOf: Map<string, Parameters<typeof toneOf>[0] & { name: string }>;
+}) {
+  if (entry?.kind === "absence") return <div className={`mt-1 h-1.5 rounded-button ${TONE_CLASS.absence}`} title={entry.absenceName ?? ""} />;
+  if (entry?.kind !== "shift" || !entry.start || !entry.end || blocks.length === 0) return null;
+  const s = toMinutes(entry.start);
+  const span = Math.max(1, toMinutes(entry.end) - s);
+  return (
+    <div className="relative mt-1 h-1.5 overflow-hidden rounded-button bg-p4a-neutral-surface" data-testid="roster-cell-bar"
+      // the blocks in words on hover, built then: a week of cells would otherwise carry them all in the page (perf.json)
+      onPointerEnter={(e) => { e.currentTarget.title = blocks.map((b) => `${b.start}–${b.end} ${b.code}${b.hoursMarket ? `-${b.hoursMarket}` : ""} ${typeOf.get(b.code)?.name ?? ""}`.trim()).join("\n"); }}>
+      {blocks.map((b) => {
+        const type = typeOf.get(b.code);
+        return <span key={`${b.start}-${b.code}`} className={`absolute inset-y-0 ${TONE_CLASS[type ? toneOf(type) : "productive"]}`}
+          style={{ left: `${pct(toMinutes(b.start) - s, span)}%`, width: `${pct(toMinutes(b.end) - toMinutes(b.start), span)}%` }} />;
+      })}
     </div>
   );
 }

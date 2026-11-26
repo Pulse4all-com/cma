@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Absences and coverage: the absence types (add, edit, retire, reactivate) and the coverage
+ * Absences and coverage (on Configuration → Roster since addition 0009zx): the absence types (add, edit, retire, reactivate, Carries over) and the coverage
  * targets as a small grid per team: one row per work type, one cell per weekday, saved at once
  * when a cell is left or Enter is pressed (0 or empty clears). Keyboard: A adds an absence type,
  * T picks the team of the grid.
@@ -15,10 +15,10 @@ import { FlagField, FormDialog, SaveNote, field, label, send, td, th, useSave } 
 
 type Form = { key: string; name: string; isPaid: boolean; sortOrder: number };
 
-export function AbsenceConfig({ absences, teams, skills, targets, copy }: { absences: AbsenceType[]; teams: TeamInfo[]; skills: SkillInfo[]; targets: CoverageTargetRow[]; copy: Pick<Copy, "configAbsences" | "configTeams" | "configuration"> }) {
+export function AbsenceConfig({ absences, teams, skills, targets, copy }: { absences: AbsenceType[]; teams: TeamInfo[]; skills: SkillInfo[]; targets: CoverageTargetRow[]; copy: Pick<Copy, "configAbsences" | "configTeams" | "configuration" | "configAssignments"> }) {
   const c = copy.configuration;
   const t = copy.configAbsences;
-  const { state, save } = useSave(c);
+  const { state, save, flag, toggle } = useSave(c);
   const [target, setTarget] = useState<{ absence: AbsenceType | null; opened: number } | null>(null);
   const [form, setForm] = useState<Form>({ key: "", name: "", isPaid: false, sortOrder: 100 });
   const [problem, setProblem] = useState<string | null>(null);
@@ -71,6 +71,7 @@ export function AbsenceConfig({ absences, teams, skills, targets, copy }: { abse
               <th className={th}>{c.name}</th>
               <th className={th}>{c.key}</th>
               <th className={th}>{t.paid}</th>
+              <th className={th} title={copy.configAssignments.carriesOverHint}>{copy.configAssignments.carriesOver}</th>
               <th className={`${th} text-right`}>{c.order}</th>
               <th className={th}>{c.active}</th>
               <th className={th}></th>
@@ -82,6 +83,13 @@ export function AbsenceConfig({ absences, teams, skills, targets, copy }: { abse
                 <td className={`${td} font-semibold`}>{a.name}</td>
                 <td className={`${td} text-small`}>{a.key}</td>
                 <td className={td}>{a.isPaid ? t.paid : "—"}</td>
+                <td className={td}>
+                  {/* D10 (addition 0009zx): whether Copy week and Save as standard week take an absence of this type */}
+                  <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${copy.configAssignments.carriesOver}: ${a.name}`}
+                    title={copy.configAssignments.carriesOverHint} data-testid={`carries-over-${a.key}`}
+                    checked={flag(`carries:${a.key}`, a.carriesOver)}
+                    onChange={(e) => toggle(`carries:${a.key}`, e.target.checked, () => send("PUT", `/api/v1/configuration/absence-types/${a.key}/carries-over`, { carriesOver: e.target.checked }))} />
+                </td>
                 <td className={`${td} text-right tabular-nums`}>{a.sortOrder}</td>
                 <td className={td}>{a.isActive ? <Badge tone="success">{c.active}</Badge> : <Badge tone="neutral">{c.retired}</Badge>}</td>
                 <td className={`${td} text-right`}>
