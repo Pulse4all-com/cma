@@ -50,6 +50,7 @@ run_init () {
 #   verify    a verify: exit 0 and a verdict row that says PASS or verified, no failure count, not PROVOKED
 #   provoked  a provoked verify: the verdict row says PROVOKED and counts no passing check (0 OK / 0 PASS)
 #   refused   a dev-only verify in prod: the script refused the database (REFUSED: …)
+#   info      reported, never gating: OK with the output's last line (a verifier whose known problems are compared by hand)
 verdict_of () {
   local check=$1 f=$2 rc=$3 row
   row="$(grep -E '^[[:space:]]*verdict[[:space:]]*\|' "$f" | tail -1 | tr -s ' ' | sed 's/^ //')"
@@ -61,6 +62,7 @@ verdict_of () {
     provoked) if grep -q 'PROVOKED' <<<"$row" && ! grep -qE '(^|[^0-9])[1-9][0-9]* (OK|PASS|ok)' <<<"$row"; then
                 echo "OK $row"; else echo "FAIL not provoked, or a check passed: ${row:-no verdict row}"; fi ;;
     refused)  if grep -q 'REFUSED: ' "$f"; then echo "OK refused, as expected: $(grep -o 'REFUSED: [^"]*' "$f" | head -1 | cut -c1-90)"; else echo "FAIL no refusal"; fi ;;
+    info)     echo "OK info, exit ${rc}: $(grep -v '^[[:space:]]*$' "$f" | tail -1 | tr -s ' ' | cut -c1-120)" ;;
     *)        echo "FAIL unknown check $check" ;;
   esac
 }
@@ -113,6 +115,8 @@ note () { say "-- $*"; RUN_SUMMARY+=("$(printf '%-4s %s' NOTE "$*" | cut -c1-230
 run_finish () {
   local el=$(( $(date +%s) - RUN_T0 )) rc
   trap - INT TERM
+  # a runner's own cleanup (RUN_ON_FINISH, a function name: the dev proxy), also when it stopped
+  if [ -n "${RUN_ON_FINISH:-}" ]; then "$RUN_ON_FINISH"; fi
   say ""
   say "== $(date +%T)  SUMMARY ${RUN_NAME} (${el} s)"
   local l
