@@ -38,6 +38,21 @@ Browser verifiers use Playwright; install its browser once with
 `npx playwright install chromium` (Cloud Shell: add `--with-deps`). That installs the headless shell the verifiers run in and
 the full chromium, whose PDF viewer `layout.mjs` uses to render the roster's printed page.
 
+The app in mock mode on 8080 is the standalone build. `npm run build` puts `.next/static` and `public` next to
+`.next/standalone/server.js` itself (`postbuild`, `scripts/standalone-assets.mjs`, as the Dockerfile's run stage does), so
+`npm start` serves the styles, scripts and fonts. A standalone server without them answers every page 200 and every asset
+404: the browser verifiers then see a page without its styles (the desktop-only gate, every "frame does not scroll …,
+fits", the rail at 1280x600) and time out later. One request shows it: a CSS file of the page answers 200, not 404.
+
+```bash
+npm run build
+CMA_AUTH_MODE=mock CMA_DATA_MODE=mock PORT=8080 npm start
+```
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080$(curl -s -H "x-cma-mock-subject: manager" http://localhost:8080/ | grep -o '/_next/static/[^"]*\.css' | head -1)
+```
+
 ```bash
 # app in mock mode on 8080, then:
 BASE=http://localhost:8080 npm run verify
