@@ -3,9 +3,11 @@
 -- agent's day (brief B)
 -- =============================================================================================
 -- Read-only on real data: every behaviour check runs on a throwaway tenant inside a block that always rolls back; the
--- R checks read every active tenant as it is, and the one call of the all-tenant job (B9) asks for a minute in the year
--- 2000, so it finds no workday and writes nothing. Run as your own IAM login after 254: dev first (normal, then provoked),
--- then prod before the merge. Expected: the last row reads "PASS | 255_verify_roster_drives_the_day: n PASS, 0 FAIL, …".
+-- R checks read every active tenant as it is; the all-tenant job's call in B9 asks for a minute in the year 2000, so it
+-- finds no workday and writes nothing, and B10's call at now() runs only when no other tenant has an open workday (a
+-- clock-in elsewhere between that check and the call would be switched inside this transaction and rolled back with it,
+-- its row held until then: run it in prod at a quiet moment). Run as your own IAM login after 254: dev first (normal,
+-- then provoked), then prod before the merge. Expected: the last row reads "PASS | 255_verify_roster_drives_the_day: n PASS, 0 FAIL, …".
 --
 -- The throwaway tenant's people live in the zone Etc/GMT±n in which it is between 12:00 and 13:00 now, so "today" and its
 -- plan lie around now at any hour of the run; every instant is shown relative to Q, the quarter hour now falls in (Q-170
