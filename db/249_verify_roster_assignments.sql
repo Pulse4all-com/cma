@@ -40,6 +40,10 @@
 --       planned minutes per person, type and hours market
 --   B11 an agent reads none of the planner's functions (CMA06)
 --   B12 a type in the plan keeps what it books: its kind, status and extra flag are refused (CMA03), its name changes
+--   B13 D8 for a cell (cma.roster_set_cell): a shift of today in a published week publishes at once; a plain
+--       roster_set_entry (Copy week's and Apply's writer) does not; an absence of today with another change waiting is
+--       refused (CMA03, publish_others=1) and writes nothing; confirmed, it publishes both, today's blocks end with it; a
+--       future date stays draft
 --   R1  per active tenant: roster_week = 0005's definition for this week and the next on every roster, but where a block
 --       changed after the publication (changed_since_publish may then be true where 0005's says false)
 --   R2  per active tenant: my_roster's earlier columns = 0005's for the first person holding roster.view, this week and next,
@@ -230,6 +234,7 @@ begin
                            'cma.roster_cell(date,text,uuid,date)', 'cma.roster_set_assignments(date,text,uuid,date,jsonb,boolean)',
                            'cma.roster_slot_coverage(date,text)', 'cma.roster_planned_hours(date,text)', 'cma.roster_week(date,text)',
                            'cma.roster_people(date,text)', 'cma.roster_set_entry(date,text,uuid,date,text,time,time,text,text)',
+                           'cma.roster_set_cell(date,text,uuid,date,text,time,time,text,text,boolean)',
                            'cma.roster_copy_week_report(date,date,text)', 'cma.roster_copy_week(date,date,text)',
                            'cma.standard_week()', 'cma.save_standard_week(date,text)', 'cma.apply_standard_week(date,text)',
                            'cma.my_roster(date,date)', 'cma.roster_today()'] loop
@@ -282,7 +287,7 @@ declare
   v_adm uuid; v_mgr uuid; v_ana uuid; v_a1 uuid; v_a2 uuid;
   v_text  text;
   v_j     jsonb;
-  v_b1 text; v_b2 text; v_b3 text; v_b4 text; v_b5 text; v_b6 text; v_b7 text; v_b8 text; v_b9 text; v_b10 text; v_b11 text; v_b12 text;
+  v_b1 text; v_b2 text; v_b3 text; v_b4 text; v_b5 text; v_b6 text; v_b7 text; v_b8 text; v_b9 text; v_b10 text; v_b11 text; v_b12 text; v_b13 text;
   v_err   text;
   e       cma.roster_entry;
   w       cma.roster_week;
@@ -530,6 +535,35 @@ begin
       pg_temp.v0009zx_try($q$select cma.upsert_assignment_type('GO', 'General Ops', 'work', 'v_sales', false, 20)$q$),
       pg_temp.v0009zx_try($q$select cma.upsert_assignment_type('GO', 'Operations, general', 'work', 'v_ops', false, 20)$q$));
 
+    -- B13: D8 for a cell (Martin, 25 November 2026): this week is published (B6, version 3); a1 and a2 work today
+    perform set_config('app.user_id', v_mgr::text, true);
+    v_j := cma.roster_set_cell(v_this, 'alpha', v_a1, v_today, 'shift', '00:00', '22:00', null, null);
+    v_b13 := format('a shift of today, nothing else waiting: published %s version %s', v_j->>'published', v_j->>'version');
+    -- a plain roster_set_entry (Copy week's and Apply's writer) never publishes: a1's today waits, unpublished
+    e := cma.roster_set_entry(v_this, 'alpha', v_a1, v_today, 'shift', '00:00', '21:00', null, null);
+    select v_b13 || format('; roster_set_entry: version %s, changed %s', r.version, r.changed_since_publish)
+    into v_b13 from cma.roster_week(v_this, 'alpha') r;
+    -- a2 is sick today: with a1's change waiting the planner is asked first, and nothing is written
+    begin
+      perform cma.roster_set_cell(v_this, 'alpha', v_a2, v_today, 'absence', null, null, 'sick', null);
+      v_b13 := v_b13 || '; sick with a change waiting: accepted';
+    exception when sqlstate 'CMA03' then
+      get stacked diagnostics v_text = pg_exception_detail;
+      v_b13 := v_b13 || '; sick with a change waiting: CMA03 ' || v_text;
+    end;
+    select v_b13 || format(', a2 still %s with %s blocks', c.kind, jsonb_array_length(c.assignments))
+    into v_b13 from cma.roster_cell(v_this, 'alpha', v_a2, v_today) c;
+    v_j := cma.roster_set_cell(v_this, 'alpha', v_a2, v_today, 'absence', null, null, 'sick', null, true);
+    v_b13 := v_b13 || format('; confirmed: published %s version %s', v_j->>'published', v_j->>'version');
+    perform set_config('app.user_id', v_a2::text, true);
+    select v_b13 || format('; a2 sees %s with %s blocks', m.kind, jsonb_array_length(m.assignments)) into v_b13 from cma.my_roster(v_today, v_today) m;
+    perform set_config('app.user_id', v_a1::text, true);
+    select v_b13 || format(', a1 sees the end %s', to_char(m.end_time, 'HH24:MI')) into v_b13 from cma.my_roster(v_today, v_today) m;
+    -- a future date in a published week stays draft until Publish
+    perform set_config('app.user_id', v_mgr::text, true);
+    v_j := cma.roster_set_cell(v_wk, 'alpha', v_a1, v_wk + 3, 'shift', '09:00', '17:00', null, null);
+    v_b13 := v_b13 || format('; a future date: published %s', v_j->>'published');
+
     -- B11: an agent reads none of the planner's functions
     perform set_config('app.user_id', v_a1::text, true);
     v_b11 := format('assignments %s; coverage %s; planned %s; cell %s; standard %s; save %s; apply %s; copy %s',
@@ -573,6 +607,8 @@ begin
     v_b9, 'zone Mars/Base CMA04; slot 7 CMA04; 08:15 on a 30-minute grid CMA04; planner zone Africa/Lagos');
   perform pg_temp.v0009zx_row(20, 'B10', 'D12: coverage per slot of the planner zone''s day and the planned minutes per type and market',
     v_b10, '09:00 w1 GO/-=1, 10:00 w2 GO/-=1, 10:00 w2 SL/NL=1, 13:00 w1 LB/-=1, 13:00 w1 SL/NL=1, 14:00 w2 SL/GB=1, 14:00 w2 X/NL=1, 17:45 w1 SL/GB=1 | slots 36, first 09:00, last 17:45 | planned a1 SL/GB=180, a1 SL/NL=240, a1 X/NL=60, a2 GO/-=240, a2 LB/-=60, a2 SL/GB=180');
+  perform pg_temp.v0009zx_row(23, 'B13', 'D8 for a cell: a shift or an absence of today publishes at once, asks first while another change waits; roster_set_entry and a future date never publish',
+    v_b13, 'a shift of today, nothing else waiting: published true version 4; roster_set_entry: version 4, changed t; sick with a change waiting: CMA03 publish_others=1, a2 still shift with 1 blocks; confirmed: published true version 5; a2 sees absence with 0 blocks, a1 sees the end 21:00; a future date: published false');
   perform pg_temp.v0009zx_row(22, 'B12', 'a type in the plan keeps its kind, status and extra flag; its name is free',
     v_b12, 'GO books sales CMA03; GO renamed accepted');
   perform pg_temp.v0009zx_row(21, 'B11', 'an agent reads none of the planner''s functions',

@@ -3720,7 +3720,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Source | The CMA: `cma.roster_assignment`, written by the planner (`cma.roster_set_assignments`, the one writer is `cma.roster_put_assignments`), Copy week and Apply standard week |
 | Counts / does not count | Counts the current version of a block, and for every reader outside the planner the version as of the week's latest publication. A shift cleared, changed to an absence or shortened ends the blocks outside it; ended versions stay as history, nothing is deleted. A person-date with a shift and no blocks is planned on the day level only |
 | Unit and display | A bar in the planner's Day view (and, as text, in the week's cell): consecutive slots of one Assignment draw as one bar with the code once, hovering shows the type's name; My schedule lists the published blocks with the Hours market's time in brackets |
-| Time rule | Local times in the person's zone on the person-date's business date, on the Slot grid and inside the shift; the Day view shows them in the Planner zone. The past is locked. A change to today in a published week publishes the week at once (Publish), a future date stays draft until Publish |
+| Time rule | Local times in the person's zone on the person-date's business date, on the Slot grid and inside the shift; the Day view shows them in the Planner zone. The past is locked. A change to today in a published week publishes the week at once, a block or the cell's shift, absence or clear alike, after asking when other changes wait (D8); a future date stays draft until Publish |
 | Scope | Per tenant, person and business date; the week of the shift's roster |
 | Equivalent in the source system | None (Pulse4all plans these in Excel today) |
 | Not to use | "Activity", "task", "skill" or "shift" for it (a shift is the planned day, Rostering; a skill is a proficiency, Teams and skills); "slot" for a block (a Slot is one grid cell) |
@@ -3746,7 +3746,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Status | Decided |
 | Decided | 25 November 2026 (Martin, D2, D3, D13); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); docs/decisions.md, 25 Nov 2026, "An Assignment type is tenant configuration …" and "Assignment codes are 1 to 6 characters …" |
 | Used by | No catalog key. Configuration → Roster, Team → Roster, My schedule; `GET /api/v1/roster/assignment-types`, `GET` and `PUT /api/v1/configuration/assignment-types` |
-| As built today | `248` (`cma.assignment_type`, trigger `cma.assignment_type_rules`, the freeze of kind, status and extra flag once a plan holds the type) and `02` (Pulse4all's seed). Matches the definition; the brief's wording 2 to 6 characters is 1 to 6 because the seeded X has one |
+| As built today | `248` (`cma.assignment_type`, trigger `cma.assignment_type_rules`, the freeze of kind, status and extra flag once a plan holds the type) and `02` (Pulse4all's seed). Matches the definition: 1 to 6 characters, as Martin decided on 25 Nov 2026 over the brief's 2 to 6 (the seeded X has one) |
 
 ### Extra hours (X)
 

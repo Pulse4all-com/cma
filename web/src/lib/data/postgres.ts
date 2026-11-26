@@ -7,7 +7,7 @@ import type {
   ActiveList, ActiveNow, ActiveReport, SubscriptionRowsList, SubscriptionsPage,
   AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MessageStat, MessagesWritten, MyMessage, MyMessages, MyProfile, MyRosterDay, OrganisationInfo,
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary,
-  AssignmentBlock, AssignmentType, PublishedAssignment, RosterAssignment, RosterAssignmentsResult, RosterCellAnswer, RosterPlannedRow, RosterPlannerContext,
+  AssignmentBlock, AssignmentType, PublishedAssignment, RosterAssignment, RosterAssignmentsResult, RosterCellResult, RosterPlannedRow, RosterPlannerContext,
   RosterReportRow, RosterSlotCoverageRow, StandardWeekDay, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkArea, WorkStatus, PermissionInfo, SentMessage, HoursMarket, MyDayChoices,
@@ -2543,28 +2543,39 @@ export const postgresData: CmaData = {
     });
   },
 
-  async setRosterEntry(me, weekStart, teamKey, userId, date, cell): Promise<RosterCellAnswer> {
+  async setRosterEntry(me, weekStart, teamKey, userId, date, cell, publishOthers = false): Promise<RosterCellResult> {
     assertDate(weekStart, "weekStart");
     assertDate(date, "date");
-    return withTenant(ctx(me), async (q) => {
+    try {
+    return await withTenant(ctx(me), async (q) => {
       const kind = cell.kind === "clear" ? null : cell.kind;
       const start = cell.kind === "shift" ? cell.start : null;
       const end = cell.kind === "shift" ? cell.end : null;
       const absence = cell.kind === "absence" ? cell.absenceKey : null;
       const note = cell.kind === "clear" ? null : cell.note ?? null;
-      await q.query(`select 1 from cma.roster_set_entry($1::date, $2, $3::uuid, $4::date, $5, $6::time, $7::time, $8, $9)`,
-        [weekStart, teamKey, userId, date, kind, start, end, absence, note]);
+      // the planner's cell write: today in a published week publishes at once (D8, cma.roster_set_cell, 0009zx)
+      const w = await q.query<{ answer: { published: boolean } }>(
+        `select cma.roster_set_cell($1::date, $2, $3::uuid, $4::date, $5, $6::time, $7::time, $8, $9, $10) as answer`,
+        [weekStart, teamKey, userId, date, kind, start, end, absence, note, publishOthers]);
       // The cell as it stands, with its blocks and the blocks this write ended with the shift (cma.roster_cell, 0009zx)
       const r = await q.query<Omit<RosterEntryDbRow, "entry_id" | "user_id" | "business_date"> & { entry_id: string | null; assignments: BlockJson[]; ended_assignments: number }>(
         `select * from cma.roster_cell($1::date, $2, $3::uuid, $4::date)`, [weekStart, teamKey, userId, date],
       );
       const c = one(r.rows, "roster_cell");
       return {
+        status: "saved",
         entry: c.entry_id ? toRosterEntry({ ...c, entry_id: c.entry_id, user_id: userId, business_date: date }) : null,
         assignments: (c.assignments ?? []).map(toBlock),
         endedAssignments: c.ended_assignments,
+        published: one(w.rows, "roster_set_cell").answer.published === true,
       };
     });
+    } catch (e) {
+      // D8: today's change in a published week would also publish other changes; the planner asks first
+      const m = e instanceof CmaDbError && e.sqlState === "CMA03" ? /^publish_others=(\d+)$/.exec(e.pgDetail ?? "") : null;
+      if (m) return { status: "confirm", otherChanges: Number(m[1]) };
+      throw e;
+    }
   },
 
   async setRosterAssignments(me, weekStart, teamKey, userId, date, blocks, publishOthers): Promise<RosterAssignmentsResult> {
@@ -2581,7 +2592,7 @@ export const postgresData: CmaData = {
       });
     } catch (e) {
       // D8: today's change in a published week would also publish other changes; the planner asks first
-      const m = e instanceof CmaDbError && e.sqlState === "CMA03" ? /^publish_others=(\d+)$/.exec(e.detail ?? "") : null;
+      const m = e instanceof CmaDbError && e.sqlState === "CMA03" ? /^publish_others=(\d+)$/.exec(e.pgDetail ?? "") : null;
       if (m) return { status: "confirm", otherChanges: Number(m[1]) };
       throw e;
     }

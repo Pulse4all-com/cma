@@ -70,6 +70,12 @@
 --                                                change to the person's today in a published week publishes the week at
 --                                                once, and refuses (CMA03, detail publish_others=<n>) while the week holds
 --                                                n other unpublished changes and publish_others is not true (D8)
+--     cma.roster_set_cell(week, team, user, date, kind, start, end, absence, note, publish_others)
+--                                                the planner's cell write: cma.roster_set_entry, and D8 as for blocks: a
+--                                                change to the person's today in a published week (a shift, an absence, a
+--                                                clear) publishes the week at once, CMA03 publish_others=<n> first while
+--                                                other changes wait (Martin, 25 November 2026: a sick day must not leave
+--                                                today's blocks ended and published while the absence waits for Publish)
 --     cma.roster_slot_coverage(date, team)       D12: per slot of the planner zone's day, the people working and the
 --                                                people per type and hours market
 --     cma.roster_planned_hours(week, team)       D12: per person, date, type and hours market, the planned minutes
@@ -1232,6 +1238,61 @@ begin
 end
 $$;
 
+-- The planner's cell write (D8, Martin 25 November 2026): cma.roster_set_entry, and when the cell is the person's today
+-- (their zone) in a published week and the write changed it (a new shift, an absence, a clear, or blocks it ended), the
+-- week is published at once, so the agents see the change, today's ended blocks and the absence together. While the week
+-- holds other unpublished changes the call is refused with CMA03 and the detail publish_others=<n>, writing nothing,
+-- unless p_publish_others is true (the planner asks first: "This also publishes {n} other changes"). A future date stays
+-- draft until Publish. cma.roster_set_entry itself never publishes: Copy week and Apply standard week write through it
+-- (they never publish), and 25 and 199 read its signature and result. Answers {"published", "version"}
+create or replace function cma.roster_set_cell(
+  p_week_start      date,
+  p_team_key        text,
+  p_user_id         uuid,
+  p_business_date   date,
+  p_kind            text,
+  p_start_time      time,
+  p_end_time        time,
+  p_absence_key     text,
+  p_note            text default null,
+  p_publish_others  boolean default false
+)
+returns jsonb
+language plpgsql
+as $$
+declare
+  v_team    uuid;
+  v_week    uuid;
+  v_t0      timestamptz := clock_timestamp();
+  v_others  integer;
+  w         cma.roster_week;
+begin
+  perform cma.assert_permission('roster.manage');
+  perform cma.assert_week_start(p_week_start);
+  v_team := cma.roster_team_id(p_team_key);
+  perform cma.roster_set_entry(p_week_start, p_team_key, p_user_id, p_business_date, p_kind, p_start_time, p_end_time,
+                               p_absence_key, p_note);
+  v_week := cma.roster_week_id(p_week_start, v_team);   -- locks the week row: one writer of a week's publication at a time
+  select * into w from cma.roster_week where tenant_id = cma.current_tenant_id() and id = v_week;
+  if p_business_date = cma.business_date(now(), cma.user_timezone(p_user_id)) and w.status = 'published'
+     and (exists (select 1 from cma.roster_entry e
+                  where e.tenant_id = cma.current_tenant_id() and e.user_id = p_user_id and e.business_date = p_business_date
+                    and (e.recorded_at >= v_t0 or e.valid_to >= v_t0))
+          or exists (select 1 from cma.roster_assignment a
+                     where a.tenant_id = cma.current_tenant_id() and a.user_id = p_user_id and a.business_date = p_business_date
+                       and a.valid_to >= v_t0)) then
+    v_others := cma.roster_other_changes(v_week, p_user_id, p_business_date);
+    if v_others > 0 and not coalesce(p_publish_others, false) then
+      raise exception 'this also publishes % other changes of the week', v_others
+        using errcode = 'CMA03', detail = 'publish_others=' || v_others;
+    end if;
+    w := cma.roster_publish(p_week_start, p_team_key);
+    return jsonb_build_object('published', true, 'version', w.version);
+  end if;
+  return jsonb_build_object('published', false, 'version', coalesce(w.version, 0));
+end
+$$;
+
 -- ---------------------------------------------------------------------------------------------
 -- 9. Copy week with its report (D10)
 -- ---------------------------------------------------------------------------------------------
@@ -1642,6 +1703,7 @@ revoke execute on function
   cma.roster_slot_coverage(date, text), cma.roster_planned_hours(date, text),
   cma.roster_week(date, text), cma.roster_people(date, text),
   cma.roster_set_entry(date, text, uuid, date, text, time, time, text, text),
+  cma.roster_set_cell(date, text, uuid, date, text, time, time, text, text, boolean),
   cma.roster_copy_week_report(date, date, text), cma.roster_copy_week(date, date, text),
   cma.standard_week(), cma.save_standard_week(date, text), cma.apply_standard_week(date, text),
   cma.roster_published_blocks_json(uuid, uuid, date), cma.my_roster(date, date), cma.roster_today()
@@ -1656,6 +1718,7 @@ grant execute on function
   cma.roster_slot_coverage(date, text), cma.roster_planned_hours(date, text),
   cma.roster_week(date, text), cma.roster_people(date, text),
   cma.roster_set_entry(date, text, uuid, date, text, time, time, text, text),
+  cma.roster_set_cell(date, text, uuid, date, text, time, time, text, text, boolean),
   cma.roster_copy_week_report(date, date, text), cma.roster_copy_week(date, date, text),
   cma.standard_week(), cma.save_standard_week(date, text), cma.apply_standard_week(date, text),
   cma.roster_published_blocks_json(uuid, uuid, date), cma.my_roster(date, date), cma.roster_today()

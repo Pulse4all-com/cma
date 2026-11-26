@@ -147,7 +147,10 @@ export function RosterPlanner({
   /** The person's own today decides which cells are in the past (the database uses the same rule) */
   const todayOf = (zone: string) => new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
-  function save(userId: string, date: string, text: string) {
+  /** A cell of today waiting for the planner's yes (D8): the week holds other unpublished changes that would go with it */
+  const [cellConfirm, setCellConfirm] = useState<{ userId: string; date: string; text: string; others: number } | null>(null);
+
+  function save(userId: string, date: string, text: string, publishOthers = false) {
     const k = key(userId, date);
     const current = entries.get(k) ?? null;
     if (text.trim() === cellLabel(current)) {
@@ -171,7 +174,7 @@ export function RosterPlanner({
       } });
       const body = cell.kind === "shift" ? { kind: "shift", start: cell.start, end: cell.end, note: current?.note ?? null }
         : cell.kind === "absence" ? { kind: "absence", absenceKey: cell.key, note: current?.note ?? null } : { kind: "clear" };
-      const res = await send("PUT", `/api/v1/roster/weeks/${weekStart}/cells`, { team: teamArg, userId, date, cell: body });
+      const res = await send("PUT", `/api/v1/roster/weeks/${weekStart}/cells`, { team: teamArg, userId, date, cell: body, publishOthers });
       if (!res.ok) {
         const err = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
         const m = err?.error?.message ?? "";
@@ -179,7 +182,15 @@ export function RosterPlanner({
         setState(k, { status: "problem", problem });
         return;
       }
-      const stored = ((await res.json()) as { data: (RosterEntry & { assignments: AssignmentBlock[]; endedAssignments: number }) | null }).data;
+      const answer = ((await res.json()) as { data: (RosterEntry & { assignments: AssignmentBlock[]; endedAssignments: number; published: boolean }) | { status: "confirm"; otherChanges: number } | null }).data;
+      if (answer && "status" in answer && answer.status === "confirm") {
+        // today in a published week with other changes waiting (D8): nothing was written; the cell keeps its text until
+        // the planner says yes (the optimistic value drops when this transition ends)
+        setState(k, { status: "idle" });
+        setCellConfirm({ userId, date, text, others: answer.otherChanges });
+        return;
+      }
+      const stored = answer as (RosterEntry & { assignments: AssignmentBlock[]; endedAssignments: number; published: boolean }) | null;
       setEntries((m) => { const n = new Map(m); if (stored) n.set(k, stored); else n.delete(k); return n; });
       // the blocks outside the new shift ended with it (addition 0009zx); a clear ends every block of the day
       const endedNow = stored ? stored.endedAssignments : (cellBlocks.get(k) ?? []).length;
@@ -188,6 +199,12 @@ export function RosterPlanner({
       setDrafts((m) => { const n = new Map(m); n.delete(k); return n; });
       setState(k, { status: "saved" });
       setHeader((h) => ({ ...h, changedSincePublish: h.status === "published", entryCount: h.entryCount + (stored ? (current ? 0 : 1) : current ? -1 : 0) }));
+      if (stored?.published || (publishOthers && !stored)) {
+        // the person's today in a published week: published at once (D8), so the header is read again now
+        setNotice(ta.publishedNow);
+        router.refresh();
+        return;
+      }
       refreshSoon();
     });
   }
@@ -496,6 +513,18 @@ export function RosterPlanner({
           </table>
         )}
       </section> : null}
+
+      <ConfirmDialog
+        open={cellConfirm !== null}
+        title={ta.confirmTodayTitle}
+        confirmLabel={ta.confirmTodayButton}
+        cancelLabel={copy.dayEditor.cancel}
+        onConfirm={() => { const c = cellConfirm!; setCellConfirm(null); save(c.userId, c.date, c.text, true); }}
+        onCancel={() => setCellConfirm(null)}
+        busy={pending}
+      >
+        {cellConfirm?.others === 1 ? ta.confirmTodayOne : ta.confirmToday.replace("{n}", String(cellConfirm?.others ?? 0))}
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={confirm !== null}

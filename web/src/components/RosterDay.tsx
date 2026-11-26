@@ -205,7 +205,7 @@ export function RosterDay({
         setPending(confirm);
         return;
       }
-      if (published) { setNotice(t.publishedNow); onPublishedNow(); } else refreshSoon();
+      if (published) { setNotice(copy.assignments.publishedNow); onPublishedNow(); } else refreshSoon();
     });
   }
 
@@ -488,14 +488,14 @@ export function RosterDay({
 
       <ConfirmDialog
         open={pending !== null}
-        title={t.confirmTodayTitle}
-        confirmLabel={t.confirmTodayButton}
+        title={copy.assignments.confirmTodayTitle}
+        confirmLabel={copy.assignments.confirmTodayButton}
         cancelLabel={copy.dayEditor.cancel}
         onConfirm={confirmPublish}
         onCancel={cancelPublish}
         busy={busy}
       >
-        {othersPending === 1 ? t.confirmTodayOne : t.confirmToday.replace("{n}", String(othersPending))}
+        {othersPending === 1 ? copy.assignments.confirmTodayOne : copy.assignments.confirmToday.replace("{n}", String(othersPending))}
       </ConfirmDialog>
 
       <ConfirmDialog

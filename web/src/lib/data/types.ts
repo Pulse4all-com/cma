@@ -944,11 +944,17 @@ export interface RosterWeek {
 
 /** A cell after a write (cma.roster_cell): the entry, its blocks, and the blocks the write ended with the shift */
 export interface RosterCellAnswer {
+  status: "saved";
   entry: RosterEntry | null;
   assignments: AssignmentBlock[];
   /** Blocks that lay outside the new shift (or every block of a cleared or absent day) and ended with it */
   endedAssignments: number;
+  /** The write was the person's today in a published week, so the week was published at once (D8) */
+  published: boolean;
 }
+
+/** A cell write (cma.roster_set_cell): saved, or confirm when today's change would also publish other changes (D8) */
+export type RosterCellResult = RosterCellAnswer | { status: "confirm"; otherChanges: number };
 
 /** One week of the range: the state of the roster of a team (or the tenant) for that week; an unwritten week is a draft at version 0 with no entries */
 export interface RosterWeekSummary {
@@ -4795,7 +4801,7 @@ export interface CmaData {
    * it. Past dates, a date outside the week, a person not on the grid, bad times are CMA04; another
    * roster's entry on that date CMA03; an unknown absence CMA02. Answers the current entry, null after a clear.
    */
-  setRosterEntry(me: Principal, weekStart: DateKey, teamKey: string | null, userId: string, date: DateKey, cell: RosterCellInput): Promise<RosterCellAnswer>;
+  setRosterEntry(me: Principal, weekStart: DateKey, teamKey: string | null, userId: string, date: DateKey, cell: RosterCellInput, publishOthers?: boolean): Promise<RosterCellResult>;
   /**
    * Replaces a person-date's blocks (cma.roster_set_assignments, addition 0009zx): overlap, off the grid, outside the
    * shift, a market that is no hours market, the past CMA04; an unknown type or market CMA02. Today in a published week

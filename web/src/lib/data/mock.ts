@@ -10,7 +10,7 @@ import { addDays, dateKeyInZone, isDateKey, startOfWeek } from "@/lib/time";
 import { onRoster } from "@/lib/roster";
 import type {
   LiveBoardData, DataQualityReport,
-  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MessageStat, MessageTarget, MessagesWritten, MyMessage, MyMessages, MyProfile, MyRosterDay, SentMessage, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, AssignmentBlock, AssignmentBlockInput, AssignmentType, PublishedAssignment, RosterAssignment, RosterAssignmentsResult, RosterCellAnswer, RosterPlannedRow, RosterReportRow, RosterSlotCoverageRow, StandardWeekDay, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
+  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MessageStat, MessageTarget, MessagesWritten, MyMessage, MyMessages, MyProfile, MyRosterDay, SentMessage, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, AssignmentBlock, AssignmentBlockInput, AssignmentType, PublishedAssignment, RosterAssignment, RosterAssignmentsResult, RosterCellResult, RosterPlannedRow, RosterReportRow, RosterSlotCoverageRow, StandardWeekDay, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
   SkillInfo, SkillInput, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow,
   TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday, HoursMarket,
   CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadAttempt, SpeedToLeadDeals, SpeedToLeadFigures, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadView,
@@ -4231,7 +4231,7 @@ export const mockData: CmaData = {
     return (state.config ? state.config.absences : MOCK_ABSENCES).map((a) => ({ ...a }));
   },
 
-  async setRosterEntry(me, weekStart, teamKey, userId, date, cell): Promise<RosterCellAnswer> {
+  async setRosterEntry(me, weekStart, teamKey, userId, date, cell, publishOthers = false): Promise<RosterCellResult> {
     assertRosterManage(me);
     const person = seedPeople().get(userId);
     if (!person) throw new CmaDbError("CMA02", "unknown person");
@@ -4246,6 +4246,10 @@ export const mockData: CmaData = {
     }
     const w = rosterWeekOf(teamKey, weekStart);
     const k = `${userId}:${date}`;
+    // D8 for a cell (cma.roster_set_cell): today in a published week publishes at once, after asking while others wait
+    const today = date === dateKeyInZone(new Date(), person.timeZone) && w.version > 0;
+    const others = [...w.changed].filter((x) => x !== k).length;
+    if (today && others > 0 && !publishOthers) return { status: "confirm", otherChanges: others };
     const entry = mockEntry(userId, date, cell, me.displayName);
     if (entry) w.cells.set(k, entry);
     else w.cells.delete(k);
@@ -4254,7 +4258,8 @@ export const mockData: CmaData = {
     const before = w.blocks.get(k) ?? [];
     const kept = cell.kind === "shift" ? before.filter((b) => b.start >= cell.start && b.end <= cell.end) : [];
     w.blocks.set(k, kept);
-    return { entry, assignments: kept.map((b) => ({ ...b })), endedAssignments: before.length - kept.length };
+    if (today) await mockData.publishRoster(me, weekStart, teamKey);
+    return { status: "saved", entry, assignments: kept.map((b) => ({ ...b })), endedAssignments: before.length - kept.length, published: today };
   },
 
   async setRosterAssignments(me, weekStart, teamKey, userId, date, input, publishOthers): Promise<RosterAssignmentsResult> {
