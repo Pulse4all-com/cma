@@ -154,6 +154,9 @@ function unauthenticated(reason: "missing" | "invalid") {
   });
 }
 
+// The exceptions are the health check and the icon exactly (anchored, the dot escaped: 26 November 2026, so a path that
+// only begins with one of them gets the gate and the CSP's step 2 like any page), Next's static files and images, and
+// the brand images under /brand/ (a folder: a missing file there renders the 404 page with step 1 only, no request data)
 export const config = {
-  matcher: ["/((?!api/health|_next/static|_next/image|icon.png|brand/).*)"],
+  matcher: ["/((?!api/health$|_next/static|_next/image|icon\\.png$|brand/).*)"],
 };

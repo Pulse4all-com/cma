@@ -23,11 +23,14 @@ PORT=8080
 export SHA IMAGE PORT
 note "dev's cma-web onto ${IMAGE}"
 
+# the dev proxy this runner started, and no other (a prod proxy in another terminal stays); also on a stop or a closed
+# terminal (lib.sh's traps: INT, TERM, HUP)
+DEV_PROXY="run services proxy cma-web --project=p4a-cma-dev"
 stop_proxy () {
-  if pgrep -f "run services proxy" >/dev/null; then
-    pkill -f "run services proxy"; sleep 2
-    pgrep -f "run services proxy" >/dev/null && pkill -KILL -f "run services proxy"
-    say "-- the proxy is stopped"
+  if pgrep -f "$DEV_PROXY" >/dev/null; then
+    pkill -f "$DEV_PROXY"; sleep 2
+    pgrep -f "$DEV_PROXY" >/dev/null && pkill -KILL -f "$DEV_PROXY"
+    say "-- the dev proxy is stopped"
   fi
 }
 RUN_ON_FINISH=stop_proxy

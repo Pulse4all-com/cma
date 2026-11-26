@@ -109,7 +109,8 @@ if (BASE) {
       const res = await p.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
       if (path === notFound) {
         // React ran on the 404 page: a script refused by the policy would leave it without hydration
-        hydrated404 = res?.status() === 404 && (await p.evaluate(() => Boolean(window.next) || document.querySelectorAll("script[nonce]").length > 0));
+        // window.next exists only once Next's client runtime ran; a nonce attribute alone stays on a refused script
+        hydrated404 = res?.status() === 404 && (await p.evaluate(() => Boolean(window.next)));
       }
     }
     if (PROVOKE) violations.push("provoked");
@@ -123,6 +124,16 @@ if (BASE) {
     // policy too. Welcome's head start writes its marker (client code ran: N07b2), the navigation beacon is answered
     // (N07d), a rail click and Back stay client navigations in the persistent shell (no document load: N07b), and the
     // Live board and Flash load as the supervisor; no CSP violation on the way
+    // the urgent pop-up would cover the rail: the subjects' urgent messages are acknowledged first (as layout and
+    // optimistic do; dev data)
+    for (const subject of ["agent-two", "supervisor"]) {
+      const inbox = await fetch(`${BASE}/api/v1/me/messages`, { headers: { "x-cma-mock-subject": subject } }).then((r) => r.json()).catch(() => null);
+      for (const m of inbox?.data?.messages ?? []) {
+        if (m.urgency === "urgent" && !m.acknowledgedAt) {
+          await fetch(`${BASE}/api/v1/me/messages/${m.id}/ack`, { method: "POST", headers: { "x-cma-mock-subject": subject, "x-cma-request": "1" } });
+        }
+      }
+    }
     const ctx2 = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const q = await ctx2.newPage();
     const after = [];
@@ -138,20 +149,26 @@ if (BASE) {
     const before = documents;
     const rail = await q.locator("nav[data-rail-nav] a[href]").evaluateAll((as) => as.filter((a) => a.offsetParent !== null).map((a) => a.getAttribute("href")));
     const target = rail.find((h) => h !== "/" && !h.startsWith("/reports")) ?? null;
+    let clickError = null;
     if (target) {
-      await q.locator(`nav[data-rail-nav] a[href="${target}"]`).first().click();
-      await q.waitForURL(`**${target}`);
-      await q.waitForLoadState("networkidle");
-      await q.goBack();
-      await q.waitForLoadState("networkidle");
+      // a click that cannot happen (a dialog over the rail) is this check's FAIL with its reason, never a crash
+      try {
+        await q.locator(`nav[data-rail-nav] a[href="${target}"]`).first().click({ timeout: 10000 });
+        await q.waitForURL(`**${target}`, { timeout: 10000 });
+        await q.waitForLoadState("networkidle");
+        await q.goBack();
+        await q.waitForLoadState("networkidle");
+      } catch (e) {
+        clickError = String(e.message ?? e).split("\n")[0].slice(0, 100);
+      }
     }
     const clientNavs = documents - before;
     for (const path of ["/?as=supervisor", "/live/newco", "/reports/flash"]) await q.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
     await q.waitForTimeout(1500);
     if (PROVOKE) after.push("provoked");
     check("Chromium after the load: the head start's marker, the beacon answered, a rail click and Back without a document load, the Live board and Flash, no CSP violation",
-      after.length === 0 && marker !== null && beacons.includes(204) && target !== null && clientNavs === 0,
-      `violations ${after.slice(0, 2).join(" | ") || 0}; marker ${marker}; beacons ${beacons.join(",") || "none"}; rail click ${target}; document loads ${clientNavs}`);
+      after.length === 0 && marker !== null && beacons.includes(204) && target !== null && clickError === null && clientNavs === 0,
+      `violations ${after.slice(0, 2).join(" | ") || 0}; marker ${marker}; beacons ${beacons.join(",") || "none"}; rail click ${target}${clickError ? ` failed: ${clickError}` : ""}; document loads ${clientNavs}`);
     await ctx2.close();
   } finally {
     await browser.close();

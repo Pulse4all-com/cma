@@ -39,7 +39,7 @@ run_init () {
   RUN_LOG="$RUN_REC/$1.log"
   RUN_TMP="$(mktemp -d)"
   export RUN_TMP
-  trap 'stop_run "interrupted"' INT TERM
+  trap 'stop_run "interrupted"' INT TERM HUP
   say ""
   say "== $(date +%T)  $RUN_NAME on $(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short=7 HEAD), log $RUN_LOG"
 }
@@ -114,7 +114,7 @@ note () { say "-- $*"; RUN_SUMMARY+=("$(printf '%-4s %s' NOTE "$*" | cut -c1-230
 
 run_finish () {
   local el=$(( $(date +%s) - RUN_T0 )) rc
-  trap - INT TERM
+  trap - INT TERM HUP
   # a runner's own cleanup (RUN_ON_FINISH, a function name: the dev proxy), also when it stopped
   if [ -n "${RUN_ON_FINISH:-}" ]; then "$RUN_ON_FINISH"; fi
   say ""
@@ -146,7 +146,7 @@ end_step () {
   STEP_PID_FILE=""
 }
 
-stop_run () { trap - INT TERM; end_step; say ""; say "== $(date +%T)  STOPPED: $*"; RUN_FAILED=1; run_finish; exit 1; }
+stop_run () { trap - INT TERM HUP; end_step; say ""; say "== $(date +%T)  STOPPED: $*"; RUN_FAILED=1; run_finish; exit 1; }
 
 # The database ------------------------------------------------------------------------------------------------------
 

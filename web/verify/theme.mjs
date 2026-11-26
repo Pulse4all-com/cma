@@ -98,7 +98,7 @@ async function acknowledgeUrgent(subject) {
 for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst"]) await acknowledgeUrgent(subject);
 // The security headers (next.config.ts): the first CSP step of the IT audit of 17 October 2026 on a page, a
 // route and the proxy's own answer alike; since brief N07 (WP8, 25 November 2026) an answer proxy.ts passes on carries
-// step 2 in front of it, script-src with a per-request nonce (src/lib/csp.ts; verify:security checks it in full), and the
+// step 2 in front of it, script-src with a per-request nonce (src/lib/csp.ts; verify:csp checks it in full), and the
 // proxy's own answer (here its 400) step 1 alone; provoked, the expected policy is a different one
 {
   const step1 = provoke ? "frame-ancestors 'self'" : "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
