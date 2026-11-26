@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-674 figures. Statuses: verified 475 · discrepancy 16 · ambiguous 35 · prerequisite_missing 155 · cadence_unconfirmed 74.
+675 figures. Statuses: verified 476 · discrepancy 16 · ambiguous 35 · prerequisite_missing 155 · cadence_unconfirmed 75.
 
 ## Welcome
 
@@ -7008,6 +7008,66 @@ with s as (select t.timezone as tz, greatest(0, coalesce((select value from cma.
 **Notes**
 
 The tag use (cma.calls_tag_use_of) has no untagged row; the verify query returns the tag rows and, per date, one row with untagged_calls. Tag shares use each group's own conversations, the untagged share the group's calls (rule 5).
+
+#### `calls.calls_per_tag`
+
+**Calls per tag, whole period** on /reports/calls · Calls per tag, whole period (Gesprekken per tag, hele periode)
+
+Every call in scope per current tag, by direction (Outbound, Inbound, Total), over the whole period: a call with two tags counts under each, a call without a current tag under Untagged, missed inbound calls included (Calls per tag).
+
+**Formula as computed**
+
+```
+per current tag (telephony_call_tag with untagged_at null; any tag, counted or not): outbound = count(outbound calls carrying it), inbound = count(inbound calls carrying it), calls = count(*); Untagged = the calls with no current tag (cma.calls_figures_of's untagged), by direction; share per cell = count / that column's calls in scope (the Total row), null-dash when 0. Total row = every call of the same set by direction (the API's total row, counted in the same pass by cma.calls_per_tag_rows_of; on the page the overview's total, cma.calls_figures_of's, the same numbers, which db/247 E4 checks), NOT the sum of the rows. A removed tag does not count. Rows by calls desc, then name; Untagged last, then Total. Whole period only: Group by does not split it.
+```
+
+**Unit** count · **Grain** period, per_tag · **Status** verified, cadence_unconfirmed
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.telephony_call` | direction, started_at, answered_at, ended_at, talk_seconds, source_deleted_at, number_ref | Aircall | Aircall webhook (one event per call change; VENDOR_SETUP §2.3) → ingest service POST /<adapter>/<key> (adapter aircall) → read-back GET /v1/calls/{id} → cma.ingest_upsert_telephony_calls() (0007a, skip rule 0008f); the Cloud Run job ingest-reconcile re-reads the look-back nightly and the manual backfill writes through the same function | event-driven; the webhook subscription is configured outside the repo: the Aircall dashboard (ingest-reconcile checks it each run), to confirm; reconcile 03:30 Europe/Amsterdam with a 26 h look-back (docs/ingest/deploy.sh, default '30 3 * * *') |
+| `cma.telephony_number` | connection_id, number_ref, name, market, is_counted | Aircall | GET /v1/numbers → cma.ingest_upsert_telephony_catalog(), refreshed inside the Cloud Run job ingest-sweep at most hourly per connection; is_counted and market set on Configuration → Sources (cma.set_telephony_number()) | ingest-sweep every minute (docs/ingest/deploy.sh '* * * * *'); the catalog refresh inside it at most hourly per connection |
+| `cma.market` | code, time_zone | CMA | the Workspace's own write path: Configuration → Markets | on change |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, untagged_at | Aircall | with the call's own write (the call's whole current tag set, closed/opened by difference at versionAt): webhook read-back, reconcile and backfill via cma.ingest_upsert_telephony_calls() | event-driven; the webhook subscription is configured outside the repo: the Aircall dashboard (ingest-reconcile checks it each run), to confirm; reconcile 03:30 Europe/Amsterdam with a 26 h look-back (docs/ingest/deploy.sh, default '30 3 * * *') |
+| `cma.telephony_tag` | tag_ref, name, meaning, is_counted | Aircall | GET /v1/tags via ingest-sweep at most hourly per connection; a tag first seen on a call joins the catalog at the call write (counted by default); is_counted and meaning (cma.set_telephony_tag_meaning, 0008zc; configuration only, the ingest never writes it) set on Configuration → Sources, Tags | at most hourly per connection inside ingest-sweep (every minute, docs/ingest/deploy.sh); the meaning on change |
+
+**Filters**
+
+- tenant: RLS plus the explicit tenant of cma.calls_of
+- source_deleted_at is null; started_at not null; either direction
+- counted lines only (telephony_number.is_counted; a line not in the catalog counts)
+- optional market filter (a code or 'unknown') and line filter (connection id ':' line ref), validated by cma.calls_filters_check; an invalid one is dropped with a notice
+- business dates [from..to] in each call's line-market zone; range at most 92 days
+- every call: answered or missed, connected or not, any talk time (no conversation filter)
+- any current tag, counted or not; a tag removed from the call does not count
+
+**Time** Each call's business date, ISO week (Monday of that date) and time of day in its line's market zone, else the tenant's (cma.calls_of); 'today' for the like-for-like cut is the database's now() in the tenant's zone (cma.calls_overview_of), while the page labels use the viewer's zone (me.timeZone)
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component), streamed after the first paint (the read starts once the overview and the tag use have answered); the API route GET /api/v1/reports/calls/tags computes on request from live tables (no snapshot)
+
+**Computed in** `cma.calls_per_tag` (0009zw); `cma.calls_per_tag_rows_of` (0009zw); `cma.calls_per_tag_of` (0009zw); `cma.calls_of` (0009b); `cma.calls_figures_of` (0008zc); `callsPerTag` in src/lib/reports.ts; `CallsPerTagTable` in src/components/CallsParts.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with s as (select t.timezone as tz from cma.tenant t where t.id = :tenant_id), c as (select tc.connection_id, tc.source_id, tc.direction, (tc.started_at at time zone coalesce(m.time_zone, s.tz))::date as bdate, exists (select 1 from cma.telephony_call_tag ct where ct.tenant_id = tc.tenant_id and ct.connection_id = tc.connection_id and ct.call_source_id = tc.source_id and ct.untagged_at is null) as tagged from cma.telephony_call tc cross join s left join cma.telephony_number n on n.tenant_id = tc.tenant_id and n.connection_id = tc.connection_id and n.number_ref = tc.number_ref left join cma.market m on m.tenant_id = tc.tenant_id and m.code = n.market where tc.tenant_id = :tenant_id and tc.source_deleted_at is null and tc.started_at is not null and coalesce(n.is_counted, true)) select ct.connection_id::text || ':' || ct.tag_ref as tag_key, count(*) filter (where c.direction = 'outbound') as outbound, count(*) filter (where c.direction = 'inbound') as inbound, count(*) as calls from c join cma.telephony_call_tag ct on ct.tenant_id = :tenant_id and ct.connection_id = c.connection_id and ct.call_source_id = c.source_id and ct.untagged_at is null where c.bdate between :from and :to group by 1 union all select null, count(*) filter (where c.direction = 'outbound'), count(*) filter (where c.direction = 'inbound'), count(*) from c where c.bdate between :from and :to and not c.tagged order by 1 nulls last
+```
+
+**Fixture check** Ran against a local database built from db/01 to db/246 (addition 0009zw) with the dev seed and web/verify/perf-volume-fixture.sql (three times prod's volume) for 1 to 31 October 2026 and matched cma.calls_per_tag_of row for row (4 row(s): three tags and Untagged), 25 November 2026; Martin compares the value with the page in Studio.
+
+**Data prerequisites**
+
+- Every call tagged in Aircall (kpis.md §11; tagging discipline): the Untagged row shows what is missing
+
+**Documented in** docs/definitions.md, Calls per tag; features.md §5, Reports → Calls and Calls per agent (B16); api.md, GET /api/v1/reports/calls/tags; decisions.md 25 Nov 2026 (Definitions: Calls per tag)
+
+**Notes**
+
+The tag use (calls.tag_bars, calls.tags_by_group) counts conversations only, so the outbound outcome tags (Not Reached, Wrong Number) and short calls show only here. The rows need not add up to the Total row: a call with two tags counts under each. The verify query returns the tag rows by tag key and one row with a null key for Untagged. Day as Reports → Calls (each line's market zone, not the tenant's; docs/definitions.md, Day, As built today).
 
 ### /reports/calls-per-agent
 

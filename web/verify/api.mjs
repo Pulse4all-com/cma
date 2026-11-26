@@ -2100,7 +2100,8 @@ async function inboundChecks() {
 }
 
 // ---- calls overview and calls per agent (addition 0008j, brief B16), 14 checks, 16 with the reader and the tenant without telephony;
-// since addition 0008k (brief B16.1) 3 more on the telephony history start, so 17 and 19 ----
+// since addition 0008k (brief B16.1) 3 more on the telephony history start, so 17 and 19; since addition 0009zw 4 more on
+// Calls per tag (/api/v1/reports/calls/tags), and one each with the reader and the tenant without telephony, so 21 and 25 ----
 // Calls needs reports.view or performance.team, Calls per agent performance.team, each answered 403 by the
 // route and again by the database. Counts, seconds, line, tag and staff names only: no number, no customer
 // name, no call id, no telephony user id and never the caller's hash in any answer. Reads only.
@@ -2235,9 +2236,37 @@ async function callsChecks() {
   const whole = (tags?.rows ?? []).filter((r) => r.groupKey === null);
   expect("calls: the whole period's tag use equals its groups', tag by tag",
     whole.every((w) => sum((tags?.rows ?? []).filter((r) => r.groupKey !== null && r.tagKey === w.tagKey), "conversations") === w.conversations), true, false);
+  // Calls per tag (addition 0009zw; docs/definitions.md, Calls per tag): every call per current tag by direction, whole period
+  const perTag = (s, q = range) => get(s, `/api/v1/reports/calls/tags?${q}`);
+  expect("calls per tag: an agent is refused, the analyst and the supervisor read it; more than 92 days and a bad line are a 400",
+    [(await perTag(AGENT)).status, (await perTag(ANALYST)).status, (await perTag(SUPERVISOR)).status,
+      (await perTag(ANALYST, `from=${day(-92)}&to=${day(0)}`)).status, (await perTag(ANALYST, `${range}&line=line-nl`)).status],
+    [403, 200, 200, 400, 400], [200, 200, 200, 400, 400]);
+  const pt = (await perTag(ANALYST)).body?.data;
+  expect("calls per tag: totals are the overview's calls, inbound and outbound; untagged its untagged; no personal field",
+    [pt?.totals?.calls, pt?.totals?.inbound, pt?.totals?.outbound, pt?.untagged?.calls, personal(pt).length],
+    [plain?.total?.calls, plain?.total?.inbound, plain?.total?.outbound, plain?.total?.untagged, 0],
+    [-1, plain?.total?.inbound, plain?.total?.outbound, plain?.total?.untagged, 0]);
+  // a call with two tags counts under each, so a tag's calls are at most the total's and at least its conversations
+  const tagConv = new Map(whole.map((r) => [r.tagKey, r.conversations]));
+  expect("calls per tag: each row coherent (inbound plus outbound, within the total, at least its conversations), by calls, untagged within the total",
+    [(pt?.rows ?? []).every((r) => r.tagKey && r.tagName && r.inbound + r.outbound === r.calls && r.calls <= pt.totals.calls
+        && r.outbound <= pt.totals.outbound && r.inbound <= pt.totals.inbound && r.calls >= (tagConv.get(r.tagKey) ?? 0)),
+      (pt?.rows ?? []).every((r, i, a) => i === 0 || a[i - 1].calls >= r.calls),
+      pt?.untagged?.inbound + pt?.untagged?.outbound === pt?.untagged?.calls && pt?.untagged?.calls <= pt?.totals?.calls],
+    [true, true, true], [false, true, true]);
+  const narrowed = async (q) => {
+    const o = (await overview(ANALYST, `${range}&group=day&${q}`)).body?.data?.total;
+    const t = (await perTag(ANALYST, `${range}&${q}`)).body?.data;
+    return t?.totals?.calls === o?.calls && t?.totals?.outbound === o?.outbound && t?.untagged?.calls === o?.untagged;
+  };
+  expect("calls per tag: a market and a line narrow it as the overview",
+    [market ? await narrowed(`market=${encodeURIComponent(market.groupKey)}`) : true, line ? await narrowed(`line=${encodeURIComponent(line.groupKey)}`) : true],
+    [true, true], [false, false]);
   // A reports reader without performance.team (the mock fixture and the local fixture; absent in dev)
   if ((await get("reader", "/api/v1/me")).status === 200) {
     expect("calls: reports.view alone reads Calls, not Calls per agent", await all4("reader"), [200, 200, 403, 403], [200, 200, 200, 200]);
+    expect("calls per tag: reports.view alone reads it", (await get("reader", `/api/v1/reports/calls/tags?${range}`)).status, 200, 403);
   } else {
     console.log("note  reader has no access here: the check of reports.view without performance.team is left out");
   }
@@ -2248,6 +2277,8 @@ async function callsChecks() {
     expect("calls: without telephony both pages say so, never 0",
       [none?.telephony, none?.rows?.length, none?.markets?.length, nobody?.telephony, nobody?.rows?.length],
       [false, 0, 0, false, 0], [true, 0, 0, true, 0]);
+    const noTags = (await get(INVEST, `/api/v1/reports/calls/tags?${range}`)).body?.data;
+    expect("calls per tag: without telephony it says so, no rows", [noTags?.telephony, noTags?.rows?.length], [false, 0], [true, 0]);
   } else {
     console.log(`note  ${INVEST} has no access here: the check of a tenant without telephony is left out`);
   }

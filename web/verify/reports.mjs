@@ -94,7 +94,7 @@ import {
   nextGroup, nextInboundGroup, openNotCalled, orderChecks, parseGroup, parseInboundGroup, percentileCont, personalDataIn, rangeProblem, REASON_SERIES,
   reasonColumns, recordsOfType, speedFigures, summaryTotals, unansweredPct, WAITING_CLASS,
   goalTone, parseSpeedView, speedDealsPage, speedPeriodFigures, speedTimeline, speedTrendGroup,
-  barShare, callRecords, callsChange, callsDelta, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, chartGroups, columnMaxima, CONVERSATION_CLASS, countAxis, filterQuery,
+  barShare, callRecords, callsChange, callsDelta, callsFigures, callsPerPerson, callsPerPersonTags, callsPerTag, callsTagUse, chartGroups, columnMaxima, CONVERSATION_CLASS, countAxis, filterQuery,
   fmtShare, fmtTalk, groupCalls, INBOUND_CLASS, nextCallsGroup, OTHER_TAGS_CLASS, OUTBOUND_CLASS, parseCallsFilter, parseCallsGroup, PER_AGENT_BAR_CLASS,
   historyStartOf, personSplit, previousBeforeHistory, previousCalls, previousPeriod, TAG_CLASS, TAG_NOT_COUNTED_CLASS, tagTable, topTags, untaggedPct, callRules,
   CONVERSATION_EXCLUDING_MEANINGS,
@@ -710,6 +710,16 @@ expect("tag use and tags per person without an untagged row; per person connecte
     + ` | ${[...zcPeopleRows.rows, zcPeopleRows.total].map((p) => `${p.name ?? p.kind}:${p.answeredInbound}/${p.outboundCalls}/${p.connected}/${p.conversations}/${p.untagged}`).join(" ")}`,
   "2026-10-05:Type=1,all:Type=1 | Type=1 | Anna Verify:0/9/8/3/6 Bram Verify:3/0/0/1/2 total:3/9/8/4/8",
   "2026-10-05:Type=1,2026-10-05:Not Reached=1,all:Type=1,all:Not Reached=1 | Type=1 | Anna Verify:0/9/8/4/6 Bram Verify:3/0/0/2/2 total:3/9/8/6/8");
+// Calls per tag (addition 0009zw), as 247 B1 and B3: every call per current tag by direction, any tag, a removed tag not
+// counted; Untagged as callsFigures' untagged; the totals every call; each tag's calls at least its conversations
+const zcPerTag = callsPerTag(zcRecords(), "2026-10-06", "2026-10-06", tagsZc);
+expect("calls per tag: every call per current tag by direction, a tag that does not count listed, a removed tag not counted; untagged and totals as callsFigures, as 247 B1",
+  `${zcPerTag.rows.map((r) => `${r.tagName}:${r.meaning ?? "-"}:${r.isCounted ? "t" : "f"}:${r.outbound}/${r.inbound}/${r.calls}`).join(" | ")}`
+    + ` | untagged ${zcPerTag.untagged.outbound}/${zcPerTag.untagged.inbound}/${zcPerTag.untagged.calls} | total ${zcPerTag.totals.outbound}/${zcPerTag.totals.inbound}/${zcPerTag.totals.calls}`
+    + ` | ${zcPerTag.untagged.calls === zf.untagged && zcPerTag.totals.calls === zf.calls}`
+    + ` | ${callsTagUse(zcRecords(), "2026-10-06", "2026-10-06", "day", tagsZc).filter((r) => r.groupKey === null).every((u) => (zcPerTag.rows.find((r) => r.tagKey === u.tagKey)?.calls ?? 0) >= u.conversations)}`,
+  "Not Reached:not_reached:t:1/1/2 | Not Reached off:not_reached:f:1/0/1 | Type:call_type:t:1/0/1 | untagged 6/3/9 | total 9/4/13 | true | true",
+  "Not Reached:not_reached:t:1/0/1 | untagged 0/0/0 | total 0/0/0 | false | false");
 expect("without a tag meaning not reached, Conversation counts on talk time alone, as 101 B1 without the meanings",
   [zcPerCall(zcRecords(0, 30, tagsZc.map((t) => ({ ...t, meaning: t.meaning === "not_reached" ? null : t.meaning })))), callRules(0, 30, []).notReachedTags.size],
   ["i1:-- i2:-v i3:-v i4:-- o1:c- o2:c- o3:c- o4:cv o5:cv o6:cv o7:cv o8:-- o9:cv", 0],

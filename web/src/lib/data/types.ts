@@ -1604,6 +1604,47 @@ export interface CallsTagUse {
   rows: TagUseRow[];
 }
 
+/** Calls by direction (Calls per tag, addition 0009zw): outbound, inbound and both */
+export interface CallsByDirection {
+  outbound: number;
+  inbound: number;
+  calls: number;
+}
+
+/** One current tag of Calls per tag (cma.calls_per_tag): every call in scope carrying it, by direction */
+export interface CallsPerTagRow extends CallsByDirection {
+  /** connection id ':' tag ref */
+  tagKey: string;
+  /** The catalog's name (the ref for a tag not in the catalog) */
+  tagName: string;
+  /** What the tag means (configuration); null for none */
+  meaning: TagMeaning | null;
+  /** Whether the tag counts (configuration); a tag that does not count is listed too */
+  isCounted: boolean;
+}
+
+/**
+ * Calls per tag (docs/definitions.md, Calls per tag; addition 0009zw): every call in scope per current tag, by
+ * direction, over the whole period (no grouping). A call with two tags counts under each, so the rows do not add up to
+ * the total; untagged is the calls without a current tag (Untagged), missed inbound calls included
+ */
+export interface CallsPerTag {
+  from: DateKey;
+  to: DateKey;
+  filter: CallsFilter;
+  /** False when the tenant has no telephony connected (no rows); null when the caller asked without the check */
+  telephony: boolean | null;
+  /** By calls, most first, then by name */
+  rows: CallsPerTagRow[];
+  untagged: CallsByDirection;
+  /**
+   * The calls in scope, counted from the same calls as the rows (equal to cma.calls_figures_of's calls, inbound and
+   * outbound, as /api/v1/reports/calls answers them), not the sum of the rows; null when the caller asked without them
+   * (Reports → Calls takes them from its overview)
+   */
+  totals: CallsByDirection | null;
+}
+
 /** One row of cma.calls_per_person: a person, the calls of telephony users without a person, or the total */
 export interface CallsPerson {
   kind: "person" | "notLinked" | "total";
@@ -4996,6 +5037,11 @@ export interface CmaData {
   getCallsOverview(me: Principal, range: HoursRange, group: CallsGroup, filter: CallsFilter): Promise<CallsOverview>;
   /** Conversations per group and current tag, and over the whole period. Needs reports.view or performance.team */
   getCallsTagUse(me: Principal, range: HoursRange, group: CallsGroup, filter: CallsFilter): Promise<CallsTagUse>;
+  /**
+   * Calls per tag (addition 0009zw). withTotals false leaves totals null (one read of the calls less) and withConnections
+   * false skips the connection check (telephony null): Reports → Calls has both from its overview. Both default to true
+   */
+  getCallsPerTag(me: Principal, range: HoursRange, filter: CallsFilter, opts?: { withTotals?: boolean; withConnections?: boolean }): Promise<CallsPerTag>;
   /** The same figures per person, the not-linked calls as one row, and the total. Needs performance.team */
   getCallsPerAgent(me: Principal, range: HoursRange, filter: CallsFilter): Promise<CallsPerAgent>;
   /** Per person the conversations per counted tag and the untagged ones. Needs performance.team */

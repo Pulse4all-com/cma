@@ -13,7 +13,7 @@
  */
 import type { Copy, Locale } from "./copy";
 import type {
-  CallsFigures, CallsFilter, CallsGroup, CallsPerson, CallsPersonTag, CallsRow, DataQualityCheck, DateKey, FormAnswerRow, FormCategory, FormsFilter,
+  CallsByDirection, CallsFigures, CallsFilter, CallsGroup, CallsPerson, CallsPerTagRow, CallsPersonTag, CallsRow, DataQualityCheck, DateKey, FormAnswerRow, FormCategory, FormsFilter,
   FormsGroup, FormsResolution, FormsRow, HoursRange, InboundFigures, InboundGroup, InboundServiceRow, Instant, IntakeDay, MissedReason,
   SourceConnections, SpeedToLeadGroup, SpeedToLeadPeriodFigures, SpeedToLeadRow, SpeedToLeadSummaryRow, SpeedToLeadView, TagMeaning, TagUseRow,
 } from "./data/types";
@@ -1022,6 +1022,45 @@ export function callsTagUse(calls: readonly CallRecord[], from: DateKey, to: Dat
   }
   const ordered = [...groups.entries()].map(([groupKey, g]) => ({ groupKey, groupLabel: g.label, calls: g.calls })).sort(groupOrder(group));
   return [...ordered.flatMap((g) => count(g.calls, g.groupKey, g.groupLabel)), ...count(conversations, null, null)];
+}
+
+/** Calls by direction: outbound, inbound and both */
+function byDirection(calls: readonly CallRecord[]): CallsByDirection {
+  const outbound = calls.filter((c) => c.direction === "outbound").length;
+  return { outbound, inbound: calls.length - outbound, calls: calls.length };
+}
+
+/**
+ * Calls per tag, as cma.calls_per_tag (addition 0009zw; docs/definitions.md, Calls per tag): every call of business
+ * dates from..to per current tag, any tag, counted or not (with the catalog's name, the ref for a tag not in it,
+ * its meaning and switch), by direction; a call with two tags counts under each; tags by calls, most first, then by
+ * name. Untagged: the calls without a current tag, missed calls included (callsFigures' untagged). Totals: every call
+ * of the period (callsFigures' calls, inbound and outbound), not the sum of the rows. Whole period only
+ */
+export function callsPerTag(calls: readonly CallRecord[], from: DateKey, to: DateKey, tags: readonly CallTagFixture[]): {
+  rows: CallsPerTagRow[]; untagged: CallsByDirection; totals: CallsByDirection;
+} {
+  const period = inPeriod(calls, from, to);
+  const tagOf = (connectionId: string, ref: string) => tags.find((t) => t.connectionId === connectionId && t.tagRef === ref);
+  const per = new Map<string, { connectionId: string; ref: string; calls: CallRecord[] }>();
+  for (const c of period) {
+    for (const ref of new Set(c.tagRefs)) {
+      const key = `${c.connectionId}:${ref}`;
+      const e = per.get(key) ?? { connectionId: c.connectionId, ref, calls: [] };
+      e.calls.push(c);
+      per.set(key, e);
+    }
+  }
+  const rows = [...per.entries()].map(([tagKey, e]): CallsPerTagRow => {
+    const t = tagOf(e.connectionId, e.ref);
+    return { tagKey, tagName: t?.name ?? e.ref, meaning: t?.meaning ?? null, isCounted: t?.isCounted ?? true, ...byDirection(e.calls) };
+  }).sort((a, b) => b.calls - a.calls || a.tagName.localeCompare(b.tagName) || byCode(a.tagKey, b.tagKey));
+  return { rows, untagged: byDirection(period.filter((c) => !c.isTagged)), totals: byDirection(period) };
+}
+
+/** A count as a share of its column's calls, 0 to 1; null when the column holds no call */
+export function columnShare(count: number, of: number): number | null {
+  return of === 0 ? null : count / of;
 }
 
 /** Who a telephony user is: the person linked to `<source system>_user` with the user's id, or null */

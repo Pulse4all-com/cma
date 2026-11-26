@@ -37,6 +37,9 @@
 -- 2 ('page (called, page 2)', a set of its own: a tab or a further page is a load of its own), the page over this month
 -- in part a (the default view, read again every minute while open), and the API's figures, deals list and rows, each a
 -- set of its own; all but the rows need 242 (before it the functions do not exist: they read FAIL).
+-- Since addition 0009zw (246_calls_per_tag.sql) Reports → Calls streams Calls per tag after its first paint: its read is a
+-- set of its own ('calls per tag {P}', the page's read without totals), and the API's read with its total row ('calls api
+-- {P}') another; both need 246 (before it they read FAIL).
 -- Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
@@ -482,6 +485,12 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'calls {P}', 'overview by line', $q$select * from cma.calls_overview('{f}', '{t}', null, null, 'line') where period = 'current' and group_key is not null$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'history start', $q$select cma.telephony_history_start()$q$, 'agent', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'tag use', $q$select * from cma.calls_tag_use('{f}', '{t}', null, null, 'day')$q$, 'overview', array['reports.view', 'performance.team']),
+-- Calls per tag (addition 0009zw): the page streams it after its first paint (0008zy: a set of its own, not part of
+-- calls {P}) and takes its totals from the overview (totals false); the API's read counts its total row from the same
+-- calls (local, three times prod's volume, one CPU, eight calls a session, 26 November 2026: a month, the page's read
+-- 720-760 ms, the API's 640-760, the tag use's 530-690; both over this budget at that volume, as the tag use already is)
+('b', 'calls per tag {P}', 'calls per tag', $q$select * from cma.calls_per_tag('{f}', '{t}', null, null, false)$q$, 'overview', array['reports.view', 'performance.team']),
+('b', 'calls api {P}', 'calls per tag with totals', $q$select * from cma.calls_per_tag('{f}', '{t}', null, null, true)$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'calls per agent {P}', 'per person', $q$select * from cma.calls_per_person('{f}', '{t}', null, null)$q$, 'overview', array['performance.team']),
 ('b', 'calls per agent {P}', 'tags per person', $q$select * from cma.calls_per_person_tags('{f}', '{t}', null, null)$q$, 'overview', array['performance.team']),
 ('b', 'inbound {P}', 'inbound service', $q$select * from cma.inbound_service('{f}', '{t}', 'day')$q$, 'overview', array['reports.view', 'performance.team']),
