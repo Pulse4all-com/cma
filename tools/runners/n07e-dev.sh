@@ -43,9 +43,9 @@ step "the image exists in prod's registry (polled while the build may still run)
   done; exit 1' || stop_run "no image ${IMAGE}: is the cma-web-main build of the merge done?"
 
 no_run_proxy
-step "dev: cma-web onto the image (a gcloud write, timeout 300)" 330 rc \
-  'timeout 300 gcloud run services update cma-web --project=p4a-cma-dev --region="$REGION" --image="$IMAGE"' \
-  || note "the update's exit is not trusted (a gcloud write can hang after it applied): the describe below decides"
+# the write's exit is reported, never gating (a gcloud write can hang or fail after it applied): the describe decides
+step "dev: cma-web onto the image (a gcloud write, timeout 300; the describe decides)" 330 info \
+  'timeout 300 gcloud run services update cma-web --project=p4a-cma-dev --region="$REGION" --image="$IMAGE"'
 step "dev: the image and the revision ready (describe, polled up to 10 minutes)" 660 rc '
   for i in $(seq 1 40); do
     IFS=, read -r img created ready <<<"$(timeout 60 gcloud run services describe cma-web --project=p4a-cma-dev --region="$REGION" \
