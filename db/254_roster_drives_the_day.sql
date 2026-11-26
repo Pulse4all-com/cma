@@ -1291,8 +1291,8 @@ $$;
 
 -- One statement for all tenants (E2): every tenant with an active Scheduler user, each served as that user in its own
 -- context (app.tenant_id, app.user_id, actor label scheduler:roster), so the tenant filters, the permission and the audit
--- trail name the tenant's Scheduler as for the other jobs. One tenant's failure never stops the others: its row says
--- failed:<SQLSTATE>. Answers counts per tenant only (no person or workday id leaves the function). SECURITY DEFINER (the
+-- trail name the tenant's Scheduler as for the other jobs. One tenant's failure never stops the others: its row carries
+-- the SQLSTATE in failed. Answers counts per tenant only (no person or workday id leaves the function). SECURITY DEFINER (the
 -- owner reads every tenant's Scheduler user) with the house's search path, pg_temp last, executable by cma_app, and
 -- refused inside a request: a tenant or user already set is CMA06, so only a job's connection (jobs/roster-switch.mjs)
 -- runs it
