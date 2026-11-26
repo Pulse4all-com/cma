@@ -11,7 +11,7 @@ import { pickCopy } from "@/lib/copy";
 const WEEKS_AROUND = 12;
 
 /**
- * Roster planner (Team group, migration 0005): the week per team as a grid of people by days with
+ * Roster planner (migration 0005; last in the Time group since 25 November 2026, Team before): the week per team as a grid of people by days with
  * quick typing, a publish button with the draft and published state, Copy previous week, the
  * coverage per work type per day, a print view. Shown to people holding roster.manage; the
  * database checks that permission on every read and write (CMA06). Staff data only.
