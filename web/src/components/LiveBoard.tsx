@@ -127,6 +127,7 @@ export function LiveBoard({
   const select =
     "h-10 min-w-56 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue";
   const th = "px-2 py-2 font-semibold";
+  const teamsOf = (r: (typeof shown)[number]) => r.teams.map((x) => x.name).join(", ");
 
   return (
     <div className="flex flex-col gap-6">
@@ -247,10 +248,11 @@ export function LiveBoard({
               <tr key={r.userId} className="h-10 border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
                 <td className="whitespace-nowrap px-2">{r.displayName}</td>
                 {byEmployer ? <td className="whitespace-nowrap px-2 text-p4a-muted">{r.organisationName}</td> : null}
-                {/* the team list is capped at 10rem and ends in an ellipsis, the whole list in its title, so a person in several
-                    teams never widens the table past the main area at 1280 px; the row keeps its 40 px */}
-                <td className="max-w-40 truncate whitespace-nowrap px-2 text-p4a-muted" title={r.teams.map((x) => x.name).join(", ")}>
-                  {r.teams.map((x) => x.name).join(", ")}
+                {/* the team list is capped at 9rem (the column 10rem with its padding) and ends in an ellipsis, the whole list in its title (on an inner block: a
+                    max-width on a table cell is not defined in every browser), so a person in several teams never widens the
+                    table past the main area at 1280 px; the row keeps its 40 px */}
+                <td className="whitespace-nowrap px-2 text-p4a-muted">
+                  <span className="block max-w-36 truncate" title={teamsOf(r)}>{teamsOf(r)}</span>
                 </td>
                 <td className="whitespace-nowrap px-2">
                   <span className="flex items-center gap-2">
