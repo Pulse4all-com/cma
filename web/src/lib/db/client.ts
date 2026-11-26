@@ -48,7 +48,7 @@ export function translateDbError(err: unknown): CmaDbError {
   if (err instanceof CmaDbError) return err;
   const e = err as { code?: string; message?: string; detail?: string };
   if (isCmaSqlState(e.code)) {
-    return new CmaDbError(e.code, CMA_SQLSTATE[e.code], e.message);
+    return new CmaDbError(e.code, CMA_SQLSTATE[e.code], e.message, e.detail);
   }
   // A SQLSTATE (five characters) is the database answering; anything else (no code, a network
   // code, a credential or connector failure) means the database could not be reached

@@ -244,6 +244,7 @@ async function expectNavigation() {
     // Cancellations; since 14 November Assets runs Installed base, Fulfillment, Maintenance, Storage, Purchase orders, Pledge
     // lists, and since 15 November Fleet management last (after Pledge lists, which none of these holds). The agent holds
     // none of their permissions, so its rail and keys do not change
+    // Since 25 November 2026 (Martin) Roster sits last in Time, after Team hours, and leaves Team (People, Quality monitoring)
     ["analyst", ["/", "/messages", "/live/newco", "/team/quality-monitoring", "/reports/flash", "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound",
       "/reports/email", "/reports/email-per-agent", "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead",
       "/reports/follow-up", "/reports/funnel", "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders",
@@ -267,15 +268,15 @@ async function expectNavigation() {
       "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/reports/fleet-management", "/campaigns"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin), since 0008zw
     // between Time and Reports; the supervisor and the agent see no Team group, so their keys do not move. The planner
-    // (0005) joins it.
-    ["manager", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/team/people", "/team/quality-monitoring", "/roster/planner", "/reports/flash",
+    // (0005) joined it, and since 25 November 2026 sits last in Time instead (Roster 8, People 9).
+    ["manager", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/roster/planner", "/team/people", "/team/quality-monitoring", "/reports/flash",
       "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent",
       "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel",
       "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person",
       "/reports/active", "/reports/subscriptions",
       "/reports/payments", "/reports/courtesy", "/reports/compliance", "/reports/reviews", "/reports/cancellations", "/reports/installed-base", "/reports/fulfillment",
       "/reports/maintenance", "/reports/storage", "/reports/purchase-orders", "/reports/fleet-management", "/campaigns"], true],
-    ["admin", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/team/people", "/team/quality-monitoring", "/roster/planner", "/reports/flash",
+    ["admin", ["/", "/messages", "/live/newco", "/day", "/hours", "/schedule", "/team/hours", "/roster/planner", "/team/people", "/team/quality-monitoring", "/reports/flash",
       "/reports/dashboard", "/reports/calls", "/reports/calls-per-agent", "/reports/inbound", "/reports/email", "/reports/email-per-agent",
       "/reports/intake", "/reports/forms", "/reports/data-quality", "/reports/speed-to-lead", "/reports/follow-up", "/reports/funnel",
       "/reports/attempts", "/reports/attempts-per-agent", "/reports/lead-cohorts", "/reports/first-orders", "/reports/orders-per-person",
@@ -2837,6 +2838,8 @@ async function expectFrame() {
     // first page they may see in it, for an analyst; Customers to Active; Assets to Installed base
     ["manager", "/team/quality-monitoring", ["Welcome", "Team", "Quality monitoring"], ["/", "/team/people", null]],
     ["analyst", "/team/quality-monitoring", ["Welcome", "Team", "Quality monitoring"], ["/", "/team/quality-monitoring", null]],
+    // Roster, last in Time since 25 November 2026: Time leads to My day, the manager's first page in it
+    ["manager", "/roster/planner", ["Welcome", "Time", "Roster"], ["/", "/day", null]],
     ["manager", "/reports/storage", ["Welcome", "Assets", "Storage"], ["/", "/reports/installed-base", null]],
     ["manager", "/reports/payments", ["Welcome", "Customers", "Payments"], ["/", "/reports/active", null]],
     ["reader", "/reports/purchase-orders", ["Welcome", "Assets", "Purchase orders"], ["/", "/reports/installed-base", null]],

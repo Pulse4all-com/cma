@@ -77,6 +77,12 @@
       "class": "agent"
     },
     {
+      "path": "/roster/planner?view=day",
+      "subject": "manager",
+      "class": "agent",
+      "html_kb": 24
+    },
+    {
       "path": "/reports/dashboard",
       "subject": "manager",
       "class": "report"

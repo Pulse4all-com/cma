@@ -7,9 +7,11 @@ export const dynamic = "force-dynamic";
 type Params = { params: Promise<{ weekStart: string }> };
 
 /**
- * Copies the cells of another week into this one: body { team?, from: <Monday> }. A source cell
- * overwrites the target cell, an empty source cell leaves the target alone, the past and people no
- * longer on the grid are skipped. Answers { copied }. Needs roster.manage.
+ * Copies the cells of another week into this one: body { team?, from: <Monday> }. A source shift
+ * overwrites the target cell with its blocks; an absence goes along only when its type carries over
+ * (D10, addition 0009zx); an empty source cell leaves the target alone; the past, people no longer on
+ * the grid and people planned on another roster are skipped. Answers { copied, report }, the report one
+ * row per source cell: { userId, date, outcome, reason, blocks, blocksDropped }. Needs roster.manage.
  */
 export async function POST(request: Request, { params }: Params) {
   return forPrincipal(async (me) => {
@@ -17,6 +19,7 @@ export async function POST(request: Request, { params }: Params) {
     const weekStart = weekStartParam((await params).weekStart);
     const b = await jsonBody(request);
     const from = weekStartParam(typeof b.from === "string" ? b.from : null);
-    return ok({ copied: await data().copyRosterWeek(me, from, weekStart, teamParam(b.team)) });
+    const report = await data().copyRosterWeek(me, from, weekStart, teamParam(b.team));
+    return ok({ copied: report.filter((r) => r.outcome === "done").length, report });
   });
 }

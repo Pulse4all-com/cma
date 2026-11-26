@@ -37,6 +37,9 @@
 -- 2 ('page (called, page 2)', a set of its own: a tab or a further page is a load of its own), the page over this month
 -- in part a (the default view, read again every minute while open), and the API's figures, deals list and rows, each a
 -- set of its own; all but the rows need 242 (before it the functions do not exist: they read FAIL).
+-- Since addition 0009zw (246_calls_per_tag.sql) Reports → Calls streams Calls per tag after its first paint: its read is a
+-- set of its own ('calls per tag {P}', the page's read without totals), and the API's read with its total row ('calls api
+-- {P}') another; both need 246 (before it they read FAIL).
 -- Since addition 0009zy (250_payments_page.sql) Customers → Payments' page, its list and file are timed in part a, each
 -- needing 250 (before it they read FAIL).
 -- Prod is the proof; dev's shared core is for
@@ -363,6 +366,18 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'roster week', 'roster coverage', $q$select * from cma.roster_coverage('{monday}', null)$q$, 'agent', array['roster.manage']),
 ('a', 'roster week', 'roster weeks around', $q$select * from cma.roster_weeks(null, date '{monday}' - 84, date '{monday}' + 90)$q$, 'agent', array['roster.manage']),
 ('a', 'roster week', 'absence types', $q$select * from cma.absence_types()$q$, 'agent', array['roster.manage']),
+-- Assignments in the roster (addition 0009zx, brief A): the week's blocks and the planner's settings and catalogs in the
+-- week's transaction (the Week and Day views), the person-date after a cell write, and the figures and Standard week the
+-- API serves; the type catalog as Configuration → Roster reads it
+('a', 'roster week', 'roster assignments', $q$select * from cma.roster_assignments('{monday}', null)$q$, 'agent', array['roster.manage']),
+('a', 'roster week', 'planner context', $q$select (select jsonb_object_agg(s.key, s.value) from cma.tenant_settings() s
+   where s.key in ('roster.slot_minutes', 'roster.lunch_after_minutes', 'roster.lunch_type_code')) as settings, cma.roster_planner_zone() as zone,
+   (select jsonb_agg(to_jsonb(t)) from cma.assignment_types() t) as types, (select jsonb_agg(to_jsonb(m)) from cma.hours_markets() m) as markets$q$, 'agent', array['roster.manage']),
+('a', 'roster cell', 'roster cell', $q$select c.* from cma.roster_people('{monday}', null) p cross join lateral cma.roster_cell('{monday}', null, p.user_id, '{monday}') c limit 1$q$, 'agent', array['roster.manage']),
+('a', 'roster figures', 'roster slot coverage', $q$select * from cma.roster_slot_coverage('{monday}', null)$q$, 'agent', array['roster.manage']),
+('a', 'roster figures', 'roster planned hours', $q$select * from cma.roster_planned_hours('{monday}', null)$q$, 'agent', array['roster.manage']),
+('a', 'roster figures', 'standard week', $q$select * from cma.standard_week()$q$, 'agent', array['roster.manage']),
+('a', 'configuration roster', 'assignment types', $q$select * from cma.assignment_types()$q$, 'agent', array['tenant.configure']),
 ('a', 'follow-up', 'follow-up page with callbacks', $q$select cma.follow_up_page(null, null, null, null) as j,
    (select coalesce(json_agg(r order by r.ordinality), '[]'::json) from cma.callbacks_kept_report(date '{today}' - 55, '{today}') with ordinality r) as callback_rows,
    cma.callbacks_kept_connected() as callbacks_connected,
@@ -483,6 +498,12 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'calls {P}', 'overview by line', $q$select * from cma.calls_overview('{f}', '{t}', null, null, 'line') where period = 'current' and group_key is not null$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'history start', $q$select cma.telephony_history_start()$q$, 'agent', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'tag use', $q$select * from cma.calls_tag_use('{f}', '{t}', null, null, 'day')$q$, 'overview', array['reports.view', 'performance.team']),
+-- Calls per tag (addition 0009zw): the page streams it after its first paint (0008zy: a set of its own, not part of
+-- calls {P}) and takes its totals from the overview (totals false); the API's read counts its total row from the same
+-- calls (local, three times prod's volume, one CPU, eight calls a session, 26 November 2026: a month, the page's read
+-- 720-760 ms, the API's 640-760, the tag use's 530-690; both over this budget at that volume, as the tag use already is)
+('b', 'calls per tag {P}', 'calls per tag', $q$select * from cma.calls_per_tag('{f}', '{t}', null, null, false)$q$, 'overview', array['reports.view', 'performance.team']),
+('b', 'calls api {P}', 'calls per tag with totals', $q$select * from cma.calls_per_tag('{f}', '{t}', null, null, true)$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'calls per agent {P}', 'per person', $q$select * from cma.calls_per_person('{f}', '{t}', null, null)$q$, 'overview', array['performance.team']),
 ('b', 'calls per agent {P}', 'tags per person', $q$select * from cma.calls_per_person_tags('{f}', '{t}', null, null)$q$, 'overview', array['performance.team']),
 ('b', 'inbound {P}', 'inbound service', $q$select * from cma.inbound_service('{f}', '{t}', 'day')$q$, 'overview', array['reports.view', 'performance.team']),

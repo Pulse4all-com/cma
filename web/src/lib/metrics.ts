@@ -156,6 +156,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
   ],
   "/roster/planner": [
     "roster.planner.planned_minutes_per_person",
+    "roster.planner.planned_hours_meter",
     "roster.planner.headcount_per_day",
     "roster.planner.coverage",
     "roster.planner.week_state",
@@ -212,6 +213,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "calls.untagged_share",
     "calls.tag_bars",
     "calls.tags_by_group",
+    "calls.calls_per_tag",
   ],
   "/reports/calls-per-agent": [
     "calls_per_agent.answered_inbound",

@@ -99,7 +99,13 @@
     "path": "/roster/planner",
     "subject": "manager",
     "tx": 5,
-    "rt": 24
+    "rt": 26
+  },
+  {
+    "path": "/roster/planner?view=day",
+    "subject": "manager",
+    "tx": 5,
+    "rt": 26
   },
   {
     "path": "/reports/dashboard",
@@ -130,8 +136,10 @@
   {
     "path": "/reports/calls",
     "subject": "manager",
-    "tx": 3,
-    "rt": 19
+    "tx": 4,
+    "rt": 23,
+    "firstTx": 3,
+    "firstRt": 19
   },
   {
     "path": "/reports/calls-per-agent",
@@ -604,8 +612,8 @@
   {
     "path": "/configuration/absences",
     "subject": "admin",
-    "tx": 6,
-    "rt": 25
+    "tx": 7,
+    "rt": 31
   },
   {
     "path": "/configuration/app-links",
