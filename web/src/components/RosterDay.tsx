@@ -5,26 +5,31 @@
  * market and the shift, the slots of the tenant's grid (roster.slot_minutes) from the earliest shift start to the latest
  * end of the day as the time axis, in the planner zone (roster.planner_timezone), the assignments as bars (D13).
  *
- * One action (the brief's principle): drag over slots, one row or several, type a code with an optional -MARKET, Enter.
- * Delete empties the selection, Esc lets it go. Clicking a bar opens a small dialog: code, from, to, market. Keyboard
- * first (Pulse4all-Style 7.8): the grid takes focus; the arrows move a one-slot selection, Shift and an arrow grows it,
- * a letter starts the code. Every write replaces the person-date's blocks (PUT .../assignments) and shows its result at
- * once (the optimistic writes of 24 November 2026); a refusal puts the row back and says why. A change to the person's
- * today in a published week is published at once, after a confirmation when other changes would go with it (D8).
+ * One action (the brief's principle): drag over slots, one row or several, choose an assignment in the dropdown (its
+ * colour, code and name; or type CODE or CODE-MARKET) and it applies at once. Delete empties the selection, Esc lets it
+ * go. Clicking a bar opens a small dialog with the same two dropdowns, from and to. Keyboard first (Pulse4all-Style 7.8):
+ * a click or a drag keeps the focus on the grid (Martin, 26 November 2026); the arrows move a one-slot selection, Shift
+ * and an arrow grows it, Enter applies the assignment chosen, Esc clears, a letter opens the dropdown with it. Every write
+ * replaces the person-date's blocks (PUT .../assignments) and shows its result at once (the optimistic writes of 24
+ * November 2026); a refusal puts the row back and says why. A change to the person's today in a published week is
+ * published at once, after a confirmation when other changes would go with it (D8).
  *
- * Under the grid: Working per slot (hover for each assignment and market), per person the Planned hours (hover for the
- * split), and the planned hours per assignment and hours market for the day and the week (D12). Staff data only.
+ * Above the grid: the Planned hours meter of the week and the day (PlannedMeter). Under it: Working per slot, 0 inside
+ * someone's shift so gaps show (hover for each assignment and market), and per person the Planned hours: the work blocks,
+ * a shift without blocks whole, never a pause (hover for the split). Staff data only.
  */
-import { useMemo, useRef, useState, useTransition, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useMemo, useRef, useState, useTransition, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
 import type { AssignmentBlockInput, AssignmentType, RosterAssignmentsResult } from "@/lib/data";
 import {
-  addFigures, assignmentText, figureKey, fromMinutes, fromPlannerMinutes, paintBlocks, parseAssignment, plannedByKey, sameBlocks, slotFigures,
-  slotFloor, toMinutes, toneOf, TONE_CLASS, toPlannerMinutes, type Block, type ParseProblem, type PlannerWeek,
+  assignmentText, fromMinutes, fromPlannerMinutes, paintBlocks, plannedByKey, plannedMinutes, plannedSummary, sameBlocks, slotFigures,
+  slotFloor, toMinutes, toneOf, TONE_CLASS, toPlannerMinutes, type Block, type ParseProblem, type PlannedDay, type PlannerWeek,
 } from "@/lib/assignments";
 import { fmtDate, fmtMinutes } from "@/lib/time";
+import { AssignmentPicker, type Choice } from "./AssignmentPicker";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { PlannedMeter, type MeterWords } from "./PlannedMeter";
 import { Button, Notice } from "./primitives";
 
 /** Width of one slot on screen, px: 15 minutes over a twelve-hour day fit 1280 px with the name columns */
@@ -33,22 +38,27 @@ const SLOT_PX = 20;
 type Sel = { r0: number; s0: number; r1: number; s1: number };
 type RowProblem = ParseProblem | "outside" | "times" | "past" | "failed";
 type Pending = { userId: string; prev: Block[]; next: Block[]; others: number };
+/** A problem with text typed in the Assignment dropdown (not with the selection or the save) */
+const typedProblem = (p: RowProblem | null): boolean => p === "unknown" || p === "retired" || p === "market" || p === "pauseMarket" || p === "format";
 
 async function send(path: string, body: unknown): Promise<Response> {
   return fetch(path, { method: "PUT", headers: { "content-type": "application/json", "x-cma-request": "1" }, body: JSON.stringify(body) });
 }
 
 export function RosterDay({
-  week, date, teamArg, copy, locale, onPublishedNow,
+  week, date, teamArg, copy, meterWords, locale, onPublishedNow, onChanged,
 }: {
   week: PlannerWeek;
   date: string;
   /** The team as the API takes it: null for Everyone */
   teamArg: string | null;
   copy: Pick<Copy, "assignmentsDay" | "assignments" | "dayEditor">;
+  meterWords: MeterWords;
   locale: Locale;
   /** A write published the week at once (D8): the page reads the header again */
   onPublishedNow: () => void;
+  /** A write was saved as a draft change: the header shows a change waiting for Publish */
+  onChanged: () => void;
 }) {
   const t = copy.assignmentsDay;
   const router = useRouter();
@@ -106,7 +116,8 @@ export function RosterDay({
   // ---- selection ----------------------------------------------------------------------------------
   const [sel, setSel] = useState<Sel | null>(null);
   const drag = useRef<{ r: number; s: number; moved: boolean } | null>(null);
-  const [code, setCode] = useState("");
+  // The assignment chosen in the dropdown (Martin, 26 November 2026): Enter on the grid applies it to the selection
+  const [chosen, setChosen] = useState<Choice>({ code: null, market: null });
   const [codeProblem, setCodeProblem] = useState<RowProblem | null>(null);
   const grid = useRef<HTMLDivElement>(null);
   const codeField = useRef<HTMLInputElement>(null);
@@ -134,12 +145,13 @@ export function RosterDay({
   function up(e: ReactPointerEvent<HTMLDivElement>, r: number) {
     const d = drag.current;
     drag.current = null;
-    if (!d || d.moved) { codeField.current?.focus(); return; }
+    // the focus stays on the grid: the arrows, Shift and an arrow, Enter and Esc go on working (Martin, 26 November 2026)
+    if (!d || d.moved) { grid.current?.focus(); return; }
     // A click on a bar opens its dialog; a click on an empty slot keeps the one-slot selection
     const min = axisStart + slotAt(e) * slot;
     const row = rows[r]!;
     const b = (blocksOf.get(row.person.userId) ?? []).find((x) => x.start <= min && min < x.end);
-    if (b) { setSel(null); openDialog(r, b); } else codeField.current?.focus();
+    if (b) { setSel(null); openDialog(r, b); } else grid.current?.focus();
   }
 
   // ---- writes -------------------------------------------------------------------------------------
@@ -179,7 +191,7 @@ export function RosterDay({
         if (!res.ok) {
           const err = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
           const m = err?.error?.message ?? "";
-          fail(/past/.test(m) ? "past" : /outside the shift|grid|overlap|ends after/.test(m) ? "times" : /hours market|no market/.test(m) ? "market" : /no longer in use/.test(m) ? "retired" : /does not exist/.test(m) ? "unknown" : "failed");
+          fail(/past/.test(m) ? "past" : /outside the shift|grid|overlap|ends after/.test(m) ? "times" : /is a pause/.test(m) ? "pauseMarket" : /hours market|no market/.test(m) ? "market" : /no longer in use/.test(m) ? "retired" : /does not exist/.test(m) ? "unknown" : "failed");
           continue;
         }
         const r = ((await res.json()) as { data: RosterAssignmentsResult }).data;
@@ -205,7 +217,7 @@ export function RosterDay({
         setPending(confirm);
         return;
       }
-      if (published) { setNotice(copy.assignments.publishedNow); onPublishedNow(); } else refreshSoon();
+      if (published) { setNotice(copy.assignments.publishedNow); onPublishedNow(); } else { onChanged(); refreshSoon(); }
     });
   }
 
@@ -226,16 +238,11 @@ export function RosterDay({
     refreshTimer.current = setTimeout(() => { refreshTimer.current = null; setRefreshing(true); startRefresh(() => router.refresh()); }, 1500);
   }
 
-  /** Paints the selection with the typed code, or empties it (null) */
-  function paint(text: string | null) {
+  /** Paints the selection with an assignment type and market, or empties it (null) */
+  function paint(what: { code: string; market: string | null } | null) {
     if (!sel) return;
     const { rA, rZ, sA, sZ } = range(sel);
-    let what: { code: string; market: string | null } | null = null;
-    if (text !== null) {
-      const parsed = parseAssignment(text, ctx.types, ctx.hoursMarkets);
-      if ("problem" in parsed) { setCodeProblem(parsed.problem); return; }
-      what = parsed;
-    }
+    if (what && kinds.get(what.code) === "pause") what = { code: what.code, market: null };   // a pause has no market (0009zz)
     const from = axisStart + sA * slot;
     const to = axisStart + (sZ + 1) * slot;
     const changes: { userId: string; next: Block[] }[] = [];
@@ -248,9 +255,17 @@ export function RosterDay({
     }
     if (outside) { setCodeProblem("outside"); return; }
     setCodeProblem(null);
-    setCode("");
     write(changes);
     grid.current?.focus();
+  }
+
+  /** Enter on the grid or Apply: the assignment chosen in the dropdown; without one, the dropdown takes the keyboard */
+  function applyChosen() {
+    if (!sel) return;
+    // typed text that names no type waits to be put right: the earlier choice is never painted in its place
+    if (typedProblem(codeProblem)) { codeField.current?.focus(); return; }
+    if (!chosen.code) { setCodeProblem("empty"); codeField.current?.focus(); return; }
+    paint({ code: chosen.code, market: chosen.market });
   }
 
   function onGridKey(e: ReactKeyboardEvent<HTMLDivElement>) {
@@ -267,30 +282,33 @@ export function RosterDay({
       return;
     }
     if (!sel) return;
+    if (e.key === "Enter") { e.preventDefault(); applyChosen(); return; }
     if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); paint(null); return; }
-    if (e.key === "Escape") { e.preventDefault(); setSel(null); setCode(""); setCodeProblem(null); return; }
+    if (e.key === "Escape") { e.preventDefault(); setSel(null); setCodeProblem(null); return; }
     if (/^[a-zA-Z0-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      e.preventDefault();
-      setCode(e.key.toUpperCase());
+      // the dropdown takes the letter (not prevented: the key lands in the field, which filters the list on it); the page's
+      // shortcuts leave a role="grid" alone (useKeyboardShortcuts), so L on the grid is a code, not Log out
       codeField.current?.focus();
     }
   }
 
   // ---- the bar's dialog -----------------------------------------------------------------------------
-  const [dialog, setDialog] = useState<{ r: number; block: Block; code: string; from: string; to: string; market: string } | null>(null);
+  const [dialog, setDialog] = useState<{ r: number; block: Block; code: string; from: string; to: string; market: string | null } | null>(null);
   const [dialogProblem, setDialogProblem] = useState<RowProblem | null>(null);
   function openDialog(r: number, b: Block) {
     setDialogProblem(null);
-    setDialog({ r, block: b, code: b.code, from: fromMinutes(b.start), to: fromMinutes(b.end), market: b.market ?? "" });
+    setDialog({ r, block: b, code: b.code, from: fromMinutes(b.start), to: fromMinutes(b.end), market: b.market });
   }
   function saveDialog(remove: boolean) {
     if (!dialog) return;
+    if (!remove && typedProblem(dialogProblem)) return;   // the dialog keeps saying why; the bar's earlier type is not saved
     const row = rows[dialog.r]!;
     if (!row.shift) return;
     const without = paintBlocks(blocksOf.get(row.person.userId) ?? [], dialog.block.start, dialog.block.end, null, row.shift);
     if (remove) { setDialog(null); write([{ userId: row.person.userId, next: without }]); return; }
-    const parsed = parseAssignment(dialog.market ? `${dialog.code}-${dialog.market}` : dialog.code, ctx.types, ctx.hoursMarkets);
-    if ("problem" in parsed) { setDialogProblem(parsed.problem); return; }
+    const type = ctx.types.find((x) => x.code === dialog.code);
+    if (!type) { setDialogProblem("unknown"); return; }
+    const parsed = { code: type.code, market: type.kind === "pause" ? null : dialog.market };
     const okTime = /^([01]\d|2[0-3]):[0-5]\d$|^24:00$/;
     if (!okTime.test(dialog.from) || !okTime.test(dialog.to)) { setDialogProblem("times"); return; }
     const from = toMinutes(dialog.from);
@@ -303,35 +321,51 @@ export function RosterDay({
   }
 
   // ---- figures (D12) --------------------------------------------------------------------------------
-  const people = rows.map((r) => ({ userId: r.person.userId, defaultMarket: r.person.defaultHoursMarket, blocks: blocksOf.get(r.person.userId) ?? [] }));
-  const figures = slotFigures(people, kinds, slot, axisStart, axisEnd);
-  const dayTotals = new Map<string, number>();
-  for (const p of people) addFigures(dayTotals, plannedByKey(p.blocks, p.defaultMarket));
-  const weekTotals = new Map<string, number>();
-  for (const [key, list] of Object.entries(week.blocks)) {
-    const [userId, d] = key.split(":");
-    if (d === date) continue;
-    const def = week.people.find((p) => p.userId === userId)?.defaultHoursMarket ?? null;
-    for (const [code, start, end, market] of list) {
-      const k = figureKey(code, market ?? def);
-      weekTotals.set(k, (weekTotals.get(k) ?? 0) + toMinutes(end) - toMinutes(start));
-    }
-  }
-  addFigures(weekTotals, dayTotals);
-  const keyLabel = (k: string) => { const [c, m] = k.split("/"); return m ? `${c} ${m}` : `${c} · ${t.ownMarket}`; };
-  const splitText = (m: Map<string, number>) => [...m].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => `${keyLabel(k)} ${fmtMinutes(v)}`).join("\n");
+  // Computed once per change of the blocks, never per pointer move or arrow key: a selection changes none of them
+  const people = useMemo(() => rows.map((r) => ({ userId: r.person.userId, defaultMarket: r.person.defaultHoursMarket, blocks: blocksOf.get(r.person.userId) ?? [] })), [rows, blocksOf]);
+  const figures = useMemo(() => slotFigures(people, kinds, slot, axisStart, axisEnd), [people, kinds, slot, axisStart, axisEnd]);
+  // Working shows 0 inside someone's shift, so a gap shows; outside every shift it stays empty (Martin, 26 November 2026)
+  const inShift = useMemo(() => new Set(figures.filter((f) => rows.some((r) => r.shift && r.shift.start <= f.start && f.start < r.shift.end)).map((f) => f.start)), [figures, rows]);
+  // The meter (point 9): this date from the rows on screen (with their unsaved results), the week's other dates from the
+  // week as read (once per week and date); each person-date in the person's own minutes (a duration does not depend on
+  // the axis)
+  const dayDays = useMemo((): PlannedDay[] => rows.map((r) => ({
+    userId: r.person.userId, date, defaultMarket: r.person.defaultHoursMarket, shift: r.shift, blocks: blocksOf.get(r.person.userId) ?? [],
+  })), [rows, blocksOf, date]);
+  const otherDays = useMemo((): PlannedDay[] => {
+    const byId = new Map(week.people.map((p) => [p.userId, p]));
+    return week.entries.filter((e) => e.date !== date && byId.has(e.userId)).map((e) => ({
+      userId: e.userId, date: e.date, defaultMarket: byId.get(e.userId)?.defaultHoursMarket ?? null,
+      shift: e.kind === "shift" && e.start && e.end ? { start: toMinutes(e.start), end: toMinutes(e.end) } : null,
+      blocks: (week.blocks[`${e.userId}:${e.date}`] ?? []).map(([code, start, end, market, note]) => ({ code, start: toMinutes(start), end: toMinutes(end), market, note })),
+    }));
+  }, [week, date]);
+  const daySummary = useMemo(() => plannedSummary(dayDays, kinds), [dayDays, kinds]);
+  const weekSummary = useMemo(() => plannedSummary([...dayDays, ...otherDays], kinds), [dayDays, otherDays, kinds]);
+  const keyLabel = (k: string) => { const [c, m] = k.split("/"); return m ? `${c} ${m}` : c ?? ""; };
+  const splitText = (m: Map<string, number>) => [...m].sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([k, v]) => `${keyLabel(k)} ${fmtMinutes(v)}${kinds.get(k.split("/")[0]!) === "pause" ? ` (${meterWords.pauses})` : ""}`).join("\n");
   const problemText: Record<RowProblem, string> = {
     empty: t.problemEmpty, unknown: t.problemUnknown, retired: t.problemRetired, market: example(t.problemMarket), format: example(t.problemFormat),
-    outside: t.problemOutside, times: t.problemTimes, past: t.problemPast, failed: t.problemFailed,
+    pauseMarket: t.problemPauseMarket, outside: t.problemOutside, times: t.problemTimes, past: t.problemPast, failed: t.problemFailed,
   };
   const hours: number[] = [];
   for (let h = Math.ceil(axisStart / 60) * 60; h < axisEnd; h += 60) hours.push(h);
   const nameCols = "w-56 shrink-0";
   const firstHour = (Math.ceil(axisStart / 60) * 60 - axisStart) / slot * SLOT_PX;
-  const hourLines = {
+  const hourLines: CSSProperties = {
     backgroundImage: "linear-gradient(to right, var(--color-p4a-border) 1px, transparent 1px)",
     backgroundSize: `${(60 / slot) * SLOT_PX}px 100%`, backgroundPosition: `${firstHour}px 0`,
   };
+  // A dotted line at every slot boundary (Martin, 26 November 2026): the border colour, lighter than the solid hour lines
+  // (60 % and dotted), one background per row; the mask cuts the line into 2 px dots
+  const slotLines: CSSProperties = {
+    backgroundImage: "linear-gradient(to right, color-mix(in srgb, var(--color-p4a-border) 60%, transparent) 1px, transparent 1px)",
+    backgroundSize: `${SLOT_PX}px 100%`,
+    maskImage: "repeating-linear-gradient(to bottom, #000 0 2px, transparent 2px 4px)",
+    WebkitMaskImage: "repeating-linear-gradient(to bottom, #000 0 2px, transparent 2px 4px)",
+  };
+
   const othersPending = Math.max(0, ...(pending ?? []).map((p) => p.others));
   const selRange = sel ? range(sel) : null;
   const barText = (type: AssignmentType | undefined, b: Block, defaultMarket: string | null) =>
@@ -339,27 +373,24 @@ export function RosterDay({
 
   return (
     <div className="flex flex-col gap-4" data-testid="roster-day">
+      <PlannedMeter week={weekSummary} day={daySummary} types={ctx.types} words={meterWords} />
       <p className="max-w-4xl text-small text-p4a-muted">{example(t.dayIntro)}</p>
-      <div className="flex items-end gap-3">
-        <label className="flex flex-col gap-2 text-small font-semibold">
-          {t.codeLabel}
-          <input
-            ref={codeField}
-            value={code}
-            maxLength={9}
-            placeholder={example(t.codeHint)}
-            disabled={!sel}
-            data-testid="assignment-code"
-            onChange={(e) => { setCode(e.target.value.toUpperCase()); setCodeProblem(null); }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") { e.preventDefault(); paint(code); }
-              if (e.key === "Escape") { e.preventDefault(); setCode(""); setCodeProblem(null); grid.current?.focus(); }
-            }}
-            className={`h-10 w-40 rounded-input border bg-white px-3 font-normal uppercase text-body text-p4a-body focus:border-p4a-deepblue disabled:bg-p4a-sand ${codeProblem ? "border-p4a-error" : "border-p4a-border"}`}
-          />
-        </label>
-        <Button variant="outlined" disabled={!sel || busy} onClick={() => paint(code)}>{t.apply}</Button>
-        {codeProblem ? <p className="pb-2 text-caption text-p4a-error">{problemText[codeProblem]}</p> : null}
+      <div className="flex flex-wrap items-end gap-3">
+        <AssignmentPicker
+          types={ctx.types}
+          markets={ctx.hoursMarkets}
+          value={chosen}
+          inputRef={codeField}
+          invalid={codeProblem !== null}
+          onChange={setChosen}
+          // choosing a type (or its market) with slots selected applies it at once (Martin, 26 November 2026)
+          onChoose={(v) => { if (sel) paint(v); }}
+          onEscape={() => grid.current?.focus()}
+          onProblem={(p) => setCodeProblem(p)}
+          labels={{ assignment: t.codeLabel, market: t.market, ownMarket: t.ownMarket, pauseNoMarket: t.pauseNoMarket, placeholder: example(t.codeHint), noMatch: t.noMatch }}
+        />
+        <Button variant="outlined" disabled={!sel || !chosen.code || busy} onClick={applyChosen}>{t.apply}</Button>
+        {codeProblem ? <p className="pb-2 text-caption text-p4a-error" role="alert" data-testid="assignment-problem">{problemText[codeProblem]}</p> : null}
         {busy || saving.size > 0 ? <p className="pb-2 text-caption text-p4a-grey">{t.saving}</p> : null}
       </div>
       {notice ? <Notice tone="info">{notice}</Notice> : null}
@@ -372,7 +403,7 @@ export function RosterDay({
           role="grid"
           aria-label={`${copy.assignments.viewDay} ${fmtDate(date, locale, "compact")}`}
           onKeyDown={onGridKey}
-          onPointerUp={() => { if (drag.current) { drag.current = null; codeField.current?.focus(); } }}
+          onPointerUp={() => { if (drag.current) { drag.current = null; grid.current?.focus(); } }}
           className="inline-block min-w-full select-none text-small focus:outline-2 focus:outline-p4a-lightblue"
           data-testid="roster-day-grid"
         >
@@ -389,8 +420,8 @@ export function RosterDay({
           </div>
           {rows.map((row, r) => {
             const blocks = blocksOf.get(row.person.userId) ?? [];
-            const planned = plannedByKey(blocks, row.person.defaultHoursMarket);
-            const total = [...planned.values()].reduce((a, b) => a + b, 0);
+            const planned = plannedByKey(blocks, row.person.defaultHoursMarket, kinds);
+            const total = plannedMinutes(row.shift, blocks, kinds);
             const problem = problems.get(row.person.userId);
             return (
               <div key={row.person.userId} className="flex min-h-10 items-center border-b border-p4a-border odd:bg-p4a-offwhite" data-person={row.person.userId}>
@@ -412,9 +443,10 @@ export function RosterDay({
                 >
                   {/* outside the shift: the neutral surface; inside: the page's own background (an empty slot, D13) */}
                   <div className="absolute inset-0 bg-p4a-neutral-surface" />
-                  {/* the hour lines, one background per row (not a line element per hour and row) */}
-                  <div className="pointer-events-none absolute inset-0" style={hourLines} />
                   {row.shift ? <div className="absolute inset-y-0 bg-white" style={{ left: px(row.shift.start), width: px(row.shift.end) - px(row.shift.start) }} /> : null}
+                  {/* the slot lines dotted and the hour lines solid, each one background per row (not an element per line) */}
+                  <div className="pointer-events-none absolute inset-0" style={slotLines} />
+                  <div className="pointer-events-none absolute inset-0" style={hourLines} />
                   {row.entry?.kind === "absence" ? (
                     <div className={`absolute inset-y-1 flex items-center rounded-button px-2 font-semibold ${TONE_CLASS.absence}`} style={{ left: 0, right: 0 }}>{row.entry.absenceName}</div>
                   ) : null}
@@ -440,7 +472,7 @@ export function RosterDay({
                       style={{ left: selRange.sA * SLOT_PX, width: (selRange.sZ - selRange.sA + 1) * SLOT_PX }} />
                   ) : null}
                 </div>
-                <div className="tabular w-20 shrink-0 px-2 text-right" onPointerEnter={(e) => { e.currentTarget.title = splitText(planned); }}>{total > 0 ? fmtMinutes(total) : ""}</div>
+                <div className="tabular w-20 shrink-0 px-2 text-right" onPointerEnter={(e) => { e.currentTarget.title = splitText(planned); }}>{row.shift ? fmtMinutes(total) : ""}</div>
               </div>
             );
           })}
@@ -452,7 +484,7 @@ export function RosterDay({
               {figures.map((f) => (
                 <div key={f.start} className="tabular flex h-10 shrink-0 items-center justify-center text-caption" style={{ width: SLOT_PX }}
                   onPointerEnter={(e) => { e.currentTarget.title = `${fromMinutes(f.start)}\n${[...f.byKey].sort((a, b) => a[0].localeCompare(b[0])).map(([k, n]) => `${keyLabel(k)}: ${n}`).join("\n")}`; }}>
-                  {f.working > 0 ? f.working : ""}
+                  {f.working > 0 || inShift.has(f.start) ? f.working : ""}
                 </div>
               ))}
             </div>
@@ -460,31 +492,6 @@ export function RosterDay({
           </div>
         </div>
       </div>
-
-      <section className="rounded-card border border-p4a-border bg-white p-6" data-testid="roster-totals">
-        <h2 className="mb-1 text-panel font-semibold text-p4a-heading">{t.totals}</h2>
-        <p className="mb-4 max-w-3xl text-small text-p4a-muted">{t.totalsIntro}</p>
-        {weekTotals.size === 0 ? <p className="text-body text-p4a-muted">{t.noAssignments}</p> : (
-          <table className="border-collapse text-body">
-            <thead className="bg-p4a-bgblue text-small text-p4a-heading">
-              <tr>
-                <th className="h-10 px-3 text-left font-semibold">{t.codeLabel}</th>
-                <th className="h-10 px-3 text-right font-semibold">{t.totalsDay}</th>
-                <th className="h-10 px-3 text-right font-semibold">{t.totalsWeek}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...weekTotals.keys()].sort((a, b) => a.localeCompare(b)).map((k) => (
-                <tr key={k} className="h-10 border-b border-p4a-border">
-                  <td className="px-3" title={typeOf.get(k.split("/")[0]!)?.name}>{keyLabel(k)}</td>
-                  <td className="tabular px-3 text-right">{dayTotals.get(k) ? fmtMinutes(dayTotals.get(k)!) : ""}</td>
-                  <td className="tabular px-3 text-right">{fmtMinutes(weekTotals.get(k)!)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
 
       <ConfirmDialog
         open={pending !== null}
@@ -509,22 +516,18 @@ export function RosterDay({
       >
         {dialog ? (
           <div className="flex flex-col gap-3" data-testid="assignment-dialog">
+            <AssignmentPicker
+              types={ctx.types.filter((x) => x.isActive || x.code === dialog.code).map((x) => (x.code === dialog.code ? { ...x, isActive: true } : x))}
+              markets={ctx.hoursMarkets}
+              value={{ code: dialog.code, market: dialog.market }}
+              onChange={(v) => setDialog({ ...dialog, code: v.code ?? dialog.code, market: v.market })}
+              onChoose={() => undefined}
+              onProblem={(p) => setDialogProblem(p)}
+              labels={{ assignment: t.codeLabel, market: t.market, ownMarket: t.ownMarket, pauseNoMarket: t.pauseNoMarket, placeholder: example(t.codeHint), noMatch: t.noMatch }}
+              testId="assignment-dialog-code"
+              inline
+            />
             <div className="grid grid-cols-2 gap-3">
-              <label className="flex flex-col gap-2 text-small font-semibold">
-                {t.codeLabel}
-                <select value={dialog.code} onChange={(e) => setDialog({ ...dialog, code: e.target.value })}
-                  className="h-10 rounded-input border border-p4a-border bg-white px-2 font-normal text-body">
-                  {ctx.types.filter((x) => x.isActive || x.code === dialog.code).map((x) => <option key={x.code} value={x.code}>{x.code} · {x.name}</option>)}
-                </select>
-              </label>
-              <label className="flex flex-col gap-2 text-small font-semibold">
-                {t.market}
-                <select value={dialog.market} onChange={(e) => setDialog({ ...dialog, market: e.target.value })}
-                  className="h-10 rounded-input border border-p4a-border bg-white px-2 font-normal text-body">
-                  <option value="">{t.ownMarket}</option>
-                  {ctx.hoursMarkets.filter((m) => m.isActive || m.code === dialog.market).map((m) => <option key={m.code} value={m.code}>{m.code} · {m.name}</option>)}
-                </select>
-              </label>
               <label className="flex flex-col gap-2 text-small font-semibold">
                 {t.from}
                 <input value={dialog.from} maxLength={5} onChange={(e) => setDialog({ ...dialog, from: e.target.value })}

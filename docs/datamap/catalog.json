@@ -420,7 +420,7 @@
         },
         {
           "name": "roster_assignment",
-          "what": "The planned blocks inside a shift: person, date, assignment type, start and end on the slot grid, an optional hours market (empty: the person's default market), versioned like roster_entry",
+          "what": "The planned blocks inside a shift: person, date, assignment type, start and end on the slot grid, an optional hours market (empty: the person's default market; a pause block written from 0009zz on has none, and every read shows a pause without one), versioned like roster_entry",
           "how": "CMA (planner): the Roster planner's blocks, refreshed on write; a shift cleared, changed to an absence or shortened ends the blocks outside it"
         },
         {

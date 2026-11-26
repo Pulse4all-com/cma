@@ -26,7 +26,8 @@
 --       (the market rule of the trigger, before the foreign key)
 --   B3  versioning (D7): a rewrite keeps the equal blocks, ends the changed one with its successor, inserts the new one
 --   B4  the published read (D7): an agent sees no block before the publication, the published blocks after it, the earlier
---       publication while a later change waits, and the header says changed since the publication for a block alone
+--       publication while a later change waits, and the header says changed since the publication for a block alone;
+--       since 0009zz (252) a pause shows no market, is not own market and has no market zone (edited by 252)
 --   B5  a shortened shift ends the blocks outside it without a successor, and roster_cell reports them; an absence ends
 --       the rest
 --   B6  D8: a change to today in a published week publishes at once; with another change waiting it is refused (CMA03,
@@ -594,7 +595,7 @@ begin
   perform pg_temp.v0009zx_row(13, 'B3', 'versioning: the equal blocks kept, the changed one ended with its successor',
     v_b3, 'kept 2 ended 1 added 1; rows 4, current 3; the ended GO 13:00-17:00 superseded by GO 13:00-16:00; current SL 09:00-11:00 GB, LB 12:00-12:30, GO 13:00-16:00');
   perform pg_temp.v0009zx_row(14, 'B4', 'the published read: nothing before, the publication while a change waits, then the change',
-    v_b4, 'before 0; future change published false; changed since publish t; planner SL 09:00-11:00, LB 12:00-12:30, GO 13:00-15:00; agent SL 09:00-11:00 work sales GB false Europe/London, LB 12:00-12:30 pause - NL true Europe/Amsterdam, GO 13:00-16:00 work operations NL true Europe/Amsterdam; after the second publication GO 13:00-15:00');
+    v_b4, 'before 0; future change published false; changed since publish t; planner SL 09:00-11:00, LB 12:00-12:30, GO 13:00-15:00; agent SL 09:00-11:00 work sales GB false Europe/London, LB 12:00-12:30 pause - - false -, GO 13:00-16:00 work operations NL true Europe/Amsterdam; after the second publication GO 13:00-15:00');
   perform pg_temp.v0009zx_row(15, 'B5', 'a shortened shift ends the blocks outside it (reported), an absence ends the rest',
     v_b5, 'shortened: cell shift 09:00-12:00, blocks SL, ended 2; without a successor 2; absence: blocks 0');
   perform pg_temp.v0009zx_row(16, 'B6', 'D8: today publishes at once; another change waiting asks first and writes nothing; confirmed it publishes both',

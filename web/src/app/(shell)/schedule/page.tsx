@@ -4,10 +4,10 @@ import { WeekBar } from "@/components/WeekBar";
 import { Badge, Card, Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock } from "@/lib/data";
 import { firstPage } from "@/lib/nav";
-import { cellLabel, shiftMinutes, weekDays } from "@/lib/roster";
+import { cellLabel, weekDays } from "@/lib/roster";
 import { dateKeyInZone, fmtDate, fmtMinutes, isDateKey, startOfWeek } from "@/lib/time";
 import { resolve } from "@/app/access";
-import { instantOf, pct, toMinutes, toneOf, TONE_CLASS } from "@/lib/assignments";
+import { instantOf, pct, plannedMinutes, toMinutes, toneOf, TONE_CLASS } from "@/lib/assignments";
 import { localParts } from "@/lib/corrections";
 import type { PublishedAssignment } from "@/lib/data";
 
@@ -18,7 +18,8 @@ import type { PublishedAssignment } from "@/lib/data";
  * without the permission). Never a colleague's schedule: that is the planner's. Since addition
  * 0009zx each day shows its published assignments as the planner's bar (D13) with the blocks and
  * times listed under it, in the person's zone; a block whose hours market lies in another zone that
- * day (GB for Spain) shows the market's own time after it in brackets.
+ * day (GB for Spain) shows the market's own time after it in brackets. Planned (Martin, 26 November 2026) counts the
+ * published blocks of kind work and a shift without blocks whole, never a pause; a pause shows no market (0009zz).
  */
 export default async function MySchedulePage({ searchParams }: PageProps<"/schedule">) {
   const r = await resolve();
@@ -46,7 +47,10 @@ export default async function MySchedulePage({ searchParams }: PageProps<"/sched
   const weekStart = isDateKey(sp.week) ? startOfWeek(sp.week) : thisWeek;
   const days = weekDays(weekStart);
   const rows = await data().getMyRoster(me, { from: days[0]!, to: days[6]! });
-  const plannedMinutes = rows.reduce((n, d) => n + (d.kind === "shift" && d.start && d.end ? shiftMinutes(d.start, d.end) : 0), 0);
+  const planned = rows.reduce((n, d) => n + (d.kind === "shift" && d.start && d.end
+    ? plannedMinutes({ start: toMinutes(d.start), end: toMinutes(d.end) },
+        d.assignments.map((b) => ({ code: b.code, start: toMinutes(b.start), end: toMinutes(b.end) })), new Map(d.assignments.map((b) => [b.code, b.kind])))
+    : 0), 0);
 
   return (
     <Shell copy={copy} me={me} active="my-schedule">
@@ -91,7 +95,7 @@ export default async function MySchedulePage({ searchParams }: PageProps<"/sched
           <tfoot>
             <tr className="text-small font-semibold text-p4a-heading">
               <td className="px-3 py-3">{t.plannedTotal}</td>
-              <td className="tabular px-3 py-3">{fmtMinutes(plannedMinutes)}</td>
+              <td className="tabular px-3 py-3">{fmtMinutes(planned)}</td>
               <td colSpan={2} />
             </tr>
           </tfoot>

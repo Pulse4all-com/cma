@@ -35,11 +35,12 @@ export interface Block {
 /** The alias the parser takes for an hours market: the planner may still type UK, the plan always says GB (D5) */
 export const MARKET_ALIASES: Readonly<Record<string, string>> = { UK: "GB" };
 
-export type ParseProblem = "empty" | "unknown" | "retired" | "market" | "format";
+export type ParseProblem = "empty" | "unknown" | "retired" | "market" | "pauseMarket" | "format";
 
 /**
  * What the planner types over a selection (D5): a type's code, or the code and an hours market joined by a hyphen (SL,
  * SL-GB, GO-DE; an en dash too), any case. The market must be an active hours market of the tenant; UK is read as GB.
+ * A pause has no hours market (0009zz): LB-GB is refused (pauseMarket).
  */
 export function parseAssignment(
   text: string, types: readonly AssignmentTypeLike[], hoursMarkets: readonly { code: string; isActive: boolean }[],
@@ -52,6 +53,7 @@ export function parseAssignment(
   if (!type) return { problem: "unknown" };
   if (!type.isActive) return { problem: "retired" };
   if (!m[2]) return { code: type.code, market: null };
+  if (type.kind === "pause") return { problem: "pauseMarket" };
   const code = MARKET_ALIASES[m[2]] ?? m[2];
   if (!hoursMarkets.some((h) => h.code === code && h.isActive)) return { problem: "market" };
   return { code: type.code, market: code };
@@ -220,9 +222,14 @@ export function sameBlocks(a: readonly Block[], b: readonly Block[]): boolean {
 
 // ---- the planned figures (D12) --------------------------------------------------------------------
 
-/** A type and market as one key of the planned figures: "SL/GB", or "SL/" without a market (no Default market either) */
+/** A type and market as one key of the planned figures: "SL/GB", or "SL/" without a market (a pause, or no Default market) */
 export function figureKey(code: string, market: string | null): string {
   return `${code}/${market ?? ""}`;
+}
+
+/** The market a block counts under (D12, 0009zz): a pause under none, a block without a market under the Default market */
+export function figureMarket(b: Pick<Block, "code" | "market">, defaultMarket: string | null, kinds: ReadonlyMap<string, "work" | "pause">): string | null {
+  return kinds.get(b.code) === "pause" ? null : b.market ?? defaultMarket;
 }
 
 export interface PersonBlocks {
@@ -243,7 +250,7 @@ export interface SlotFigure {
 
 /**
  * D12 per slot, as cma.roster_slot_coverage counts them: from `from` to `to` on the slot grid, the people working (a
- * block of kind work) and the people per type and hours market; a slot without a block counts 0
+ * block of kind work) and the people per type and hours market (a pause under no market); a slot without a block counts 0
  */
 export function slotFigures(people: readonly PersonBlocks[], kinds: ReadonlyMap<string, "work" | "pause">, slotMinutes: number, from: number, to: number): SlotFigure[] {
   const out: SlotFigure[] = [];
@@ -253,7 +260,7 @@ export function slotFigures(people: readonly PersonBlocks[], kinds: ReadonlyMap<
     for (const p of people) {
       for (const b of p.blocks) {
         if (b.start <= s && s < b.end) {
-          const k = figureKey(b.code, b.market ?? p.defaultMarket);
+          const k = figureKey(b.code, figureMarket(b, p.defaultMarket, kinds));
           byKey.set(k, (byKey.get(k) ?? 0) + 1);
           if (kinds.get(b.code) === "work") working.add(p.userId);
         }
@@ -264,20 +271,93 @@ export function slotFigures(people: readonly PersonBlocks[], kinds: ReadonlyMap<
   return out;
 }
 
-/** D12 per person: the planned minutes per type and hours market over the blocks given */
-export function plannedByKey(blocks: readonly Block[], defaultMarket: string | null): Map<string, number> {
+/** D12 per person: the planned minutes per type and hours market over the blocks given (a pause under no market) */
+export function plannedByKey(blocks: readonly Block[], defaultMarket: string | null, kinds: ReadonlyMap<string, "work" | "pause">): Map<string, number> {
   const out = new Map<string, number>();
   for (const b of blocks) {
-    const k = figureKey(b.code, b.market ?? defaultMarket);
+    const k = figureKey(b.code, figureMarket(b, defaultMarket, kinds));
     out.set(k, (out.get(k) ?? 0) + (b.end - b.start));
   }
   return out;
 }
 
-/** Sums maps of minutes per key */
-export function addFigures(into: Map<string, number>, from: ReadonlyMap<string, number>): Map<string, number> {
-  for (const [k, v] of from) into.set(k, (into.get(k) ?? 0) + v);
-  return into;
+/**
+ * A person-date's Planned minutes (Martin, 26 November 2026): the blocks of kind work, an extra type included, a pause
+ * never; a shift without any block is planned on the day level only and counts whole (as the plan check reads it), an
+ * absence or no entry counts 0. Durations in local minutes of the person's day, as the shift's
+ */
+export function plannedMinutes(
+  shift: { start: number; end: number } | null, blocks: readonly Pick<Block, "code" | "start" | "end">[], kinds: ReadonlyMap<string, "work" | "pause">,
+): number {
+  if (!shift) return 0;
+  if (blocks.length === 0) return Math.max(0, shift.end - shift.start);
+  return blocks.reduce((n, b) => n + (kinds.get(b.code) === "pause" ? 0 : b.end - b.start), 0);
+}
+
+/** One person-date for the Planned hours meter: its entry's shift (null without one) and its blocks */
+export interface PlannedDay {
+  userId: string;
+  date: DateKey;
+  defaultMarket: string | null;
+  /** The shift in minutes of the person's day; null for an absence or no entry */
+  shift: { start: number; end: number } | null;
+  blocks: readonly Block[];
+}
+
+/** The meter's figures over a set of person-dates (D12, Martin's point 9 of 26 November 2026) */
+export interface PlannedSummary {
+  /** Planned minutes: work blocks, and shifts planned on the day level only (plannedMinutes) */
+  planned: number;
+  /** The shifts' minutes: what Planned is measured against */
+  onShift: number;
+  /** Work minutes per type and hours market (figureKey) */
+  byKey: Map<string, number>;
+  /** Minutes of shifts without any block (planned on the day level only) */
+  dayLevel: number;
+  /** Pause minutes per type: never part of Planned */
+  pauses: Map<string, number>;
+}
+
+/** The meter's figures: Planned (= the sum of every person's Planned), its split per type and market, pauses apart */
+export function plannedSummary(days: readonly PlannedDay[], kinds: ReadonlyMap<string, "work" | "pause">): PlannedSummary {
+  const out: PlannedSummary = { planned: 0, onShift: 0, byKey: new Map(), dayLevel: 0, pauses: new Map() };
+  for (const d of days) {
+    if (!d.shift) continue;
+    out.onShift += Math.max(0, d.shift.end - d.shift.start);
+    out.planned += plannedMinutes(d.shift, d.blocks, kinds);
+    if (d.blocks.length === 0) { out.dayLevel += Math.max(0, d.shift.end - d.shift.start); continue; }
+    for (const b of d.blocks) {
+      if (kinds.get(b.code) === "pause") out.pauses.set(b.code, (out.pauses.get(b.code) ?? 0) + (b.end - b.start));
+      else {
+        const k = figureKey(b.code, b.market ?? d.defaultMarket);
+        out.byKey.set(k, (out.byKey.get(k) ?? 0) + (b.end - b.start));
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * The order the Assignment dropdown lists the active types in (Martin, 26 November 2026): work types first, then pauses,
+ * then the extra types, each group in the tenant's sort order
+ */
+export function pickerOrder<T extends Pick<AssignmentTypeLike, "kind" | "isExtra" | "isActive"> & { sortOrder?: number; code: string }>(types: readonly T[]): T[] {
+  const group = (t: T) => (t.isExtra ? 2 : t.kind === "pause" ? 1 : 0);
+  return types.filter((t) => t.isActive)
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => group(a.t) - group(b.t) || (a.t.sortOrder ?? 0) - (b.t.sortOrder ?? 0) || a.i - b.i)
+    .map((x) => x.t);
+}
+
+/**
+ * The types the dropdown offers for typed text: the codes that start with it first, then the names that hold it (any case),
+ * each in the dropdown's order, so "L" highlights LB before Sales
+ */
+export function pickerFilter<T extends { code: string; name: string }>(types: readonly T[], text: string): T[] {
+  const q = text.trim().toUpperCase().split(/[-–]/)[0] ?? "";
+  if (q === "") return [...types];
+  const byCode = types.filter((t) => t.code.startsWith(q));
+  return [...byCode, ...types.filter((t) => !byCode.includes(t) && t.name.toUpperCase().includes(q))];
 }
 
 // ---- the plan check -----------------------------------------------------------------------------
