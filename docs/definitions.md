@@ -3944,15 +3944,15 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 |---|---|
 | Term | Planned (nl: Gepland), the hours a person is planned to work on the roster |
 | Key | Catalog keys `roster.planner.planned_minutes_per_person`, `roster.print.planned_minutes_per_person`, `my_schedule.planned_total`, `roster.planner.planned_hours_meter`; copy `assignments.meterDayLevel`, `assignments.plannedHint` |
-| Definition | Per person and business date, the duration of the work blocks of the shift (an extra type included) and never a pause; a shift without any block counts whole, because it is planned on the day level only, and an absence or an empty cell counts 0. The label of the whole-shift part in a split is "Shifts without assignments" (nl "Diensten zonder inzet"). The whole-shift rule is to confirm. |
+| Definition | Per person and business date, the duration of the work blocks of the shift (an extra type included) and never a pause; a shift without any block counts whole, because it is planned on the day level only, and an absence or an empty cell counts 0. The label of the whole-shift part in a split is "Shifts without assignments" (nl "Diensten zonder inzet"). |
 | Source | The CMA: `cma.roster_entry` with `cma.roster_assignment` and `cma.assignment_type` (the planner reads current rows, My schedule the published ones) |
 | Counts / does not count | Counts work blocks and a shift without blocks; does not count a pause, an absence, or the shift's minutes outside the blocks of a shift that has some. A pause stays in the Planned hours per assignment panel on its own line |
-| Unit and display | Hours and minutes: the planner's Planned column (Day and Week view), the print view, My schedule's planned total, and the Planned hours meter's total with a bar measured against the hours on shift ("72h 00m of 75h 30m on shift"; the bar's measure is to confirm) |
+| Unit and display | Hours and minutes: the planner's Planned column (Day and Week view), the print view, My schedule's planned total, and the Planned hours meter's total with a bar measured against the hours on shift ("72h 00m of 75h 30m on shift") |
 | Time rule | Business date in the person's zone; the planner reads current rows, My schedule published ones. Durations are wall-clock minutes, as the shift's |
 | Scope | Per person and date, summed per week and for the roster on screen |
 | Equivalent in the source system | None |
 | Not to use | "Worked hours", "paid hours" or "billable hours" for it: it is a plan; "Planned hours" alone for it where the Planned hours per assignment split is meant |
-| Status | Decided; the whole-shift rule and the bar's measure to confirm |
+| Status | Decided (the whole-shift rule and the bar's measure confirmed by Martin, 26 Nov 2026) |
 | Decided | 26 November 2026 (Martin); docs/decisions.md, 26 Nov 2026, "D12 updated: Planned per person …", "A Planned hours meter sits above the grid …" and "Definitions: Person-day (nl Persoonsdag) is a new term …" (this PR, addition 0009zz) |
 | Used by | `roster.planner.planned_minutes_per_person`, `roster.print.planned_minutes_per_person`, `my_schedule.planned_total`, `roster.planner.planned_hours_meter`; Time → Roster (Day and Week view, the print view), My schedule |
 | As built today | `252` (`cma.roster_planned_hours`), `web/src/lib/assignments.ts` (`plannedMinutes`), `web/src/components/PlannedMeter.tsx`, the print page and `/schedule`. Matches the definition |
