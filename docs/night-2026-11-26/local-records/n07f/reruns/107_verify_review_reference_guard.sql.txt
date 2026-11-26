@@ -1,0 +1,38 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:107_verify_review_reference_guard.sql:47: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+                                                    check_name                                                    | result |                                                                               detail                                                                                
+------------------------------------------------------------------------------------------------------------------+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008zf recorded, after 0008ze                                                                        | PASS   | 
+ A2 the check review_reference_no_at on cma.review, validated, on transaction_ref and raw                         | PASS   | CHECK (((strpos(COALESCE(transaction_ref, ''::text), '@'::text) = 0) AND (strpos(COALESCE((raw #>> '{transaction,reference}'::text[]), ''::text), '@'::text) = 0)))
+ A3 the helper, the cleanup's rights and cma.audit_row() with the review branch                                   | PASS   | 
+ A4 no review and no audit row of a review holds an @                                                             | PASS   | reviews, audit rows: 0 0
+ B1 the guard: an @ reference refused through ingest (in the item, in raw) and by a direct update                 | PASS   | CMA04 CMA04 0 23514 23514
+ B2 a normal reference kept in the column and raw, none stored as nothing                                         | PASS   | rev-ok-1:ORD-990001:ORD-990001 rev-ok-2:-:-
+ B3 the audit image of a review is written without the @ reference                                                | PASS   | true 1:true
+ B4 the cleanup: counts, the review and the legacy audit row cleared, its own row clean, a rerun, the check again | PASS   | 1/1 -:false:true true 1:true 0 0/0 ok
+ B5 the helper: null, a non-object, a clean image, the column only, raw only                                      | PASS   | null "text" true {"raw": {"transaction": {"reference": "ORD-1"}}, "transaction_ref": null} {"raw": {"id": "x"}, "transaction_ref": "ORD-1"}
+ B6 a run's counts take ref_dropped; a key outside the list is refused                                            | PASS   | ok {"fetched": 3, "upserted": 2, "ref_dropped": 1} CMA04
+ verdict                                                                                                          | PASS   | 107_verify_review_reference_guard: 10 PASS, 0 FAIL
+(11 rows)
+
+DROP FUNCTION
+DROP FUNCTION
+RESET

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Shell } from "@/components/Shell";
+import { ShellFrame } from "@/components/ShellFrame";
 import { Card, Keycap, Notice, PageTitle } from "@/components/primitives";
 import { data } from "@/lib/data";
 import { workedSeconds } from "@/lib/live";
@@ -28,6 +29,8 @@ export default async function LogOutPage() {
     : null;
 
   return (
+    // Outside the route group (D2): the page draws the frame itself, Welcome current as before
+    <ShellFrame copy={copy} me={me} currentHref="/">
     <Shell copy={copy} me={me} active="welcome">
       <PageTitle>{copy.logOut.title}</PageTitle>
       <Card>
@@ -57,5 +60,6 @@ export default async function LogOutPage() {
         </form>
       </Card>
     </Shell>
+    </ShellFrame>
   );
 }

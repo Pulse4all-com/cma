@@ -1,0 +1,9 @@
+SET
+SET
+SET
+CREATE INDEX
+ indisvalid 
+------------
+ t
+(1 row)
+

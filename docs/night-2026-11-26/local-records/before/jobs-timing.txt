@@ -1,0 +1,100 @@
+Pager usage is off.
+Timing is on.
+BEGIN
+Time: 0.278 ms
+SET
+Time: 0.181 ms
+Time: 1.415 ms
+SET
+Time: 0.139 ms
+              set_config              
+--------------------------------------
+ 01a20e63-7601-704e-a948-51edc88c1504
+(1 row)
+
+Time: 1.263 ms
+active inputs key
+ length 
+--------
+     32
+(1 row)
+
+Time: 274.602 ms
+facts inputs key
+ length 
+--------
+     32
+(1 row)
+
+Time: 137.513 ms
+facts forced
+                                                                                                                                                                             ?column?                                                                                                                                                                             
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"rows": 622822, "steps_ms": {"months": 2091, "outcomes": 8401, "survival": 557, "inputs_key": 139, "device_units": 104, "subscriptions": 1608}, "refreshed": true, "unchanged": false, "month_rows": 3983, "duration_ms": 12907, "outcome_rows": 578015, "rows_written": 463000, "survival_rows": 18144, "subscription_rows": 22680, "device_units_written": 0}
+(1 row)
+
+Time: 12908.987 ms (00:12.909)
+facts again (quiet)
+      subscription_facts_refresh_of      
+-----------------------------------------
+ {"reason": "fresh", "refreshed": false}
+(1 row)
+
+Time: 2.387 ms
+follow-up forced
+                                                                                             refresh_follow_up_of                                                                                              
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"rows": 12480, "leads": 1380, "tasks": 7500, "tickets": 3600, "written": 12480, "computed": true, "refreshed": true, "unchanged": 0, "computed_at": "2026-11-24T16:35:02.098907+00:00", "duration_ms": 2300}
+(1 row)
+
+Time: 2308.220 ms (00:02.308)
+follow-up again
+                                                                                             refresh_follow_up_of                                                                                              
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"rows": 12480, "leads": 1380, "tasks": 7500, "tickets": 3600, "written": 0, "computed": true, "refreshed": true, "unchanged": 12480, "computed_at": "2026-11-24T16:35:02.098907+00:00", "duration_ms": 2308}
+(1 row)
+
+Time: 2313.790 ms (00:02.314)
+open_leads_of
+ count 
+-------
+  1380
+(1 row)
+
+Time: 1353.166 ms (00:01.353)
+open_tickets_of
+ count 
+-------
+  3600
+(1 row)
+
+Time: 125.493 ms
+open_tasks_of
+ count 
+-------
+  7500
+(1 row)
+
+Time: 219.161 ms
+courtesy_unreachable_of
+ courtesy_unreachable_of 
+-------------------------
+                        
+(1 row)
+
+Time: 0.878 ms
+small catalog seq scans in this transaction
+       relname        | seq_scan | idx_scan 
+----------------------+----------+----------
+ app_user_external_id |        9 |        0
+ business_hours       |        0 |      308
+ market               |      239 |        0
+ market_alias         |      225 |        0
+ setting              |    20699 |        0
+ telephony_tag        |        0 |        0
+ tenant_setting       |    20699 |        0
+(7 rows)
+
+Time: 2.299 ms
+ROLLBACK
+Time: 9.510 ms

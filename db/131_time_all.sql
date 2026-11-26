@@ -32,6 +32,11 @@
 -- Since addition 0009zq (234_speed_to_lead_one.sql) the Dashboard's speed-to-lead row reads the one-row total of
 -- cma.speed_to_lead_summary ('speed to lead total', which needs 234: before it the group is refused, CMA04), and Speed to
 -- lead's page has its rows read timed as a row of its own ('speed to lead {P}', 'rows').
+-- Since addition 0009zu (242_speed_to_lead_cockpit.sql) Speed to lead's page is the cockpit: its two rows ('summary by
+-- day', 'rows') are its one read, cma.speed_to_lead_page ('page (not called yet, first page)'), and the Called tab's page
+-- 2 ('page (called, page 2)', a set of its own: a tab or a further page is a load of its own), the page over this month
+-- in part a (the default view, read again every minute while open), and the API's figures, deals list and rows, each a
+-- set of its own; all but the rows need 242 (before it the functions do not exist: they read FAIL).
 -- Prod is the proof; dev's shared core is for
 -- information. The pledge reads need pledges.view, which no default role holds: in a tenant where no person holds it they
 -- read skip, as any read without such a person. A per-person read (email, orders, attempts and deals per person) needs
@@ -177,6 +182,7 @@ select set_config('verify.max_top_ms', '400', false);                -- Customer
 select set_config('verify.max_refresh_ms', '15000', false);          -- the refresh of Customers → Active's stored take, the history and the documents written again
 select set_config('verify.max_markers_ms', '300', false);            -- the inputs' change markers of Customers → Active's take, read by the job's every due run (addition 0009m)
 select set_config('verify.max_facts_ms', '10000', false);            -- the subscription facts' refresh, forced: every take computed again (addition 0009ze, brief B39c C.9). Since 0009zf (Martin, 21 November 2026: 10,000 ms until prod's runs set it): prod read 10,156 ms that day and 7 to 9 s is expected after 212, so a run that gained nothing reads FAIL; set from prod's runs after 212 (PROD_RUNBOOK 21.7 and 21.9)
+select set_config('verify.max_facts_step_ms', '5000', false);        -- the subscription facts' incremental refresh (0009zr, night N07; to confirm from prod's runs)
 select set_config('verify.max_takes_ms', '5000', false);             -- the refresh of Flash's current takes, every overview of the tenant's setting (0009p; to confirm from prod's first runs)
 select set_config('verify.time_budget_s', '240', false);             -- stop starting reads after this, inside Studio's 300 s
 select set_config('verify.poll_warmup', '6', false);                 -- a poll's untimed runs first (the plans a pooled connection keeps)
@@ -436,6 +442,9 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('a', 'subscriptions filtered', 'page under a market, no proposition and the monthly group', $q$select cma.subscriptions_page((select min(t.market) from cma.subscription_take t where t.tenant_id = cma.current_tenant_id()), null, 'none', 'monthly', (date '{month}' - interval '12 months')::date, date '{month}')$q$, 'list', array['reports.view', 'performance.team']),
 ('a', 'subscriptions further page', 'list page 2', $q$select cma.subscription_rows(null, null, null, null, 'total', 'monthly_amount', true, 2, 50, false)$q$, 'list', array['reports.view', 'performance.team']),
 ('a', 'subscriptions file', 'records file of the Total subscriptions', $q$select cma.subscription_rows(null, null, null, null, 'total', 'monthly_amount', true, 1, 50, true)$q$, 'overview', array['reports.view', 'performance.team']),
+-- Speed to lead's page over this month to today (addition 0009zu): the view a plain visit opens, and the one the page
+-- reads again every 60 seconds while it is open
+('a', 'speed to lead this month', 'page (not called yet, first page)', $q$select cma.speed_to_lead_page(date_trunc('month', x.today)::date, x.today, null, 'day', 'not_called', 50, 0) from (select (now() at time zone t.timezone)::date as today from cma.tenant t where t.id = cma.current_tenant_id()) x$q$, 'overview', array['reports.view', 'performance.team']),
 -- Campaigns
 ('a', 'campaigns', 'journeys', $q$select * from cma.journeys()$q$, 'agent', array['reports.view', 'performance.team']),
 -- report cores, the previous month then 92 days ({P} is replaced by the period's name, {f} and {t} by its bounds)
@@ -443,8 +452,19 @@ insert into pg_temp.reads_0131 (part, page, name, sql, cls, perms) values
 ('b', 'dashboard {P}', 'intake per day', $q$select * from cma.intake_per_day('{f}', '{t}')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'dashboard {P}', 'speed to lead total', $q$select * from cma.speed_to_lead_summary('{f}', '{t}', 'total')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'dashboard {P}', 'callbacks kept', $q$select * from cma.callbacks_kept_report('{f}', '{t}')$q$, 'overview', array['reports.view', 'performance.team']),
-('b', 'speed to lead {P}', 'summary by day', $q$select * from cma.speed_to_lead_summary('{f}', '{t}', 'day')$q$, 'overview', array['reports.view', 'performance.team']),
-('b', 'speed to lead {P}', 'rows', $q$select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) from cma.speed_to_lead_rows('{f}', '{t}') r$q$, 'list', array['reports.view', 'performance.team']),
+-- Speed to lead's cockpit (addition 0009zu): the page makes one read (cma.speed_to_lead_page: the figures with the
+-- previous period, the markets, the trend, the Group by table and the deals list's first page of 50), the Not called yet
+-- tab first; a tab or a further page is the same read again (the Called tab's page 2 its own row). A report core
+-- (overview, 500 ms) that holds a list's first page
+-- (local, three times prod's volume, one CPU, 25 November 2026: 540-650 ms, the Called tab's page 2 765-875, the API's
+-- deals list 545-665 against a list's 300; a stored take is decided after this file runs in prod on 0009zu, as
+-- docs/open-decisions.md says)
+('b', 'speed to lead {P}', 'page (not called yet, first page)', $q$select cma.speed_to_lead_page('{f}', '{t}', null, 'day', 'not_called', 50, 0)$q$, 'overview', array['reports.view', 'performance.team']),
+('b', 'speed to lead further page {P}', 'page (called, page 2)', $q$select cma.speed_to_lead_page('{f}', '{t}', null, 'day', 'called', 50, 50)$q$, 'overview', array['reports.view', 'performance.team']),
+-- the API's reads of the cockpit (each a request of its own): the figures, a deals list's first page, and the rows
+('b', 'speed to lead api {P}', 'figures', $q$select * from cma.speed_to_lead_figures('{f}', '{t}')$q$, 'overview', array['reports.view', 'performance.team']),
+('b', 'speed to lead api deals {P}', 'deals list (called, first page)', $q$select d.*, cma.record_url(d.connection_id, 'deal', d.deal_source_id) from cma.speed_to_lead_deals_of('{f}', '{t}', null, 'called', 50, 0) d$q$, 'list', array['reports.view', 'performance.team']),
+('b', 'speed to lead api rows {P}', 'rows', $q$select r.deal_id, cma.record_url(r.connection_id, 'deal', r.deal_source_id) from cma.speed_to_lead_rows('{f}', '{t}') r$q$, 'list', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'overview by day', $q$select * from cma.calls_overview('{f}', '{t}', null, null, 'day')$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'overview by market', $q$select * from cma.calls_overview('{f}', '{t}', null, null, 'market') where period = 'current' and group_key is not null$q$, 'overview', array['reports.view', 'performance.team']),
 ('b', 'calls {P}', 'overview by line', $q$select * from cma.calls_overview('{f}', '{t}', null, null, 'line') where period = 'current' and group_key is not null$q$, 'overview', array['reports.view', 'performance.team']),
@@ -678,6 +698,32 @@ begin
         r_detail := r_detail || case when v_sched is null then 'no active scheduler user: nothing to time'
                                      else coalesce(v_ms || ' ms (best of 3)', 'the read failed') || ' against ' || v_max || ' ms' end;
         r_ms := r_ms || v_ms;
+        -- the web minute jobs' gate (addition 0009zr, night N07): what every job asks for every tenant every minute before
+        -- its heavy step (cma.job_gate_of; deferral switched off inside the block so the answer is the whole read), as the
+        -- tenant's scheduler, the best of three, rolled back, against verify.max_poll_ms
+        v_ms := null; v_cur := null;
+        if to_regprocedure('cma.job_gate_of(text)') is not null and v_sched is not null then
+          perform set_config('role', 'cma_app', true);
+          perform set_config('app.user_id', v_sched::text, true);
+          begin
+            for i in 1 .. 3 loop
+              v_mark0 := clock_timestamp();
+              v_cur := cma.job_gate_of('refresh_data_quality');
+              v_ms := least(coalesce(v_ms, 1e9), round((extract(epoch from clock_timestamp() - v_mark0) * 1000)::numeric, 1));
+            end loop;
+          exception when others then v_cur := jsonb_build_object('error', sqlstate); v_ms := null;
+          end;
+          perform set_config('role', 'cma_owner', true);
+          perform set_config('app.user_id', '', true);
+        end if;
+        v_max := case when v_provoke then 0 else current_setting('verify.max_poll_ms')::numeric end;
+        r_name := r_name || (t.slug || ' jobs'' gate');
+        r_result := r_result || case when v_provoke then 'FAIL' when to_regprocedure('cma.job_gate_of(text)') is null or v_sched is null then 'skip'
+                                     when v_ms is not null and v_ms < v_max then 'ok' else 'FAIL' end;
+        r_detail := r_detail || case when to_regprocedure('cma.job_gate_of(text)') is null then 'addition 0009zr has not run: nothing to time'
+                                     when v_sched is null then 'no active scheduler user: nothing to time'
+                                     else coalesce(v_ms || ' ms (best of 3) against ' || v_max || ' ms: ', '') || coalesce(v_cur::text, '') end;
+        r_ms := r_ms || v_ms;
       end if;
       -- the subscription facts (addition 0009ze, brief B39c C.9), part b: their refresh as the tenant's scheduler, every
       -- take computed again (forced), once, against verify.max_facts_ms, rolled back at once as Active's above. Since
@@ -714,6 +760,38 @@ begin
                                      when v_cur ->> 'reason' = 'not_set_up' then 'the subscriptions source is not set up: nothing to take'
                                      when v_cur ->> 'reason' = 'running' then 'the job is refreshing this tenant now: nothing to time'
                                      else coalesce(v_ms || ' ms (every take computed again, once) against ' || v_max || ' ms: ', '') || v_cur::text end;
+        r_ms := r_ms || v_ms;
+        -- the subscription facts' incremental refresh (addition 0009zr, night N07): after the forced one above, three
+        -- subscriptions written now and a refresh twenty minutes on, rolled back at once: the renewal outcomes of the
+        -- subscriptions written since and every invoice renewal (outcomes_whole false), against verify.max_facts_step_ms
+        v_ms := null; v_cur := null;
+        if to_regprocedure('cma.job_gate_of(text)') is not null and v_sched is not null then
+          perform set_config('role', 'cma_app', true);
+          perform set_config('app.user_id', v_sched::text, true);
+          begin
+            perform cma.subscription_facts_refresh_of(t.id, true);
+            update cma.subscription x set synced_at = now()
+            where x.id in (select y.id from cma.subscription y where y.tenant_id = t.id order by y.id limit 3);
+            v_cur := cma.subscription_facts_refresh_of(t.id, false, now() + interval '20 minutes');
+            v_ms := (v_cur ->> 'duration_ms')::numeric;
+            raise exception using errcode = 'CMAOK', message = 'the refresh is timed: rolled back';
+          exception
+            when sqlstate 'CMAOK' then null;
+            when others then v_cur := jsonb_build_object('error', sqlstate);
+          end;
+          perform set_config('role', 'cma_owner', true);
+          perform set_config('app.user_id', '', true);
+        end if;
+        v_max := case when v_provoke then 0 else current_setting('verify.max_facts_step_ms')::numeric end;
+        r_name := r_name || (t.slug || ' subscription facts refresh, incremental');
+        r_result := r_result || case when v_provoke then 'FAIL'
+                                     when to_regprocedure('cma.job_gate_of(text)') is null or v_sched is null
+                                          or v_cur ->> 'reason' in ('not_set_up', 'running') then 'skip'
+                                     when v_ms is not null and v_ms < v_max and not (v_cur ->> 'outcomes_whole')::boolean then 'ok' else 'FAIL' end;
+        r_detail := r_detail || case when to_regprocedure('cma.job_gate_of(text)') is null then 'addition 0009zr has not run: nothing to time'
+                                     when v_sched is null then 'no active scheduler user: nothing to time'
+                                     when v_cur ->> 'reason' in ('not_set_up', 'running') then 'nothing to time: ' || (v_cur ->> 'reason')
+                                     else coalesce(v_ms || ' ms (the subscriptions written since) against ' || v_max || ' ms: ', '') || v_cur::text end;
         r_ms := r_ms || v_ms;
         v_ms := null; v_cur := null;
         if to_regprocedure('cma.subscription_variants_of(uuid,uuid)') is not null then

@@ -860,6 +860,12 @@ export interface MyMessages {
   unreadCount: number;
 }
 
+/** A mark read or an acknowledgement (night N07, D3): how many deliveries changed, and the unread count after the write */
+export interface MessagesWritten {
+  changed: number;
+  unreadCount: number;
+}
+
 /**
  * The target of a manual message, exactly one group (cma.send_message): everyone, teams by key, a
  * language skill with a minimum level, or named people; optionally only those clocked in now
@@ -905,8 +911,8 @@ export interface MessageStat {
 // ---- Intake reports (migration 0007d and 0006; B11, 12 October 2026). Ids, counts and codes only:
 // no customer name, email or phone number reaches these shapes.
 
-/** How cma.speed_to_lead_summary groups its rows */
-export type SpeedToLeadGroup = "day" | "market" | "agent" | "pipeline";
+/** How cma.speed_to_lead_summary groups its rows; week: the Monday of the business date's ISO week (0009zu) */
+export type SpeedToLeadGroup = "day" | "week" | "market" | "agent" | "pipeline";
 
 /**
  * called: the deal had its first Attempt (an outbound call on the phone system linked to the deal or its contacts) before
@@ -932,15 +938,6 @@ export interface SpeedToLeadRow {
   marketSource: string | null;
   isClosed: boolean;
   status: SpeedToLeadStatus;
-  /**
-   * @deprecated The first outbound CRM call, linked or not: never the measure's end (0009zq). Kept in the API for this
-   * release only, shown nowhere, removed in B40b (Martin, 24 Nov 2026); the end is firstAttemptAt
-   */
-  firstCallSourceId: string | null;
-  /** @deprecated As firstCallSourceId: removed in B40b */
-  firstCallAt: Instant | null;
-  /** @deprecated As firstCallSourceId: removed in B40b */
-  firstCallLinked: boolean | null;
   firstAnyCallAt: Instant | null;
   firstAnyDirection: string | null;
   inboundFirst: boolean;
@@ -965,6 +962,14 @@ export interface SpeedToLeadRow {
   attemptsSoFar: number;
   /** The deal's owner mapped to a person; never part of the measure */
   dealOwnerUserId: string | null;
+  /** The last Attempt so far; null without one (0009zu) */
+  lastAttemptAt: Instant | null;
+  /** The latest call of the deal or its contacts from the window's start, any direction (0009zu) */
+  lastCallAt: Instant | null;
+  /** The Attempts so far that were a Conversation (0009zu) */
+  conversationsSoFar: number;
+  /** The end of the Attempts' window: the earliest of the close, the contacts' first order and now (0009zu) */
+  windowEnd: Instant;
   recordUrl: string | null;
 }
 
@@ -987,6 +992,123 @@ export interface SpeedToLeadSummaryRow {
   openNotCalled: number;
   /** Deals closed before their first attempt: shown apart, in neither share nor the median */
   closedBeforeFirstCall: number;
+  /** Attempts per deal as attempts.per_deal counts them: the mean (2 places) and the median (1 place), every deal counting (0009zu) */
+  attemptsMean: number | null;
+  attemptsMedian: number | null;
+  /** The share of deals with a Conversation among their Attempts, in percent (1 place); null in no_attempt (0009zu) */
+  conversationShare: number | null;
+}
+
+/** One period's figures of Speed to lead's cockpit (cma.speed_to_lead_figures, 0009zu) */
+export interface SpeedToLeadPeriodFigures {
+  deals: number;
+  called: number;
+  withinTargetPct: number | null;
+  beforeNextNoonPct: number | null;
+  medianBusinessMinutes: number | null;
+  openNotCalled: number;
+  /** The longest an open deal not called yet has waited, in business seconds; null without one */
+  oldestWaitingBusinessSeconds: number | null;
+  closedBeforeFirstCall: number;
+  attemptsMean: number | null;
+  attemptsMedian: number | null;
+  conversationShare: number | null;
+}
+
+/** The cockpit's figures: the period and the previous one of the same length (cma.forms_previous_of), with the settings */
+export interface SpeedToLeadFigures {
+  from: DateKey;
+  to: DateKey;
+  previousFrom: DateKey;
+  previousTo: DateKey;
+  /** Set while the period reaches today: the previous period's last date counts up to this instant's time of day */
+  previousUntil: Instant | null;
+  settings: {
+    targetMinutes: number | null;
+    /** speed_to_lead.next_day_cutoff, HH:MM */
+    nextDayCutoff: string;
+    /** The goals in whole percent, null for none (the tile has no colour) */
+    goalWithinTargetPct: number | null;
+    goalBeforeCutoffPct: number | null;
+    staleBusinessDays: number;
+  };
+  current: SpeedToLeadPeriodFigures;
+  previous: SpeedToLeadPeriodFigures;
+}
+
+/** One Attempt of a deal in the cockpit's list (cma.deal_attempts_of's): no phone number, recording or customer name */
+export interface SpeedToLeadAttempt {
+  n: number;
+  startedAt: Instant;
+  /** Office seconds after the deal's creation; null in an unknown market */
+  businessSeconds: number | null;
+  connected: boolean;
+  talkSeconds: number | null;
+  conversation: boolean;
+  /** The meaning keys of the call's current tags (not_reached, call_type, ...); never a tag's text */
+  tagMeanings: string[];
+  /** The telephony user mapped to a person, with the person's name; null without a mapping */
+  agentUserId: string | null;
+  agentName: string | null;
+}
+
+/** The two views of the cockpit's deals list */
+export type SpeedToLeadView = "not_called" | "called";
+
+/** One lead deal of the cockpit's list (cma.speed_to_lead_deals_of, 0009zu) */
+export interface SpeedToLeadDeal {
+  dealId: string;
+  connectionId: string;
+  dealSourceId: string;
+  market: string;
+  pipelineId: string | null;
+  pipelineLabel: string | null;
+  createdAt: Instant;
+  status: SpeedToLeadStatus;
+  /** To the first attempt; for a deal not called yet, waited so far. Office seconds; null in an unknown market */
+  businessSeconds: number | null;
+  withinTarget: boolean | null;
+  beforeNextNoon: boolean | null;
+  /** The next working day's cutoff for this deal */
+  cutoffAt: Instant | null;
+  ownerUserId: string | null;
+  ownerName: string | null;
+  attemptsSoFar: number;
+  /** The first 20 attempts by number; attemptsSoFar is the true count */
+  attempts: SpeedToLeadAttempt[];
+  /** Not called yet and waiting more than speed_to_lead.stale_business_days working days */
+  stale: boolean;
+  /** The timeline's scales: the cutoff, and 1.5 of the market's working days, in business seconds after the creation; null in an unknown market */
+  cutoffBusinessSeconds: number | null;
+  spanBusinessSeconds: number | null;
+  recordUrl: string | null;
+}
+
+/** A page of one view of the deals list */
+export interface SpeedToLeadDeals {
+  from: DateKey;
+  to: DateKey;
+  market: string | null;
+  view: SpeedToLeadView;
+  limit: number;
+  offset: number;
+  /** The view's deals in all */
+  total: number;
+  rows: SpeedToLeadDeal[];
+}
+
+/** Sales → Speed to lead's page in one read (cma.speed_to_lead_page, 0009zu) */
+export interface SpeedToLeadPage {
+  figures: SpeedToLeadFigures;
+  /** Every market of the period, never narrowed */
+  markets: SpeedToLeadSummaryRow[];
+  trendGroup: "day" | "week";
+  trend: SpeedToLeadSummaryRow[];
+  /** The ISO weekdays (1 Monday to 7 Sunday) with office hours in the market, or in any market: the trend shades the others */
+  workingWeekdays: number[];
+  group: SpeedToLeadGroup;
+  groups: SpeedToLeadSummaryRow[];
+  deals: SpeedToLeadDeals;
 }
 
 export interface SpeedToLeadSummary {
@@ -4521,10 +4643,16 @@ export interface CmaData {
    * after that instant. The first return of a message sets its delivered time. Any active person.
    */
   listMyMessages(me: Principal, since: Instant | null, limit: number): Promise<MyMessages>;
-  /** Marks the caller's own deliveries read; other people's ids and rows already read are left alone. Answers how many changed */
-  markMessagesRead(me: Principal, ids: string[]): Promise<number>;
-  /** Acknowledges one of the caller's own messages (reads it too); a message not delivered to the caller is CMA02 */
-  acknowledgeMessage(me: Principal, id: string): Promise<void>;
+  /**
+   * Marks the caller's own deliveries read; other people's ids and rows already read are left alone. Answers how many
+   * changed and the caller's unread count after the write, from the same transaction (night N07, D3)
+   */
+  markMessagesRead(me: Principal, ids: string[]): Promise<MessagesWritten>;
+  /**
+   * Acknowledges one of the caller's own messages (reads it too); a message not delivered to the caller is CMA02. Answers
+   * the caller's unread count after it, from the same transaction (N07, D3)
+   */
+  acknowledgeMessage(me: Principal, id: string): Promise<MessagesWritten>;
   /** A manager's message to a target resolved now (cma.send_message). Nobody reached CMA04, an unknown team, skill or person CMA02 */
   sendMessage(me: Principal, input: SendMessageInput): Promise<SentMessage>;
   /** Per message of a business-date range of at most 92 days: recipients, delivered, read, acknowledged. Needs messages.send or performance.team */
@@ -4633,6 +4761,16 @@ export interface CmaData {
    * or performance.team; another group CMA04
    */
   getSpeedToLeadSummary(me: Principal, range: HoursRange, group: SpeedToLeadGroup, market?: string | null): Promise<SpeedToLeadSummary>;
+  /** The cockpit's figures of the period and the previous one, narrowed to one market when given (0009zu) */
+  getSpeedToLeadFigures(me: Principal, range: HoursRange, market: string | null): Promise<SpeedToLeadFigures>;
+  /** One view of the cockpit's deals list, limit (1 to 200) from offset, newest first (0009zu) */
+  getSpeedToLeadDeals(me: Principal, range: HoursRange, market: string | null, view: SpeedToLeadView, limit: number, offset: number): Promise<SpeedToLeadDeals>;
+  /**
+   * Sales → Speed to lead's page in one read (0009zu): the figures, every market, the trend, the group's table and a page
+   * of 50 of one view of the deals list. Needs reports.view or performance.team; a group other than day, week, market,
+   * agent or pipeline CMA04
+   */
+  getSpeedToLeadPage(me: Principal, range: HoursRange, market: string | null, group: SpeedToLeadGroup, view: SpeedToLeadView, offset: number): Promise<SpeedToLeadPage>;
   /** Intake per business date and market with the tenant's source connections. Needs reports.view or performance.team */
   getIntake(me: Principal, range: HoursRange): Promise<Intake>;
   /** Every data-quality check with its total, in the database's order. Needs reports.view or tenant.configure */
@@ -4761,6 +4899,11 @@ export interface CmaData {
   getOpenTasks(me: Principal): Promise<FollowUpRowsAt<OpenTask>>;
   /** The counts. Needs monitoring.live, performance.team or workday.team */
   getFollowUpSummary(me: Principal): Promise<FollowUpSummaryAt>;
+  /**
+   * When the follow-up snapshot was computed (cma.follow_up_computed_at(), one scalar; any follow-up read's permission):
+   * Reports → Follow-up's poll (night N07, D3)
+   */
+  getFollowUpComputedAt(me: Principal): Promise<Instant>;
   /** Per person, the not-linked row last. Needs performance.team */
   getFollowUpByOwner(me: Principal): Promise<FollowUpRowsAt<FollowUpOwner>>;
   /** The caller's own rows. Needs leads.accept or workday.own */

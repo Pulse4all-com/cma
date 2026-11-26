@@ -18,12 +18,97 @@
  * reload opens none. NavAccordion therefore wraps the whole frame in Shell, the top bar included.
  */
 import Link from "next/link";
-import { createContext, useCallback, useContext, useRef, useState, type ComponentProps, type ReactNode } from "react";
-import { expiredCookie, NAV_COOKIE_PREFIX, NAV_OPEN_COOKIE, prefCookie, type NavIcon } from "@/lib/nav";
+import { usePathname, useRouter } from "next/navigation";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { currentHrefOf, expiredCookie, HOVER_PREFETCH_MS, mayFullPrefetch, NAV_COOKIE_PREFIX, NAV_OPEN_COOKIE, prefCookie, type NavIcon } from "@/lib/nav";
 import { Keycap } from "./primitives";
 import { railCollapsed, setRailCollapsed } from "./ShellPrefs";
 
 const OpenGroup = createContext<{ open: string | null; setOpen: (id: string | null) => void }>({ open: null, setOpen: () => {} });
+
+/**
+ * The current rail item (night N07, decision D2): the frame renders once for every page of the route group and stays on
+ * the screen across navigations, so the item marked current follows the address on the client (lib/nav currentHrefOf)
+ * instead of the page that rendered the frame. `hrefs` are the rail items the person sees; `fixed` names the item for a
+ * page outside the group that draws the frame itself (Log out: Welcome, as before)
+ */
+const CurrentHref = createContext<string | null>(null);
+
+export function NavCurrent({ hrefs, fixed, children }: { hrefs: readonly string[]; fixed?: string | null; children: ReactNode }) {
+  const pathname = usePathname() ?? "/";
+  const current = fixed !== undefined ? fixed : currentHrefOf(pathname, hrefs);
+  return <CurrentHref.Provider value={current}>{children}</CurrentHref.Provider>;
+}
+
+/** The rail item marked current, from NavCurrent */
+export function useCurrentHref(): string | null {
+  return useContext(CurrentHref);
+}
+
+/** Whether the address is this path or under it (the top bar's inbox on Messages and Send a message, My account) */
+export function usePathUnder(path: string): boolean {
+  const pathname = usePathname() ?? "/";
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
+/**
+ * A full prefetch on intent (decision D5): a pointer or the focus resting on the link for HOVER_PREFETCH_MS starts a
+ * prefetch of the whole page with its data (router.prefetch of kind full), so the click finds it there; only for the
+ * routes lib/nav mayFullPrefetch allows (the agent class of db/131). Every other link keeps Next's default, the route's
+ * loading boundary. Answers the handlers to spread on the link
+ */
+export function useIntentPrefetch(href: string) {
+  const router = useRouter();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const done = useRef(false);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  if (!mayFullPrefetch(href)) return {};
+  const start = () => {
+    if (done.current || timer.current) return;
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      done.current = true;
+      // kind "full": the page with its data, cached as staleTimes.static says (next.config.ts: 30 s, as dynamic)
+      router.prefetch(href, { kind: "full", onInvalidate: () => { done.current = false; } } as Parameters<typeof router.prefetch>[1]);
+    }, HOVER_PREFETCH_MS);
+  };
+  const cancel = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  return { onMouseEnter: start, onMouseLeave: cancel, onFocus: start, onBlur: cancel };
+}
+
+/**
+ * A link of the rail (D2, D5): marked current from the address (aria-current and the current classes), with the full
+ * prefetch on intent where the route allows it. `bare`: a bare rail page (Welcome, Messages), whose click closes the
+ * open group as NavBareLink does
+ */
+export function RailLink({ href, bare = false, className, currentClassName, idleClassName, children, ...props }:
+  Omit<ComponentProps<typeof Link>, "href" | "className"> & { href: string; bare?: boolean; className: string; currentClassName: string; idleClassName: string }) {
+  const current = useCurrentHref() === href;
+  const intent = useIntentPrefetch(href);
+  const close = useCloseNavGroup();
+  return (
+    <Link
+      {...props}
+      {...intent}
+      href={href}
+      aria-current={current ? "page" : undefined}
+      className={`${className} ${current ? currentClassName : idleClassName}`}
+      onClick={bare ? () => close() : undefined}
+    >
+      {children}
+    </Link>
+  );
+}
+
+/** The top bar's link to My account, marked current on that page (D2) */
+export function AccountLink(props: Omit<ComponentProps<typeof Link>, "href">) {
+  const current = usePathUnder("/account");
+  const intent = useIntentPrefetch("/account");
+  return <Link {...props} {...intent} href="/account" aria-current={current ? "page" : undefined} />;
+}
 
 /** The rail's open group, for the groups inside it; `initial` is the cookie's group as Shell read it */
 export function NavAccordion({ initial, children }: { initial: string | null; children: ReactNode }) {
@@ -71,21 +156,23 @@ export function NavGroup({
   id,
   label,
   icon,
-  current,
+  hrefs,
   shortcut,
   children,
 }: {
   id: string;
   label: string;
   icon: NavIcon;
-  /** One of the group's pages is the current page */
-  current: boolean;
+  /** The group's pages: one of them is the current page when the address is under it (NavCurrent, D2) */
+  hrefs: readonly string[];
   /** A letter that opens the group and focuses its first page (an unnumbered group, 0005a) */
   shortcut?: string;
   children: ReactNode;
 }) {
   const accordion = useContext(OpenGroup);
   const open = accordion.open === id;
+  const currentHref = useCurrentHref();
+  const current = currentHref !== null && hrefs.includes(currentHref);
   const list = useRef<HTMLUListElement>(null);
 
   function toggle() {

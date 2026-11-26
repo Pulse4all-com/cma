@@ -30,6 +30,15 @@ const nextConfig: NextConfig = {
   // job script (jobs/close-forgotten-workdays.mjs, migration 0005a) can import it from the same
   // node_modules the server uses
   serverExternalPackages: ["@google-cloud/cloud-sql-connector"],
+  experimental: {
+    // Instant revisits (night N07, decision D4): the client router cache keeps a dynamic page's answer for 30 seconds, so
+    // Back, Forward and a second click within that time cost no request; a full prefetch (D5: router.prefetch of kind
+    // full, the "static" class) is kept as long, not Next's default 5 minutes, so a prefetched personal page is never
+    // older than 30 seconds (to confirm). The cache lives in the tab's memory: per person and per tab, never shared, so the
+    // caching rule of 5 November 2026 (no server cache of anything personal) stands. A write the page shows refreshes the
+    // router (router.refresh), which drops it; the Live board and the polls keep their own refresh
+    staleTimes: { dynamic: 30, static: 30 },
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

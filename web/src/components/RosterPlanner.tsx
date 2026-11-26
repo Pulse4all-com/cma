@@ -21,7 +21,7 @@
  * when the page's answer is there (a transition: until then the previous week stays, the filter row busy). A refresh
  * of the same week (after Publish or Copy previous week) brings the cells and the header from the database again.
  */
-import { useEffect, useMemo, useRef, useState, useTransition, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
 import type { AbsenceType, RosterEntry, RosterWeek, RosterWeekSummary, TeamInfo } from "@/lib/data";
@@ -77,7 +77,18 @@ export function RosterPlanner({
   const days = useMemo(() => weekDays(weekStart), [weekStart]);
   const keep = { team };
   const entryMap = (w: RosterWeek) => new Map(w.entries.map((e) => [`${e.userId}:${e.date}`, e]));
-  const [entries, setEntries] = useState<Map<string, RosterEntry>>(() => entryMap(week));
+  const [saved, setEntries] = useState<Map<string, RosterEntry>>(() => entryMap(week));
+  /**
+   * A cell saved shows its new value at once (night N07, decision D3): the entry, the person's planned hours, the day's
+   * headcount and the cell's style follow the typed value from the moment the cell is left; the server's entry replaces
+   * it when the write answers, and a refusal drops it when the transition ends, the cell keeping its text and its problem
+   */
+  const [entries, showEntry] = useOptimistic(saved, (m: Map<string, RosterEntry>, change: { k: string; entry: RosterEntry | null }) => {
+    const n = new Map(m);
+    if (change.entry) n.set(change.k, change.entry);
+    else n.delete(change.k);
+    return n;
+  });
   const [drafts, setDrafts] = useState<Map<string, string>>(new Map());
   const [states, setStates] = useState<Map<string, CellState>>(new Map());
   const [header, setHeader] = useState(week.header);
@@ -126,6 +137,13 @@ export function RosterPlanner({
     const cell: Cell = parsed.cell;
     setState(k, { status: "saving" });
     startTransition(async () => {
+      showEntry({ k, entry: cell.kind === "clear" ? null : {
+        entryId: current?.entryId ?? "", userId, date, kind: cell.kind, note: current?.note ?? null,
+        start: cell.kind === "shift" ? `${cell.start}:00`.slice(0, 8) : null, end: cell.kind === "shift" ? `${cell.end}:00`.slice(0, 8) : null,
+        absenceKey: cell.kind === "absence" ? cell.key : null,
+        absenceName: cell.kind === "absence" ? absenceOptions.find((a) => a.key === cell.key)?.name ?? cell.key : null,
+        recordedAt: new Date().toISOString(), recordedByName: current?.recordedByName ?? "",
+      } });
       const body = cell.kind === "shift" ? { kind: "shift", start: cell.start, end: cell.end, note: current?.note ?? null }
         : cell.kind === "absence" ? { kind: "absence", absenceKey: cell.key, note: current?.note ?? null } : { kind: "clear" };
       const res = await send("PUT", `/api/v1/roster/weeks/${weekStart}/cells`, { team: teamArg, userId, date, cell: body });
@@ -136,13 +154,29 @@ export function RosterPlanner({
         setState(k, { status: "problem", problem });
         return;
       }
-      const saved = ((await res.json()) as { data: RosterEntry | null }).data;
-      setEntries((m) => { const n = new Map(m); if (saved) n.set(k, saved); else n.delete(k); return n; });
+      const stored = ((await res.json()) as { data: RosterEntry | null }).data;
+      setEntries((m) => { const n = new Map(m); if (stored) n.set(k, stored); else n.delete(k); return n; });
       setDrafts((m) => { const n = new Map(m); n.delete(k); return n; });
       setState(k, { status: "saved" });
-      setHeader((h) => ({ ...h, changedSincePublish: h.status === "published", entryCount: h.entryCount + (saved ? (current ? 0 : 1) : current ? -1 : 0) }));
+      setHeader((h) => ({ ...h, changedSincePublish: h.status === "published", entryCount: h.entryCount + (stored ? (current ? 0 : 1) : current ? -1 : 0) }));
+      refreshSoon();
     });
   }
+
+  /**
+   * The week read again once the person pauses (night N07, D4): the client router cache keeps a page 30 seconds, so a
+   * click back to the planner within that time would otherwise show the week before these edits. One read after the last
+   * save of a run of edits, 1.5 s later, never one per cell
+   */
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function refreshSoon() {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => {
+      refreshTimer.current = null;
+      startTransition(() => router.refresh());
+    }, 1500);
+  }
+  useEffect(() => () => { if (refreshTimer.current) clearTimeout(refreshTimer.current); }, []);
 
   function onKey(e: ReactKeyboardEvent<HTMLInputElement>, userId: string, date: string) {
     const inputs = Array.from(grid.current?.querySelectorAll<HTMLInputElement>("input[data-cell]") ?? []);

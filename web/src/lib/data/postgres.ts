@@ -5,11 +5,11 @@ import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantCo
 import { tenantCache } from "@/lib/cache";
 import type {
   ActiveList, ActiveNow, ActiveReport, SubscriptionRowsList, SubscriptionsPage,
-  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MessageStat, MyMessage, MyMessages, MyProfile, MyRosterDay, OrganisationInfo,
+  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MessageStat, MessagesWritten, MyMessage, MyMessages, MyProfile, MyRosterDay, OrganisationInfo,
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkArea, WorkStatus, PermissionInfo, SentMessage, HoursMarket, MyDayChoices,
-  CrmRecordsDay, DashboardIntake, DashboardReads, DataQualityCheck, Intake, SourceConnections, SpeedToLeadGroup, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
+  CrmRecordsDay, DashboardIntake, DashboardReads, DataQualityCheck, Intake, SourceConnections, SpeedToLeadDeal, SpeedToLeadFigures, SpeedToLeadGroup, SpeedToLeadPeriodFigures, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceRead, SourceKind, SourcePipeline, SourceSettings,
   InboundFigures, InboundNow, OutboundNow, InboundService, MissedReason, LiveBoardData, DataQualityReport,
   CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
@@ -31,7 +31,7 @@ import type {
   DataQualityRowsView, FlashCardReads, FlashDocumentView, FlashHeadlineView, FlashStoredCard, FlashPageView, FlashRowsView, FlashSnapshotsView, FlashSourcesView, FlashWatchItem,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
-import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
+import { OUTBOX_LATE_MINUTES, SPEED_DEALS_PAGE, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
 import { workdayStartsAt } from "@/lib/live";
 import { REMOVE_REFUSAL } from "@/lib/corrections";
 import { FLASH_CARD_ORDER, FLASH_LABELLED_DIMS, overviewOf, splitItemsOf, statusSettingsOf, withLabels, type FlashKey, type FlashLabels } from "@/lib/flash";
@@ -157,34 +157,43 @@ const num = (v: string | number | null): number | null => (v === null ? null : N
 type SpeedDbRow = {
   deal_id: string; connection_id: string; deal_source_id: string; pipeline_id: string | null; pipeline_label: string | null;
   business_date: string; created_at: Date; market: string; market_source: string | null; is_closed: boolean; status: SpeedToLeadStatus;
-  first_call_source_id: string | null; first_call_at: Date | null; first_call_linked: boolean | null; first_any_call_at: Date | null;
+  first_any_call_at: Date | null;
   first_any_direction: string | null; inbound_first: boolean; first_connected_at: Date | null; agent_user_id: string | null;
   agent_from: string | null; elapsed_seconds: number | null; business_seconds: number | null; target_seconds: number | null;
   within_target: boolean | null; next_business_noon: Date | null; before_next_noon: boolean | null;
   waiting_business_seconds: number | null; first_attempt_call_id: string | null; first_attempt_at: Date | null;
-  attempts_so_far: number; deal_owner_user_id: string | null; record_url: string | null;
+  attempts_so_far: number; deal_owner_user_id: string | null; last_attempt_at: Date | null; last_call_at: Date | null;
+  conversations_so_far: number; window_end: Date; record_url: string | null;
 };
 
 function toSpeedRow(r: SpeedDbRow): SpeedToLeadRow {
   return {
     dealId: r.deal_id, connectionId: r.connection_id, dealSourceId: r.deal_source_id, pipelineId: r.pipeline_id,
     pipelineLabel: r.pipeline_label, date: r.business_date, createdAt: r.created_at.toISOString(), market: r.market,
-    marketSource: r.market_source, isClosed: r.is_closed, status: r.status, firstCallSourceId: r.first_call_source_id,
-    firstCallAt: iso(r.first_call_at), firstCallLinked: r.first_call_linked, firstAnyCallAt: iso(r.first_any_call_at),
+    marketSource: r.market_source, isClosed: r.is_closed, status: r.status, firstAnyCallAt: iso(r.first_any_call_at),
     firstAnyDirection: r.first_any_direction, inboundFirst: r.inbound_first, firstConnectedAt: iso(r.first_connected_at),
     agentUserId: r.agent_user_id, agentFrom: r.agent_from, elapsedSeconds: r.elapsed_seconds, businessSeconds: r.business_seconds,
     targetSeconds: r.target_seconds, withinTarget: r.within_target, nextBusinessNoon: iso(r.next_business_noon),
     beforeNextNoon: r.before_next_noon, waitingBusinessSeconds: r.waiting_business_seconds,
     firstAttemptCallId: r.first_attempt_call_id, firstAttemptAt: iso(r.first_attempt_at), attemptsSoFar: r.attempts_so_far,
-    dealOwnerUserId: r.deal_owner_user_id, recordUrl: r.record_url,
+    dealOwnerUserId: r.deal_owner_user_id, lastAttemptAt: iso(r.last_attempt_at), lastCallAt: iso(r.last_call_at),
+    conversationsSoFar: r.conversations_so_far, windowEnd: r.window_end.toISOString(), recordUrl: r.record_url,
   };
 }
 
-/** One row per lead deal created in the range (cma.speed_to_lead_rows checks the permission and the 92 days) */
+/**
+ * One row per lead deal created in the range (cma.speed_to_lead_rows checks the permission and the 92 days). The columns
+ * are named, never r.*: the owner's CRM reference (deal_owner_ref, 0009zu) is the open leads', not the API's
+ */
 async function readSpeedToLeadRows(q: Querier, range: HoursRange): Promise<SpeedToLeadRow[]> {
   // cma.record_url (migration 0008) builds the link from the connection's own template; null without one
   const r = await q.query<SpeedDbRow>(
-    `select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url
+    `select r.deal_id, r.connection_id, r.deal_source_id, r.pipeline_id, r.pipeline_label, r.business_date, r.created_at, r.market,
+            r.market_source, r.is_closed, r.status, r.first_any_call_at, r.first_any_direction, r.inbound_first, r.first_connected_at,
+            r.agent_user_id, r.agent_from, r.elapsed_seconds, r.business_seconds, r.target_seconds, r.within_target,
+            r.next_business_noon, r.before_next_noon, r.waiting_business_seconds, r.first_attempt_call_id, r.first_attempt_at,
+            r.attempts_so_far, r.deal_owner_user_id, r.last_attempt_at, r.last_call_at, r.conversations_so_far, r.window_end,
+            cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url
        from cma.speed_to_lead_rows($1::date, $2::date) r`,
     [range.from, range.to],
   );
@@ -194,7 +203,7 @@ async function readSpeedToLeadRows(q: Querier, range: HoursRange): Promise<Speed
 type SummaryDbRow = {
   group_key: string; group_label: string | null; deals: number; called: number; median_business_minutes: string | null;
   p80_business_minutes: string | null; within_target_pct: string | null; before_next_noon_pct: string | null; open_not_called: number;
-  closed_before_first_call: number;
+  closed_before_first_call: number; attempts_mean: string | null; attempts_median: string | null; conversation_share: string | null;
 };
 
 /** A row of cma.speed_to_lead_summary; the function labels an agent who is not mapped 'unknown', which the screen says as Not mapped */
@@ -205,8 +214,78 @@ function toSummaryRow(x: SummaryDbRow, group: SpeedToLeadGroup | "total"): Speed
     deals: x.deals, called: x.called,
     medianBusinessMinutes: num(x.median_business_minutes), p80BusinessMinutes: num(x.p80_business_minutes),
     withinTargetPct: num(x.within_target_pct), beforeNextNoonPct: num(x.before_next_noon_pct), openNotCalled: x.open_not_called,
-    closedBeforeFirstCall: x.closed_before_first_call,
+    closedBeforeFirstCall: x.closed_before_first_call, attemptsMean: num(x.attempts_mean), attemptsMedian: num(x.attempts_median),
+    conversationShare: num(x.conversation_share),
   };
+}
+
+// ---- Speed to lead's cockpit (addition 0009zu): the figures, the deals list and the page in one read
+
+/** cma.speed_to_lead_figures' row (numeric as a string; to_jsonb gives numbers) */
+type FiguresDb = Record<string, string | number | null>;
+
+function toPeriodFigures(x: FiguresDb, prefix: "" | "prev_"): SpeedToLeadPeriodFigures {
+  const n = (k: string) => { const v = x[prefix + k]; return v === null || v === undefined ? null : Number(v); };
+  return {
+    deals: n("deals") ?? 0, called: n("called") ?? 0, withinTargetPct: n("within_target_pct"), beforeNextNoonPct: n("before_next_noon_pct"),
+    medianBusinessMinutes: n("median_business_minutes"), openNotCalled: n("open_not_called") ?? 0,
+    oldestWaitingBusinessSeconds: n("oldest_waiting_business_seconds"), closedBeforeFirstCall: n("closed_before_first_call") ?? 0,
+    attemptsMean: n("attempts_mean"), attemptsMedian: n("attempts_median"), conversationShare: n("conversation_share"),
+  };
+}
+
+function toSpeedFigures(x: FiguresDb): SpeedToLeadFigures {
+  const d = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10));
+  const until = x.previous_until as unknown;
+  const whole = (k: string) => (x[k] === null || x[k] === undefined ? null : Number(x[k]));
+  return {
+    from: d(x.period_from), to: d(x.period_to), previousFrom: d(x.previous_from), previousTo: d(x.previous_to),
+    previousUntil: until === null || until === undefined ? null : until instanceof Date ? until.toISOString() : new Date(String(until)).toISOString(),
+    settings: {
+      targetMinutes: whole("target_minutes"), nextDayCutoff: String(x.next_day_cutoff ?? ""),
+      goalWithinTargetPct: whole("goal_within_target_pct"), goalBeforeCutoffPct: whole("goal_before_cutoff_pct"),
+      staleBusinessDays: whole("stale_business_days") ?? 2,
+    },
+    current: toPeriodFigures(x, ""), previous: toPeriodFigures(x, "prev_"),
+  };
+}
+
+/** A deal of cma.speed_to_lead_deals_of as to_jsonb (or a row) gives it, with its record link */
+type DealDb = {
+  deal_id: string; connection_id: string; deal_source_id: string; market: string; pipeline_id: string | null; pipeline_label: string | null;
+  created_at: string | Date; status: SpeedToLeadStatus; business_seconds: number | null; within_target: boolean | null;
+  before_next_noon: boolean | null; cutoff_at: string | Date | null; owner_user_id: string | null; owner_name: string | null;
+  attempts_so_far: number; stale: boolean; cutoff_business_seconds: number | null; span_business_seconds: number | null; view_total: number;
+  attempts: { n: number; started_at: string; business_seconds: number | null; connected: boolean; talk_seconds: number | null;
+    conversation: boolean; tag_meanings: string[]; agent_user_id: string | null; agent_name: string | null }[];
+};
+
+const isoOfAny = (v: string | Date | null): string | null => (v === null ? null : v instanceof Date ? v.toISOString() : new Date(v).toISOString());
+
+function toDeal(x: DealDb, recordUrl: string | null): SpeedToLeadDeal {
+  return {
+    dealId: x.deal_id, connectionId: x.connection_id, dealSourceId: x.deal_source_id, market: x.market, pipelineId: x.pipeline_id,
+    pipelineLabel: x.pipeline_label, createdAt: isoOfAny(x.created_at)!, status: x.status, businessSeconds: x.business_seconds,
+    withinTarget: x.within_target, beforeNextNoon: x.before_next_noon, cutoffAt: isoOfAny(x.cutoff_at), ownerUserId: x.owner_user_id,
+    ownerName: x.owner_name, attemptsSoFar: x.attempts_so_far, stale: x.stale, cutoffBusinessSeconds: x.cutoff_business_seconds,
+    spanBusinessSeconds: x.span_business_seconds, recordUrl,
+    attempts: x.attempts.map((a) => ({
+      n: a.n, startedAt: new Date(a.started_at).toISOString(), businessSeconds: a.business_seconds, connected: a.connected,
+      talkSeconds: a.talk_seconds, conversation: a.conversation, tagMeanings: a.tag_meanings, agentUserId: a.agent_user_id, agentName: a.agent_name,
+    })),
+  };
+}
+
+/** The summary's row as to_jsonb gives it inside the page's object (numbers, not strings) */
+function toSummaryRowJson(x: Record<string, unknown>, group: SpeedToLeadGroup): SpeedToLeadSummaryRow {
+  const s = (v: unknown) => (v === null || v === undefined ? null : String(v));
+  return toSummaryRow({
+    group_key: String(x.group_key), group_label: s(x.group_label), deals: Number(x.deals), called: Number(x.called),
+    median_business_minutes: s(x.median_business_minutes), p80_business_minutes: s(x.p80_business_minutes),
+    within_target_pct: s(x.within_target_pct), before_next_noon_pct: s(x.before_next_noon_pct), open_not_called: Number(x.open_not_called),
+    closed_before_first_call: Number(x.closed_before_first_call), attempts_mean: s(x.attempts_mean), attempts_median: s(x.attempts_median),
+    conversation_share: s(x.conversation_share),
+  }, group);
 }
 
 type IntakeDbRow = {
@@ -2488,15 +2567,22 @@ export const postgresData: CmaData = {
     });
   },
 
-  async markMessagesRead(me, ids): Promise<number> {
+  async markMessagesRead(me, ids): Promise<MessagesWritten> {
     return withTenant(ctx(me), async (q) => {
       const r = await q.query<{ n: number }>(`select cma.mark_messages_read($1::uuid[]) as n`, [ids]);
-      return Number(one(r.rows, "mark_messages_read").n);
+      // The new unread count from the same transaction, after the write (its own statement: a stable function in the
+      // write's statement would read the snapshot before it), so the screen takes it without another read (N07, D3)
+      const c = await q.query<{ n: number }>(`select cma.my_unread_count() as n`);
+      return { changed: Number(one(r.rows, "mark_messages_read").n), unreadCount: Number(one(c.rows, "my_unread_count").n) };
     });
   },
 
-  async acknowledgeMessage(me, id): Promise<void> {
-    await withTenant(ctx(me), (q) => q.query(`select cma.acknowledge_message($1::uuid)`, [id]));
+  async acknowledgeMessage(me, id): Promise<MessagesWritten> {
+    return withTenant(ctx(me), async (q) => {
+      await q.query(`select cma.acknowledge_message($1::uuid)`, [id]);
+      const c = await q.query<{ n: number }>(`select cma.my_unread_count() as n`);
+      return { changed: 1, unreadCount: Number(one(c.rows, "my_unread_count").n) };
+    });
   },
 
   async sendMessage(me, input): Promise<SentMessage> {
@@ -3411,6 +3497,53 @@ export const postgresData: CmaData = {
     });
   },
 
+  async getSpeedToLeadFigures(me, range, market) {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<FiguresDb>(`select * from cma.speed_to_lead_figures($1::date, $2::date, $3)`, [range.from, range.to, market]);
+      return toSpeedFigures(r.rows[0]!);
+    });
+  },
+
+  async getSpeedToLeadDeals(me, range, market, view, limit, offset) {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // each deal's link from its connection's own template (cma.record_url), in the same statement
+      const r = await q.query<DealDb & { record_url: string | null }>(
+        `select d.*, cma.record_url(d.connection_id, 'deal', d.deal_source_id) as record_url
+           from cma.speed_to_lead_deals_of($1::date, $2::date, $3, $4, $5, $6) d`,
+        [range.from, range.to, market, view, limit, offset]);
+      return { ...range, market, view, limit, offset, total: r.rows[0]?.view_total ?? 0, rows: r.rows.map((x) => toDeal(x, x.record_url)) };
+    });
+  },
+
+  async getSpeedToLeadPage(me, range, market, group, view, offset) {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // one statement: the page's object and the record links of its deals (cma.record_url, the connection's template)
+      const r = await q.query<{ j: { figures: FiguresDb; markets: Record<string, unknown>[]; trend_group: "day" | "week"; trend: Record<string, unknown>[]; working_weekdays: number[];
+        groups: Record<string, unknown>[]; deals: DealDb[] }; urls: Record<string, string | null> | null }>(
+        `select x.j, (select jsonb_object_agg(e ->> 'deal_id', cma.record_url((e ->> 'connection_id')::uuid, 'deal', e ->> 'deal_source_id'))
+                        from jsonb_array_elements(x.j -> 'deals') e) as urls
+           from (select cma.speed_to_lead_page($1::date, $2::date, $3, $4, $5, $6, $7) as j) x`,
+        [range.from, range.to, market, group, view, SPEED_DEALS_PAGE, offset]);
+      const { j, urls } = r.rows[0]!;
+      return {
+        figures: toSpeedFigures(j.figures),
+        markets: j.markets.map((x) => toSummaryRowJson(x, "market")),
+        trendGroup: j.trend_group,
+        trend: j.trend.map((x) => toSummaryRowJson(x, j.trend_group)),
+        workingWeekdays: j.working_weekdays,
+        group,
+        groups: j.groups.map((x) => toSummaryRowJson(x, group)),
+        deals: {
+          ...range, market, view, limit: SPEED_DEALS_PAGE, offset, total: j.deals[0]?.view_total ?? 0,
+          rows: j.deals.map((x) => toDeal(x, urls?.[x.deal_id] ?? null)),
+        },
+      };
+    });
+  },
+
   async getIntake(me, range): Promise<Intake> {
     assertReportRange(range);
     return withTenant(ctx(me), (q) => readIntake(q, range));
@@ -3625,6 +3758,11 @@ export const postgresData: CmaData = {
         tasks: { total: j.tasks.total, rows: j.tasks.rows.map((x) => toOpenTask(x)) },
       };
     });
+  },
+
+  async getFollowUpComputedAt(me): Promise<string> {
+    // one scalar for every caller: cma.follow_up_computed_at() checks a follow-up read's permission itself
+    return withTenant(ctx(me), (q) => computedAt(q));
   },
 
   async getOpenLeads(me): Promise<FollowUpRowsAt<OpenLead>> {

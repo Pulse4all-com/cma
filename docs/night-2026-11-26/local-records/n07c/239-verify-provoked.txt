@@ -1,0 +1,24 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DROP FUNCTION
+DROP FUNCTION
+          check_name          |        result        |                             detail                             
+------------------------------+----------------------+----------------------------------------------------------------
+ E1 structure                 | FAIL                 | FAIL E1: provoked; order and grants
+ E2 equals 100 now            | FAIL                 | FAIL E2: provoked; 1 rows differ over 150 deals not responding
+ E3 equals 100 thirty days on | FAIL                 | FAIL E3: provoked; 0 rows differ over 166 deals
+ verdict                      | PROVOKED, NOT A PASS | 239_verify_email_not_responding_speed: 0 OK, 3 FAIL
+(4 rows)
+
+RESET

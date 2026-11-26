@@ -37,6 +37,9 @@
 # that database) is all it takes. A failed pledge take fails the tenant's run row ("pledge_take <code>") without
 # stopping Flash's take, so System health shows it.
 set -euo pipefail
+# DB_SESSION_OPTIONS (optional, from the shell that runs this script; night N07, decision D6): the job's database session
+# settings, as cma-web's _DB_SESSION_OPTIONS (pairs name=value separated by ';', only jit, work_mem, random_page_cost);
+# empty by default. Martin switches each on after measuring it in dev
 
 ENV="${1:?dev or prod}"
 SHA="${2:?short sha of the image on main}"
@@ -61,7 +64,7 @@ gcloud run jobs deploy "$JOB" \
   --command=node --args=jobs/snapshot-flash.mjs \
   --service-account="$SA" \
   --set-cloudsql-instances="$INSTANCE" \
-  --set-env-vars="CMA_DB_INSTANCE=${INSTANCE},CMA_DB_USER=${DB_USER},CMA_DB_NAME=cma,CMA_DB_POOL_MAX=1" \
+  --set-env-vars="CMA_DB_INSTANCE=${INSTANCE},CMA_DB_USER=${DB_USER},CMA_DB_NAME=cma,CMA_DB_POOL_MAX=1,CMA_DB_SESSION_OPTIONS=${DB_SESSION_OPTIONS:-}" \
   --cpu=1 --memory=512Mi \
   --tasks=1 --max-retries=0 --task-timeout=15m \
   --quiet

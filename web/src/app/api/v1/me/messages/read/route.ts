@@ -14,6 +14,7 @@ export async function POST(request: Request) {
     assertSameSiteWrite(request);
     const ids = parseIds(await jsonBody(request));
     if (!ids.ok) throw new ApiError(400, ids.code, ids.message);
-    return ok({ changed: await data().markMessagesRead(me, ids.value) });
+    // How many changed and the unread count after the write, from the same transaction (night N07, D3)
+    return ok(await data().markMessagesRead(me, ids.value));
   });
 }

@@ -1,0 +1,24 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:241_verify_audit_and_retention.sql:32: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DROP FUNCTION
+DROP FUNCTION
+                                   check_name                                   |   result    |                                                                 detail                                                                  
+--------------------------------------------------------------------------------+-------------+-----------------------------------------------------------------------------------------------------------------------------------------
+ R1 structure                                                                   | OK          | order, purge definer, grants, settings 90/365, refusals CMA04/CMA04
+ A1 the ingest's writes to the listed mirrors out; inputs, config and people in | OK          | ingest to subscription_event 0 rows, ingest to crm_contact 1, ingest to market 1, a person labelled ingest to subscription_event 1
+ P1 the purge keeps what it must and the hourly counts                          | OK          | deleted 32 (more false), left 29: 25 recent, 3 failed of 200 days, 1 of its own stream; hourly runs 61 before, 61 after; a person CMA06
+ verdict                                                                        | PASS 0009zt | 241_verify_audit_and_retention: 3 OK, 0 FAIL
+(4 rows)
+
+RESET

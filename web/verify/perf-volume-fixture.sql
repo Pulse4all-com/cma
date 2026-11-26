@@ -806,6 +806,146 @@ begin
 end
 $$;
 reset role;
+-- The CRM's email at volume (night N07, 25 November 2026): prod held about 4,000 threads, 17,000 messages and 9,000 thread
+-- events on 16 November 2026 (records/perf-prod-2026-11-16), this block × m on the perf CRM connection over the last 90 days,
+-- so Reports → Email and Email per agent (prod p99 11.3 s, max 14.3 s on 24 November) are measured on something like prod.
+-- Threads with their inbox and channel, about a quarter linked to a ticket and most to a contact; messages in and out
+-- (four in five in a thread, the rest the CRM's own emails without one), agents' answers by the perf owners, now and then
+-- an internal forward; assignments, closes and reopens. Invented ids (pem…, pet…, pin-…); no address, subject or body. Its
+-- own guard (the thread pem-t1): a rerun of this block adds nothing
+set role cma_owner;
+do $$
+declare
+  m      numeric := coalesce(nullif(current_setting('cma.perf_multiplier', true), ''), '3')::numeric;
+  v_subs uuid := (select t.id from cma.tenant t where t.slug = 'pulse4all-subscriptions');
+  v_crm  uuid;
+  n_th   integer;
+  n_msg  integer;
+  n_ev   integer;
+begin
+  if coalesce(current_setting('cma.local_fixture', true), '') <> 'on' then
+    raise exception 'local fixture only: run  set cma.local_fixture = ''on''  in this session first';
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'cloudsqladmin') then
+    raise exception 'this is a Cloud SQL instance (the role cloudsqladmin exists): the volume fixture is for a local database only';
+  end if;
+  perform set_config('app.tenant_id', v_subs::text, true);
+  v_crm := (select c.id from cma.integration_connection c where c.tenant_id = v_subs and c.adapter = 'perfcrm');
+  if v_crm is null then
+    raise notice 'perf email: no perf CRM connection';
+    return;
+  end if;
+  if exists (select 1 from cma.email_thread x where x.tenant_id = v_subs and x.connection_id = v_crm and x.source_id = 'pem-t1') then
+    raise notice 'perf email: present';
+    return;
+  end if;
+  n_th := round(4000 * m)::integer;
+  n_msg := round(17000 * m)::integer;
+  n_ev := round(9000 * m)::integer;
+  alter table cma.email_thread disable trigger audit;
+  alter table cma.email_message disable trigger audit;
+  alter table cma.email_thread_event disable trigger audit;
+  insert into cma.email_thread (tenant_id, connection_id, source_system, source_id, inbox_source_id, channel_source_id, status,
+                                source_created_at, closed_at, owner_ref, contact_source_id, ticket_source_id, latest_received_at,
+                                latest_sent_at, source_updated_at)
+  select v_subs, v_crm, 'perfcrm', 'pem-t' || g, 'pin-' || (1 + g % 4), 'pch-' || (1 + g % 4),
+         case when g % 3 = 0 then 'open' else 'closed' end,
+         now() - make_interval(mins => ((g::bigint * 7907) % (90 * 1440))::integer),
+         case when g % 3 <> 0 then now() - make_interval(mins => ((g::bigint * 7907) % (90 * 1440))::integer) + make_interval(hours => 2 + g % 70) end,
+         case when g % 7 <> 0 then 'po-' || (1 + g % 8) end,
+         case when g % 10 <> 0 then 'pc' || (1 + (g * 13) % (20000 * m)::integer) end,
+         case when g % 4 = 0 then 'pt' || (1 + g % (3600 * m)::integer) end,
+         now() - make_interval(mins => ((g::bigint * 7907) % (90 * 1440))::integer) + interval '1 hour',
+         case when g % 5 <> 0 then now() - make_interval(mins => ((g::bigint * 7907) % (90 * 1440))::integer) + interval '3 hours' end,
+         now() - make_interval(mins => ((g::bigint * 7907) % (90 * 1440))::integer) + interval '3 hours'
+  from generate_series(1, n_th) g;
+  -- closed_at in the future is never stored: a thread whose close would lie ahead stays open
+  update cma.email_thread x set status = 'open', closed_at = null
+  where x.tenant_id = v_subs and x.connection_id = v_crm and x.closed_at > now();
+  insert into cma.email_message (tenant_id, connection_id, source_system, source_kind, source_id, thread_source_id, inbox_source_id,
+                                 channel_source_id, direction, status, occurred_at, actor_kind, owner_ref, contact_source_id, source_created_at)
+  select v_subs, v_crm, 'perfcrm', case when g % 5 = 0 then 'crm_email' else 'inbox_message' end, 'pem-m' || g,
+         case when g % 5 <> 0 then 'pem-t' || t end, 'pin-' || (1 + t % 4), 'pch-' || (1 + t % 4),
+         case when g % 9 = 0 then 'forwarded' when g % 2 = 0 then 'out' else 'in' end, 'sent',
+         now() - make_interval(mins => ((t::bigint * 7907) % (90 * 1440))::integer) + make_interval(mins => 30 * (g % 5)),
+         case when g % 2 = 0 or g % 9 = 0 then 'agent' else 'customer' end,
+         case when g % 2 = 0 or g % 9 = 0 then 'po-' || (1 + g % 8) end,
+         case when t % 10 <> 0 then 'pc' || (1 + (t * 13) % (20000 * m)::integer) end,
+         now() - make_interval(mins => ((t::bigint * 7907) % (90 * 1440))::integer) + make_interval(mins => 30 * (g % 5))
+  from generate_series(1, n_msg) g cross join lateral (select 1 + (g * 31) % n_th as t) x;
+  insert into cma.email_thread_event (tenant_id, connection_id, source_id, thread_source_id, kind, occurred_at, actor_kind, owner_ref,
+                                      to_actor_kind, to_owner_ref)
+  select v_subs, v_crm, 'pet' || g, 'pem-t' || t, k.kind,
+         now() - make_interval(mins => ((t::bigint * 7907) % (90 * 1440))::integer) + make_interval(mins => 10 + g % 120),
+         'agent', 'po-' || (1 + g % 8),
+         case when k.kind = 'assigned' then 'agent' end, case when k.kind = 'assigned' then 'po-' || (1 + (g + 3) % 8) end
+  from generate_series(1, n_ev) g
+  cross join lateral (select 1 + (g * 17) % n_th as t) x
+  cross join lateral (select (array['assigned', 'assigned', 'closed', 'reopened'])[1 + g % 4] as kind) k;
+  alter table cma.email_thread enable trigger audit;
+  alter table cma.email_message enable trigger audit;
+  alter table cma.email_thread_event enable trigger audit;
+  analyze cma.email_thread;
+  analyze cma.email_message;
+  analyze cma.email_thread_event;
+  raise notice 'perf email: % threads, % messages, % thread events', n_th, n_msg, n_ev;
+end
+$$;
+reset role;
+
+-- The old Juo moves (night N07, 25 November 2026): prod's backfill of the app's older history (addition 0009zk, 23 November
+-- 2026) took cma.subscription_event from about 102,000 to 268,828 rows; this block tops the tenant's events up to
+-- 268,828 × m with moves older than a year (renewals on a cycle, status changes, a pause and a resume now and then) on the
+-- subscriptions that old, written a day ago as the backfill was, so the Active refresh and the subscription facts are
+-- measured at today's shape. Its own guard (the event pold1): a rerun of this block adds nothing
+set role cma_owner;
+do $$
+declare
+  m      numeric := coalesce(nullif(current_setting('cma.perf_multiplier', true), ''), '3')::numeric;
+  v_subs uuid := (select t.id from cma.tenant t where t.slug = 'pulse4all-subscriptions');
+  v_old  uuid[];
+  n_have integer;
+  n_add  integer;
+begin
+  if coalesce(current_setting('cma.local_fixture', true), '') <> 'on' then
+    raise exception 'local fixture only: run  set cma.local_fixture = ''on''  in this session first';
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'cloudsqladmin') then
+    raise exception 'this is a Cloud SQL instance (the role cloudsqladmin exists): the volume fixture is for a local database only';
+  end if;
+  perform set_config('app.tenant_id', v_subs::text, true);
+  if exists (select 1 from cma.subscription_event e where e.tenant_id = v_subs and e.source_system = 'perfsubs' and e.source_id = 'pold1') then
+    raise notice 'perf old moves: present';
+    return;
+  end if;
+  select count(*) into n_have from cma.subscription_event e where e.tenant_id = v_subs;
+  n_add := greatest(0, round(268828 * m)::integer - n_have);
+  v_old := array(select x.id from cma.subscription x
+                 where x.tenant_id = v_subs and x.source_system = 'perfsubs' and x.source_created_at < now() - interval '366 days'
+                 order by x.source_id collate "C");
+  if n_add = 0 or cardinality(v_old) = 0 then
+    raise notice 'perf old moves: nothing to add (% events, % subscriptions older than a year)', n_have, cardinality(v_old);
+    return;
+  end if;
+  alter table cma.subscription_event disable trigger audit;
+  insert into cma.subscription_event (tenant_id, connection_id, source_system, source_id, subscription_source_id, event_type, occurred_at,
+                                      cycle_index, status_from, status_to, synced_at)
+  select s.tenant_id, s.connection_id, 'perfsubs', 'pold' || g, s.source_id,
+         case g % 25 when 0 then 'status_changed' when 1 then 'paused' when 2 then 'resumed' else 'renewed' end,
+         -- between the subscription's creation (at most five years back) and a year ago
+         greatest(s.source_created_at, now() - interval '5 years')
+           + ((now() - interval '366 days') - greatest(s.source_created_at, now() - interval '5 years')) * ((g % 997) / 997.0),
+         case when g % 25 > 2 then 100 + g % 60 end,
+         case when g % 25 = 0 then 'paused' end, case when g % 25 = 0 then 'active' end,
+         now() - interval '1 day' + make_interval(secs => g % 3600)
+  from generate_series(1, n_add) g
+  join cma.subscription s on s.id = v_old[1 + g % cardinality(v_old)];
+  get diagnostics n_add = row_count;
+  alter table cma.subscription_event enable trigger audit;
+  raise notice 'perf old moves: % events added to %', n_add, n_have;
+end
+$$;
+reset role;
 -- The events were all written again: their dead rows go, so the table has the size it would have had, and a plain vacuum
 -- after it marks its pages all visible (a full one does not), as autovacuum does in time. Maintenance runs outside a
 -- transaction, so it cannot sit in the guarded block above: it runs only where the session set the local switch and the

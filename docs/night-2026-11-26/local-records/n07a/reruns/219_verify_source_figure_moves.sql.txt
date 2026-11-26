@@ -1,0 +1,31 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ true
+(1 row)
+
+psql:219_verify_source_figure_moves.sql:39: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+DO
+DO
+DROP FUNCTION
+                                                                                                            check_name                                                                                                            | result |                                                                                              detail                                                                                               
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0009zi recorded, after 0009zg                                                                                                                                                                                        | PASS   | 
+ A2 cma.source_figure_moves_of and the write the application's and no one else's; the write's JIT off, its pauses and exits counted by the rule, 214's status_to count gone                                                       | PASS   | jit=off true true false
+ A3 every stored exits and pauses row's CMA value equals the rule's recount of the events the CMA held when it was taken (every tenant; counts only)                                                                              | PASS   | 0 rows, 0 differ
+ B1 the write as the ingest: exits into canceled 4 (214: 8), the day before 1, failed 2 (214: 3), expired 0, pauses 3 (214: 4); renewals and purchases 1; every compared figure within                                            | PASS   | {"updated": 0, "inserted": 7, "unchanged": 0} | exits:canceled:-1=1.00 exits:canceled:0=4.00 exits:expired:0=0.00 exits:failed:0=2.00 pauses:0=3.00 purchases:0=1.00 renewals:0=1.00 | 214: 8 3 4
+ B2 B39c's moves (cma.subscription_moves_of, the Churn rate's and Failed rate's input) on the same events: churned into canceled 4, moved_to_failed 2, paused 3 on D, churned 1 the day before; a double report is no second move | PASS   | 4 2 3 1 | f1:1 f2:1 k1:1 k2:1 k3:2 k4:1 p1:1 p2:2
+ B3 the day's bounds: a move at D 00:00 counts on D, one at D + 1 00:00 on the next day; an event the CMA held only after the moment asked for is not counted                                                                     | PASS   | 1 1 0
+ verdict                                                                                                                                                                                                                          | PASS   | 219_verify_source_figure_moves: 6 PASS, 0 FAIL
+(7 rows)
+
+RESET

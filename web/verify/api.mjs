@@ -1061,7 +1061,7 @@ if (managerDay === null) {
 // Nothing of the run stays: the manager's Default market is cleared again (dev data; not a check)
 await defaultMarket(ADMIN, meM.userId, null);
 
-// ---- messaging (migration 0008), 22 checks --------------------------------------------------
+// ---- messaging (migration 0008), 25 checks (the write answers since night N07) --------------------------------------------------
 // One urgent message per run from the test supervisor to Agent Two (dev data), then read and
 // acknowledged by Agent Two, so the stats show the whole path.
 const inboxBefore = (await get(AGENT, "/api/v1/me/messages")).body?.data;
@@ -1094,11 +1094,24 @@ expect("the sender's own inbox does not hold it",
 expect("since lists only newer messages",
   (await get(AGENT, `/api/v1/me/messages?since=${encodeURIComponent(mine?.createdAt ?? "")}`)).body?.data?.messages?.some((m) => m.id === mid) ?? false, false, true);
 expect("another person cannot read it for the recipient", (await readIds(SUPERVISOR, [mid])).body?.data?.changed, 0, 1);
-expect("marking read changes one row, then none",
-  [(await readIds(AGENT, [mid])).body?.data?.changed, (await readIds(AGENT, [mid])).body?.data?.changed], [1, 0], [0, 1]);
+const read1 = (await readIds(AGENT, [mid])).body?.data;
+const read2 = (await readIds(AGENT, [mid])).body?.data;
+expect("marking read changes one row, then none", [read1?.changed, read2?.changed], [1, 0], [0, 1]);
+// Night N07 (D3): the write answers the unread count after it, from its own transaction, so the screen needs no read
+expect("marking read answers the unread count after it", [typeof read1?.unreadCount, read1?.unreadCount, read2?.unreadCount],
+  ["number", inboxAfter?.unreadCount - 1, inboxAfter?.unreadCount - 1], ["undefined", inboxAfter?.unreadCount, null]);
 expect("acknowledging needs the request header", (await ackOf(AGENT, mid, {})).status, 400, 200);
 expect("acknowledging a message that is not yours is a 404", (await ackOf(SUPERVISOR, mid)).status, 404, 200);
-expect("the recipient acknowledges; a second time changes nothing", [(await ackOf(AGENT, mid)).status, (await ackOf(AGENT, mid)).status], [200, 200], [404, 404]);
+const ack1 = await ackOf(AGENT, mid);
+const ack2 = await ackOf(AGENT, mid);
+expect("the recipient acknowledges; a second time changes nothing", [ack1.status, ack2.status], [200, 200], [404, 404]);
+expect("acknowledging answers the unread count after it (N07, D3)", [ack1.body?.data?.acknowledged, ack1.body?.data?.unreadCount, ack2.body?.data?.unreadCount],
+  [true, inboxBefore?.unreadCount, inboxBefore?.unreadCount], [false, null, null]);
+// Reports → Follow-up's poll (N07, D3): the snapshot's time alone, for the follow-up report's permissions
+const updated = await get(SUPERVISOR, "/api/v1/reports/follow-up/updated");
+expect("the follow-up poll answers the snapshot's time alone; an agent is refused",
+  [updated.status, Object.keys(updated.body?.data ?? {}), Number.isNaN(Date.parse(updated.body?.data?.computedAt ?? "x")), (await get(AGENT, "/api/v1/reports/follow-up/updated")).status],
+  [200, ["computedAt"], false, 403], [403, [], true, 200]);
 const acked = (await get(AGENT, "/api/v1/me/messages")).body?.data?.messages?.find((m) => m.id === mid);
 expect("read and acknowledged times are set and the count is back", [!!acked?.readAt, !!acked?.acknowledgedAt, inboxBefore?.unreadCount === (await get(AGENT, "/api/v1/me/messages")).body?.data?.unreadCount],
   [true, true, true], [false, false, false]);
@@ -1175,6 +1188,10 @@ async function followUpChecks() {
   if ((await get(READER, "/api/v1/me")).status === 200) {
     expect("follow-up: the reader (reports.view alone) reads the tasks, no summary and no per-person figures",
       [(await get(READER, `${fu}/tasks`)).status, (await get(READER, `${fu}/summary`)).status, (await get(READER, `${fu}/by-owner`)).status], [200, 403, 403], [200, 200, 403]);
+    // Night N07: the page's poll is one scalar for every follow-up reader, the reader with reports.view alone too
+    const readerUpdated = await get(READER, `${fu}/updated`);
+    expect("follow-up: the reader polls the snapshot's time alone",
+      [readerUpdated.status, Object.keys(readerUpdated.body?.data ?? {})], [200, ["computedAt"]], [403, []]);
   } else {
     console.log("note  no reader identity in this tenant: the reader's check is left out");
   }
@@ -1491,12 +1508,13 @@ async function reportChecks() {
       .map(async (r) => (await get(ANALYST, r)).status)), [400, 400, 400], [200, 200, 200]);
   expect("reports: 92 days are answered", (await get(ANALYST, `/api/v1/reports/intake?from=${day(-91)}&to=${day(0)}`)).status, 200, 400);
   expect("reports: a backwards range is a 400", (await get(ANALYST, `/api/v1/reports/speed-to-lead/rows?from=${day(0)}&to=${day(-1)}`)).status, 400, 200);
-  expect("reports: a group outside the four is a 400",
-    await Promise.all(["owner", "week", "DAY"].map(async (g) => (await get(ANALYST, `/api/v1/reports/speed-to-lead?${range}&group=${g}`)).status)),
+  // since addition 0009zu week is a group too (the Monday of the business date's ISO week); total stays the Dashboard's own
+  expect("reports: a group outside the five is a 400",
+    await Promise.all(["owner", "total", "DAY"].map(async (g) => (await get(ANALYST, `/api/v1/reports/speed-to-lead?${range}&group=${g}`)).status)),
     [400, 400, 400], [200, 200, 200]);
-  const grouped = await Promise.all(["day", "market", "agent", "pipeline"].map(async (g) => (await get(ANALYST, `/api/v1/reports/speed-to-lead?${range}&group=${g}`)).body?.data?.group));
+  const grouped = await Promise.all(["day", "week", "market", "agent", "pipeline"].map(async (g) => (await get(ANALYST, `/api/v1/reports/speed-to-lead?${range}&group=${g}`)).body?.data?.group));
   const plain = (await get(ANALYST, `/api/v1/reports/speed-to-lead?${range}`)).body?.data?.group;
-  expect("reports: each group answers as itself, none means day", [...grouped, plain], ["day", "market", "agent", "pipeline", "day"], ["day", "day", "day", "day", "day"]);
+  expect("reports: each group answers as itself, none means day", [...grouped, plain], ["day", "week", "market", "agent", "pipeline", "day"], ["day", "day", "day", "day", "day", "day"]);
 
   const rowsBody = (await get(ANALYST, `/api/v1/reports/speed-to-lead/rows?${range}`)).body;
   const rows = rowsBody?.data?.rows ?? [];
@@ -1505,6 +1523,9 @@ async function reportChecks() {
   walk(rowsBody);
   expect("reports: no field named email, phone, name or firstname in the rows",
     ["email", "phone", "name", "firstname"].filter((k) => keys.has(k)), [], ["name"]);
+  // D36 (addition 0009zu): the first outbound CRM call left the rows, and the CRM owner's reference was never in them
+  expect("reports: no firstCall field and no owner reference in the rows",
+    [...keys].filter((k) => /^(firstcallsourceid|firstcallat|firstcalllinked|dealownerref|ownerref)$/.test(k)), [], ["firstcallat"]);
   expect("reports: statuses are called, not called yet or closed before the first call",
     rows.every((r) => ["called", "not_called_open", "closed_before_first_call"].includes(r.status)), true, false);
   expect("reports: every record link is https or empty",
@@ -1525,6 +1546,35 @@ async function reportChecks() {
       byAgent.every((g) => g.groupKey === "unknown" || g.groupKey === "no_attempt" || /^[0-9a-f-]{36}$/.test(g.groupKey))],
     [true, rows.filter((r) => r.agentUserId === null && r.firstAttemptAt !== null).length, true, rows.filter((r) => r.firstAttemptAt === null).length, true],
     [false, -1, false, -1, false]);
+
+  // Speed to lead's cockpit (addition 0009zu): the figures and the deals list, each with its permission and its checks
+  const figures = (await get(ANALYST, `/api/v1/reports/speed-to-lead/figures?${range}`)).body?.data;
+  const total = (await get(ANALYST, `/api/v1/reports/speed-to-lead?${range}&group=day`)).body?.data?.rows ?? [];
+  expect("reports: the figures' period adds up as the summary's groups and its rows",
+    [figures?.current?.deals, figures?.current?.called, figures?.current?.openNotCalled, figures?.current?.closedBeforeFirstCall, figures?.from, figures?.to],
+    [sum(total, (g) => g.deals), sum(total, (g) => g.called), sum(total, (g) => g.openNotCalled), sum(total, (g) => g.closedBeforeFirstCall), day(-29), day(0)],
+    [-1, -1, -1, -1, null, null]);
+  expect("reports: the previous period is the same length, ending the day before the period (cut at now while it reaches today)",
+    [figures?.previousTo < figures?.from, typeof figures?.settings?.staleBusinessDays === "number", figures?.previousUntil !== null],
+    [true, true, true], [false, false, false]);
+  const dealsOf = async (q, s = ANALYST) => get(s, `/api/v1/reports/speed-to-lead/deals?${range}${q}`);
+  const notCalled = (await dealsOf("")).body?.data;
+  const called = (await dealsOf("&view=called&limit=5")).body?.data;
+  expect("reports: the deals list's views hold the rows' not called and called deals, a page of them, newest first",
+    [notCalled?.view, notCalled?.total, called?.view, called?.total, called?.rows?.length <= 5,
+     (called?.rows ?? []).every((r, i, a) => i === 0 || a[i - 1].createdAt >= r.createdAt),
+     (called?.rows ?? []).every((r) => r.attempts.length <= 20 && r.attempts.length <= r.attemptsSoFar)],
+    ["not_called", rows.filter((r) => r.status === "not_called_open").length, "called", rows.filter((r) => r.status === "called").length, true, true, true],
+    ["called", -1, "not_called", -1, false, false, false]);
+  expect("reports: the deals list refuses a view, a limit or an offset outside its bounds, and an agent",
+    await Promise.all([(await dealsOf("&view=all")).status, (await dealsOf("&limit=0")).status, (await dealsOf("&limit=201")).status,
+      (await dealsOf("&offset=-1")).status, (await dealsOf("", AGENT)).status, (await get(AGENT, `/api/v1/reports/speed-to-lead/figures?${range}`)).status]),
+    [400, 400, 400, 400, 403, 403], [200, 200, 200, 200, 200, 200]);
+  const dealKeys = new Set();
+  const walkDeals = (v) => { if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) { dealKeys.add(k.toLowerCase()); walkDeals(x); } };
+  walkDeals(called);
+  expect("reports: no phone, email, recording, customer name or tag text in the deals list",
+    [...dealKeys].filter((k) => /^(email|phone|phonenumber|name|firstname|recording|recordingurl|tag|tagname|tags|counterparthash)$/.test(k)), [], ["phone"]);
 
   // Not connected: a telephony or shop figure is null exactly when that source is not connected
   const consistent = (data) => {

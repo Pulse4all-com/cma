@@ -33,7 +33,7 @@ import { JobBudget } from "../core/budget.mjs";
 import { info, warn } from "../core/log.mjs";
 import { codeOf, withRun } from "./runner.mjs";
 import { rereadVersion } from "./sweep.mjs";
-import { measurePool } from "../core/db.mjs";
+import { measurePool, withTenant } from "../core/db.mjs";
 
 export const DEFAULT_LOOKBACK_MINUTES = 26 * 60;
 const LINKED_PART = 100;
@@ -172,6 +172,64 @@ async function reconcileJob({ connectionId = null, lookbackMinutes = DEFAULT_LOO
       }
     }
   }
+  // The run rows' retention (addition 0009zt, decision D13): once per tenant served, after its streams, in small batches,
+  // each its own transaction with its own lock and statement timeouts, at most PURGE_BATCHES a night (the rest the next
+  // night). Not when the run is narrowed to one connection or one object type
+  if (!connectionId && !object) {
+    const seen = new Set();
+    for (const c of connections) {
+      if (seen.has(c.tenantId)) continue;
+      seen.add(c.tenantId);
+      const r = await purgeRunRows(contextOf(c));
+      total.purged = (total.purged ?? 0) + r.deleted;
+      if (r.skipped) total.purgeSkipped = (total.purgeSkipped ?? 0) + 1;
+      if (r.error) total.failed += 1;
+    }
+  }
   info("reconcile", { ...total, lookbackMinutes, ms: Date.now() - started });
   return total;
+}
+
+export const PURGE_BATCH = 2000;
+export const PURGE_BATCHES = 50;
+/** The purge's signature as its latest definition in db/ creates it (verify/retention.mjs reads the scripts to compare) */
+export const PURGE_SIGNATURE = "cma.sync_run_purge(integer,text,uuid)";
+
+/**
+ * One tenant's run rows past their retention (cma.sync_run_purge, 0009zt), batch by batch while the database says there is
+ * more. A database without the function (before 0009zt, or a signature that no longer matches PURGE_SIGNATURE) purges
+ * nothing, with one warning (code function_missing); a batch that fails (a lock or statement timeout) stops the tenant's
+ * purge for tonight with one warning; the reconcile still succeeds. One log line per tenant: deleted, batches, more, ms.
+ * The existence check runs once per tenant, in the first batch's transaction.
+ */
+export async function purgeRunRows(ctx, { batch = PURGE_BATCH, batches = PURGE_BATCHES, tenantTx = withTenant } = {}) {
+  const started = Date.now();
+  let deleted = 0;
+  let n = 0;
+  let more = true;
+  try {
+    while (more && n < batches) {
+      const r = await tenantTx({ ...ctx, actorLabel: "ingest:reconcile" }, async (q) => {
+        if (n === 0) {
+          const has = (await q.query("select to_regprocedure($1) is not null as has", [PURGE_SIGNATURE])).rows[0]?.has;
+          if (!has) return null;
+        }
+        await q.query("set local lock_timeout = '2s'");
+        await q.query("set local statement_timeout = '30s'");
+        return (await q.query("select cma.sync_run_purge($1) as r", [batch])).rows[0].r;
+      });
+      if (!r) {
+        warn("reconcile: sync_run retention skipped", { tenant: ctx.tenantId, code: "function_missing", signature: PURGE_SIGNATURE });
+        return { deleted: 0, skipped: true };
+      }
+      n += 1;
+      deleted += Number(r.deleted ?? 0);
+      more = Boolean(r.more);
+    }
+    info("reconcile: sync_run retention", { tenant: ctx.tenantId, deleted, batches: n, more, ms: Date.now() - started });
+    return { deleted, batches: n, more };
+  } catch (err) {
+    warn("reconcile: sync_run retention stopped", { tenant: ctx.tenantId, deleted, batches: n, code: codeOf(err), ms: Date.now() - started });
+    return { deleted, batches: n, error: codeOf(err) };
+  }
 }
