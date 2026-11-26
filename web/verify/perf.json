@@ -200,6 +200,18 @@
     {
       "path": "/reports/payments",
       "subject": "manager",
+      "class": "report",
+      "html_kb": 64
+    },
+    {
+      "path": "/reports/payments?market=GB&interval=monthly&state=all",
+      "subject": "manager",
+      "class": "report",
+      "html_kb": 64
+    },
+    {
+      "path": "/api/v1/reports/payments",
+      "subject": "manager",
       "class": "report"
     },
     {
@@ -343,6 +355,7 @@
     "/reports/courtesy": 30,
     "/reports/active": 86,
     "/reports/subscriptions": 64,
+    "/reports/payments": 64,
     "/reports/data-quality": 16,
     "/configuration/sources": 33,
     "/configuration/health": 21,
@@ -371,6 +384,7 @@
     "/reports/courtesy": 169,
     "/reports/active": 169,
     "/reports/subscriptions": 169,
+    "/reports/payments": 169,
     "/reports/data-quality": 167,
     "/configuration/sources": 173,
     "/configuration/health": 167,

@@ -1898,8 +1898,8 @@ const en = {
     intro_subscriptions: "The subscriptions per store and status, and how they move.",
     fedBy_subscriptions: "The subscription app of each store: its subscriptions and their events.",
     link_subscriptions: "Today in Flash: Active subscriptions",
-    intro_payments: "The financial status of store orders, and the renewals of subscriptions.",
-    fedBy_payments: "The financial status the store gives each order, and the subscription app's renewals and failed renewals.",
+    intro_payments: "The payment state of the subscription base over months, and what is at risk.",
+    fedBy_payments: "The subscription facts' take of the subscription app: each subscription's payment state, the amount at risk and the moves to failed.",
     link_payments: "Today in Flash: Payments",
     intro_compliance: "Complaints, vulnerable cases and the checks required on calls.",
     fedBy_compliance: "The complaint and vulnerable-case tickets in the customer records, and the checks a market's regulator requires on calls, from the telephony system. When built, a case shows only its status and a link to the customer records.",
@@ -4290,7 +4290,7 @@ const en = {
     h_installed_base: "Devices the asset register holds, in the field or in stock, with their maintenance items past due or due within three months.",
     h_churn: "Subscriptions that moved into an ended status in the period, once per day, per market and reason. Not the cancellation requests.",
     h_orders: "Store orders created in the period, test and deleted orders left out, with their units and totals less refunds per currency.",
-    h_payments: "Two sources, labelled as such: each order's payment status as the shop states it, and the subscription app's renewals and failed renewals.",
+    h_payments: "Two sources, labelled as such: each order's financial status as the shop states it, and the subscription app's renewals and failed renewals.",
     h_open_deals: "Deals of counted pipelines that are not closed or deleted, with their age in days.",
     h_open_tickets: "Tickets of counted pipelines that are not closed, per ticket queue (the pipeline) and stage, with their age in days.",
     h_open_tasks: "Tasks whose status is not done, with the overdue ones.",
@@ -4731,6 +4731,46 @@ const en = {
     h_list: "One row per subscription of the take: the subscription app's id and number, codes, the monthly amount in its currency, its age since the subscription app created it, and a link to the contact. Never a name or an email.",
     h_placeholder: "This part needs a take the subscription facts do not hold yet: it is not computed from the subscription app's events on the page.",
   },
+  // Customers → Payments (addition 0009zy): read by its page alone (paymentsCopy), beside Customers → Subscriptions'
+  // words for what the two pages share (the filters, the states, the list's columns, the notices)
+  payments: {
+    title: "Payments",
+    intro: "The payment state of the subscription base: which subscriptions are paid, in retry, charged back, awaiting payment or failed, what is at risk, and the failed rate over months. Flash shows the financial status of orders and the renewals per market and day.",
+    openFlash: "Open Flash's Payments overview",
+    tile_atRisk: "Amount at risk",
+    atRiskLine: "{n} subscriptions",
+    atRiskOne: "1 subscription",
+    noAtRisk: "Nothing at risk",
+    stateShare: "{share} of {total}",
+    overdueLine: "{n} overdue",
+    openState: "Show in the list",
+    piNote: "The failed rate by month is per store: the proposition and billing interval filters do not narrow it. The tiles, the table by payment instrument and the list follow every filter.",
+    ratesTitle: "Failed rate by month",
+    ratesChartLabel: "Failed rate per market and month",
+    crossTitle: "Payment state by payment instrument",
+    stateCol: "Payment state",
+    totalCol: "Total",
+    flowsTitle: "Renewals, chargebacks and refunds by month",
+    flowsFedBy: "Fed by: per store and month the renewals paid at the first attempt, recovered and not recovered, the chargebacks and the refunds, once the subscription facts are refreshed by what changed.",
+    listTitle: "Subscriptions by payment state",
+    state_at_risk: "Amount at risk",
+    state_all: "All five payment states",
+    col_since: "Since",
+    col_overdue: "Overdue",
+    col_return_code: "Return code",
+    col_instrument: "Payment instrument",
+    col_amount_at_risk: "Amount at risk",
+    yes: "Yes",
+    no: "No",
+    noRows: "No subscription of this payment state matches these filters",
+    h_state: "The subscriptions whose payment state is {state} now, out of every subscription in one of the five payment states (Paid, In retry, Charged back, Awaiting payment, Failed); Paused and Canceled are not on this page. From the subscription facts' take, as of Refreshed at.",
+    h_awaiting: "A renewal by invoice that is not paid yet; overdue once the subscription app said so. Only stores whose subscription app sends invoice events have this state.",
+    h_atRisk: "The amount per cycle of the subscriptions In retry, Failed, Charged back or overdue Awaiting payment, per currency and never added across currencies; the euro line uses the tenant's indicative rates and appears only when every currency has one. Not an amount charged back and not a payment in the finance system.",
+    h_failedRate: "The subscriptions that moved to failed in the last complete month divided by the Total subscriptions at the end of the month before, over the stores whose rates have started; the same figure as on Subscriptions.",
+    h_rates: "Failed rate per market and complete month: the month's moved-to-failed subscriptions over the Total subscriptions at the previous month end, counted from each store's start month.",
+    h_cross: "The subscriptions in each payment state by the type of their payment instrument in the subscription app; Unknown where the subscription app did not give one.",
+    h_list: "One row per subscription in the chosen payment state: the subscription app's id and number, codes, since when it holds its payment state, the chargeback's return code, the amount at risk in its currency, and a link to the contact. Never a name or an email.",
+  },
   fleet: {
     intro: "The devices in the field on a map by postcode area, their monitoring state and the devices that need attention.",
     previewBadge: "Preview",
@@ -4796,11 +4836,13 @@ type AllCopy = Deep<typeof en>;
  * routes' HTML (verify/perf.json's html_kb). Only the Active page reads its words, through activeCopy below; they stay
  * in the two dictionaries here, so verify:copy checks them like every other word
  */
-export type Copy = Omit<AllCopy, "active" | "subscriptions">;
+export type Copy = Omit<AllCopy, "active" | "subscriptions" | "payments">;
 /** The words of Customers → Active (addition 0009l), read by its page alone */
 export type ActiveCopy = AllCopy["active"];
 /** The words of Customers → Subscriptions (addition 0009zh), read by its page alone, as Active's */
 export type SubscriptionsCopy = AllCopy["subscriptions"];
+/** The words of Customers → Payments (addition 0009zy), read by its page alone, as Subscriptions' */
+export type PaymentsCopy = AllCopy["payments"];
 
 const nl = {
   app: {
@@ -6676,8 +6718,8 @@ const nl = {
     intro_subscriptions: "De abonnementen per winkel en status, en hoe ze bewegen.",
     fedBy_subscriptions: "De abonnementen-app van elke winkel: de abonnementen en hun gebeurtenissen.",
     link_subscriptions: "Vandaag in Flash: Actieve abonnementen",
-    intro_payments: "De financiële status van winkelorders, en de verlengingen van abonnementen.",
-    fedBy_payments: "De financiële status die de winkel aan elke order geeft, en de verlengingen en mislukte verlengingen van de abonnementen-app.",
+    intro_payments: "De betaalstand van het abonnementenbestand per maand, en wat er risico loopt.",
+    fedBy_payments: "De take van de abonnementsfeiten uit de abonnementen-app: de betaalstand van elk abonnement, het bedrag met betaalrisico en de overgangen naar mislukt.",
     link_payments: "Vandaag in Flash: Betalingen",
     intro_compliance: "Klachten, kwetsbare gevallen en de verplichte controles op gesprekken.",
     fedBy_compliance: "De tickets voor klachten en kwetsbare gevallen in de klantgegevens, en de controles die de toezichthouder van een markt op gesprekken verplicht, uit het telefoniesysteem. Eenmaal gebouwd toont een zaak alleen de status en een link naar de klantgegevens.",
@@ -9057,7 +9099,7 @@ const nl = {
     h_installed_base: "Apparaten in het assetregister, in het veld of op voorraad, met hun achterstallige onderhoudsitems of items die binnen drie maanden vervallen.",
     h_churn: "Abonnementen die in de periode naar een beëindigde status gingen, één keer per dag, per markt en reden. Niet de opzegverzoeken.",
     h_orders: "Webwinkelbestellingen aangemaakt in de periode, zonder test- en verwijderde bestellingen, met hun stuks en totalen min terugbetalingen per valuta.",
-    h_payments: "Twee bronnen, zo benoemd: de betaalstatus van elke bestelling zoals de webwinkel die geeft, en de verlengingen en mislukte verlengingen van de abonnementen-app.",
+    h_payments: "Twee bronnen, zo benoemd: de financiële status van elke bestelling zoals de webwinkel die geeft, en de verlengingen en mislukte verlengingen van de abonnementen-app.",
     h_open_deals: "Deals van meetellende pijplijnen die niet gesloten of verwijderd zijn, met hun leeftijd in dagen.",
     h_open_tickets: "Tickets van meetellende pijplijnen die niet gesloten zijn, per ticketwachtrij (de pijplijn) en fase, met hun leeftijd in dagen.",
     h_open_tasks: "Taken waarvan de status niet klaar is, met die te laat zijn.",
@@ -9493,6 +9535,46 @@ const nl = {
     h_list: "Eén rij per abonnement van de take: de id en het nummer uit de abonnementen-app, codes, het maandbedrag in zijn valuta, de leeftijd sinds de abonnementen-app het aanmaakte, en een link naar het contact. Nooit een naam of e-mailadres.",
     h_placeholder: "Dit deel heeft een take nodig die de abonnementsfeiten nog niet hebben: het wordt op de pagina niet uit de gebeurtenissen van de abonnementen-app berekend.",
   },
+  // Customers → Payments (addition 0009zy): read by its page alone (paymentsCopy), beside Customers → Subscriptions'
+  // words for what the two pages share
+  payments: {
+    title: "Betalingen",
+    intro: "De betaalstand van het abonnementenbestand: welke abonnementen betaald zijn, in herkansing, teruggeboekt, wachten op betaling of mislukt, wat er risico loopt, en het mislukt-percentage per maand. Flash toont de financiële status van orders en de verlengingen per markt en dag.",
+    openFlash: "Open het Betalingen-overzicht in Flash",
+    tile_atRisk: "Bedrag met betaalrisico",
+    atRiskLine: "{n} abonnementen",
+    atRiskOne: "1 abonnement",
+    noAtRisk: "Niets met risico",
+    stateShare: "{share} van {total}",
+    overdueLine: "{n} te laat",
+    openState: "Toon in de lijst",
+    piNote: "Het mislukt-percentage per maand is per winkel: de filters op propositie en cyclusinterval beperken het niet. De tegels, de tabel per betaalmiddel en de lijst volgen elk filter.",
+    ratesTitle: "Mislukt-percentage per maand",
+    ratesChartLabel: "Mislukt-percentage per markt en maand",
+    crossTitle: "Betaalstand per betaalmiddel",
+    stateCol: "Betaalstand",
+    totalCol: "Totaal",
+    flowsTitle: "Verlengingen, terugboekingen en terugbetalingen per maand",
+    flowsFedBy: "Gevoed door: per winkel en maand de verlengingen die bij de eerste poging betaald zijn, hersteld en niet hersteld, de terugboekingen en de terugbetalingen, zodra de abonnementsfeiten worden ververst met wat er veranderde.",
+    listTitle: "Abonnementen per betaalstand",
+    state_at_risk: "Bedrag met betaalrisico",
+    state_all: "Alle vijf betaalstanden",
+    col_since: "Sinds",
+    col_overdue: "Te laat",
+    col_return_code: "Retourcode",
+    col_instrument: "Betaalmiddel",
+    col_amount_at_risk: "Bedrag met betaalrisico",
+    yes: "Ja",
+    no: "Nee",
+    noRows: "Geen abonnement met deze betaalstand past bij deze filters",
+    h_state: "De abonnementen met nu de betaalstand {state}, van alle abonnementen in een van de vijf betaalstanden (Betaald, In herkansing, Teruggeboekt, Wacht op betaling, Mislukt); Gepauzeerd en Opgezegd staan niet op deze pagina. Uit de take van de abonnementsfeiten, per Ververst om.",
+    h_awaiting: "Een verlenging per factuur die nog niet betaald is; te laat zodra de abonnementen-app dat meldt. Alleen winkels waarvan de abonnementen-app factuurgebeurtenissen stuurt hebben deze stand.",
+    h_atRisk: "Het bedrag per cyclus van de abonnementen In herkansing, Mislukt, Teruggeboekt of te laat met Wacht op betaling, per valuta en nooit over valuta's heen opgeteld; de eurolijn gebruikt de indicatieve koersen van de tenant en verschijnt alleen als elke valuta er een heeft. Geen teruggeboekt bedrag en geen betaling in het financiële systeem.",
+    h_failedRate: "De abonnementen die in de laatste volledige maand naar mislukt gingen, gedeeld door het Totaal abonnementen aan het eind van de maand ervoor, over de winkels waarvan de percentages begonnen zijn; hetzelfde cijfer als op Abonnementen.",
+    h_rates: "Mislukt-percentage per markt en volledige maand: de abonnementen die in de maand naar mislukt gingen, gedeeld door het Totaal abonnementen aan het eind van de maand ervoor, geteld vanaf de startmaand van elke winkel.",
+    h_cross: "De abonnementen in elke betaalstand per type betaalmiddel in de abonnementen-app; Onbekend waar de abonnementen-app er geen gaf.",
+    h_list: "Eén rij per abonnement in de gekozen betaalstand: het id en nummer in de abonnementen-app, codes, sinds wanneer het zijn betaalstand heeft, de retourcode van de terugboeking, het bedrag met betaalrisico in zijn valuta, en een link naar het contact. Nooit een naam of een e-mailadres.",
+  },
   fleet: {
     intro: "De apparaten in het veld op een kaart per postcodegebied, hun bewakingsstatus en de apparaten die aandacht nodig hebben.",
     previewBadge: "Voorbeeld",
@@ -9552,6 +9634,7 @@ function shared(all: AllCopy): Copy {
   const rest: Partial<AllCopy> = { ...all };
   delete rest.active;
   delete rest.subscriptions;
+  delete rest.payments;
   return rest as Copy;
 }
 
@@ -9577,6 +9660,7 @@ export function pickHints<K extends keyof Copy["hints"]>(from: Copy, ...keys: K[
 }
 export const activeCopy: Record<Locale, ActiveCopy> = { en: en.active, nl: nl.active };
 export const subscriptionsCopy: Record<Locale, SubscriptionsCopy> = { en: en.subscriptions, nl: nl.subscriptions };
+export const paymentsCopy: Record<Locale, PaymentsCopy> = { en: en.payments, nl: nl.payments };
 export function t(locale: Locale): Copy {
   return copy[locale];
 }
