@@ -1,13 +1,15 @@
 -- =============================================================================================
--- 252_lead_cohorts_jit.sql: addition 0009zz, Lead cohorts' read without JIT compilation
+-- 258_lead_cohorts_jit.sql: addition 0010c, Lead cohorts' read without JIT compilation
+-- Renumbered on 27 November 2026 from 0009zz with 252/253, which main's roster pause (#335) took, to 0010c with 258/259:
+-- #336 holds 0010a (254/255) and N07h 0010b (256/257); it needs nothing of either (Decision log, 25 Nov 2026).
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics; a function setting only. Runs unchanged in every database, after
 -- 120_lead_cohorts.sql (0008zm), the only addition it needs. Rerunnable, forward-only, in one transaction with a lock
--- timeout. Run as your own IAM login: dev first, then 253_verify_lead_cohorts_jit.sql there (normal, then provoked), then
+-- timeout. Run as your own IAM login: dev first, then 259_verify_lead_cohorts_jit.sql there (normal, then provoked), then
 -- 121_verify_lead_cohorts.sql (dev only; still PASS, not edited), then 131_time_all.sql part b for the row 'lead
 -- cohorts' (its overview budget, 500 ms, may still FAIL: about 1.1 s at three times prod's volume locally; the timeout
--- is what this addition removes). Prod the same after the merge, without 121; 253's E1 runs 120's definition with JIT
--- there, the read the application cancelled, so run 253 at a quiet moment. The proof in prod is the request log's dbMs
+-- is what this addition removes). Prod the same after the merge, without 121; 259's E1 runs 120's definition with JIT
+-- there, the read the application cancelled, so run 259 at a quiet moment. The proof in prod is the request log's dbMs
 -- for /reports/lead-cohorts, 15,036 to 15,043.5 ms before.
 --
 -- Why (Martin, 26 November 2026): Reports -> Sales -> Lead cohorts shows "This page could not be loaded" in prod. The
@@ -63,7 +65,7 @@ set role cma_owner;
 do $$
 begin
   if not exists (select 1 from cma.schema_migration where version = '0008zm') then
-    raise exception 'addition 0008zm (120_lead_cohorts.sql) must run before 0009zz';
+    raise exception 'addition 0008zm (120_lead_cohorts.sql) must run before 0010c';
   end if;
 end
 $$;
@@ -74,10 +76,10 @@ $$;
 alter function cma.lead_cohort_rows_of(uuid, date, date, timestamptz) set jit = off;
 
 comment on function cma.lead_cohort_rows_of(uuid, date, date, timestamptz) is
-  'The lead deals of the business dates [p_from, p_to] in the tenant''s zone in one pass (0008zm): cma.lead_cohorts_of with the tenant, the bounds and the instant as literals, so it is inlined and planned for this tenant and span. jit off (0009zz): the inlined tree costs above every JIT threshold, and compiling it took longer than the read (Lead cohorts timed out in prod); a create or replace drops the setting, so the script that re-creates this function repeats the alter';
+  'The lead deals of the business dates [p_from, p_to] in the tenant''s zone in one pass (0008zm): cma.lead_cohorts_of with the tenant, the bounds and the instant as literals, so it is inlined and planned for this tenant and span. jit off (0010c): the inlined tree costs above every JIT threshold, and compiling it took longer than the read (Lead cohorts timed out in prod); a create or replace drops the setting, so the script that re-creates this function repeats the alter';
 
 insert into cma.schema_migration (version, description)
-values ('0009zz', 'Lead cohorts without JIT: cma.lead_cohort_rows_of set jit = off (definition unchanged), so the cohorts'' inlined statement is no longer compiled with LLVM before it reads; the page timed out at the application''s 15 s statement timeout in prod')
+values ('0010c', 'Lead cohorts without JIT: cma.lead_cohort_rows_of set jit = off (definition unchanged), so the cohorts'' inlined statement is no longer compiled with LLVM before it reads; the page timed out at the application''s 15 s statement timeout in prod')
 on conflict (version) do nothing;
 
 commit;
