@@ -90,6 +90,14 @@ check("the root layout mounts the notice once", (breakSource(layout, "<SessionEx
 // 3. in Chromium
 if (BASE) {
   const { chromium } = await import("playwright");
+  // the urgent pop-up would cover the top bar: the subject's urgent messages are acknowledged first (as csp, layout and
+  // optimistic do; dev data), so a fresh server's unacknowledged message cannot hide Log out
+  const inbox = await fetch(`${BASE}/api/v1/me/messages`, { headers: { "x-cma-mock-subject": "agent-two" } }).then((r) => r.json()).catch(() => null);
+  for (const m of inbox?.data?.messages ?? []) {
+    if (m.urgency === "urgent" && !m.acknowledgedAt) {
+      await fetch(`${BASE}/api/v1/me/messages/${m.id}/ack`, { method: "POST", headers: { "x-cma-mock-subject": "agent-two", "x-cma-request": "1" } });
+    }
+  }
   const browser = await chromium.launch();
   const expire = async (page, status) => {
     let withHeader = null;
@@ -146,9 +154,10 @@ if (BASE) {
     await r.goto(`${BASE}/day?as=agent-two`, { waitUntil: "networkidle" });
     const name = (await r.locator('a[href="/account"]').first().innerText().catch(() => "")).trim();
     // Log out as a person does it: the top bar's link, then the page's confirmation (a form POST to /logout/end)
-    await r.getByTestId("logout").first().click();
+    // a click that cannot happen (a dialog over the top bar) leaves leftAt elsewhere: the check's FAIL, never a crash
+    await r.getByTestId("logout").first().click({ timeout: 10_000 }).catch(() => undefined);
     await r.waitForURL(/\/logout$/, { timeout: 10_000 }).catch(() => undefined);
-    await r.locator('form[action="/logout/end"] button[type="submit"]').click();
+    await r.locator('form[action="/logout/end"] button[type="submit"]').click({ timeout: 10_000 }).catch(() => undefined);
     await r.waitForURL(/\/logout\/done|\/signed-out/, { timeout: 10_000 }).catch(() => undefined);
     const leftAt = r.url();
     // IAP clears its own cookie on the way out (gcp-iap-mode=CLEAR_LOGIN_COOKIE); the mock's cookies stand for it here
