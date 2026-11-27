@@ -66,7 +66,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | "CRM call" or "HubSpot call" for a call fact (Retired words) |
 | Status | Decided (R2; the reconciliation of 23 October 2026). Pending, untested because that day had none: the attribution of a transferred call to its last participant, and whether internal calls are excluded |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2"; evidence: "Definitions: Aircall reconciliation 23 Oct 2026 identical on every General Performance figure" |
-| Used by | `calls.total`, `calls.chart`, `calls.inbound`, `calls.outbound`, `dashboard.intake.calls`, `intake.calls_in`, `intake.calls_out`; Reports → Calls, Calls per agent, Intake, Dashboard |
+| Used by | `calls.total`, `calls.chart`, `calls.calls_per_tag`, `calls.inbound`, `calls.outbound`, `dashboard.intake.calls`, `intake.calls_in`, `intake.calls_out`; Reports → Calls, Calls per agent, Intake, Dashboard |
 | As built today | `cma.calls_of` (`152`, addition 0009b, with `100`'s rule; first in `62`): a telephony call, not deleted, with a start, on a counted line (a line not yet in the catalog counts), either direction; archived calls are not filtered out, which matches. A person's calls are their answered inbound and outbound calls (`cma.calls_per_person_of`, `62`), so a missed inbound call without a user counts in the totals and in no person's row, which matches. Internal calls are not excluded: neither the Aircall adapter (`ingest/src/adapters/aircall/map.mjs`) nor the SQL recognises one, so every call Aircall returns with direction inbound or outbound is stored and counted. A call is attributed to Aircall's `user` of the call object, not to a last participant (Gaps). A line Aircall adds arrives counted (`cma.telephony_number.is_counted` defaults to true), and no screen shows how many lines count (Gaps) |
 
 ### Attempt
@@ -85,7 +85,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | "CRM call" or "logged call" as an attempt (R1); "Call attempt" and, in Dutch, "belpoging" next to "poging" (proposed; both appear today, see Gaps) |
 | Status | Decided |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: Attempt" |
-| Used by | `attempts.*` (among them `attempts.per_deal`, `attempts.attempted_share`, `attempts.list.attempts`, `attempts.deal.n`), `attempts_per_agent.attempts`, `attempts_per_agent.avg_attempts`, `calls.outbound`, `live.outbound.attempts`, `calls_per_agent.outbound_calls`, and the first attempt of `speed_to_lead.*`; Reports → Calls, Calls per agent; Live board (Outbound today); Sales → Attempts per deal, Attempts per agent, Speed to lead; Customers → Courtesy through `courtesy.list.attempts` and `courtesy.unreachable` (Attempt since due) |
+| Used by | `attempts.*` (among them `attempts.per_deal`, `attempts.attempted_share`, `attempts.list.attempts`, `attempts.deal.n`), `attempts_per_agent.attempts`, `attempts_per_agent.avg_attempts`, `calls.outbound`, `calls.calls_per_tag`, `live.outbound.attempts`, `calls_per_agent.outbound_calls`, and the first attempt of `speed_to_lead.*`; Reports → Calls, Calls per agent; Live board (Outbound today); Sales → Attempts per deal, Attempts per agent, Speed to lead; Customers → Courtesy through `courtesy.list.attempts` and `courtesy.unreachable` (Attempt since due) |
 | As built today | Attempts per deal (`cma.deal_attempts_of`, `94`): under `attempts.source` `telephony` (the default, and Pulse4all's) an outbound telephony call on a counted line, not deleted, with a start, linked to a CRM call associated with the deal or its contacts; under `crm` every outbound CRM call so associated (R1 gap). Attempts per agent counts the attempts on the deals a person owns in the CRM, by whoever placed them. Reports → Calls counts every outbound call as Outbound, which matches. Speed to lead ends at the first Attempt, through `cma.deal_attempts_of` under the same `attempts.source` (`cma.speed_to_lead_of`, `234`). First orders' evidence "attempt" is an outbound telephony call linked to a CRM call with the contact (`100`), which matches. Courtesy counts the same Aircall attempts per courtesy order from the start of its due date (`cma.courtesy_orders_of`; Attempt since due) |
 
 ### Connected
@@ -199,7 +199,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | "Offered" (proposed; Reports → Inbound uses it today, see Gaps) |
 | Status | Decided (R2) |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2" |
-| Used by | `calls.inbound`, `intake.calls_in`, `inbound.*`, `live.inbound.*`; Reports → Calls, Inbound, Intake; Live board |
+| Used by | `calls.inbound`, `calls.calls_per_tag`, `intake.calls_in`, `inbound.*`, `live.inbound.*`; Reports → Calls, Inbound, Intake; Live board |
 | As built today | Direction inbound, not deleted, with a start, on a counted line (`cma.calls_of`; `cma.inbound_calls_of`, `60`, `76`). Internal calls are not excluded (as Call). Reports → Inbound labels them "Offered" ("Aangeboden") |
 
 ### Answered inbound call
@@ -256,7 +256,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | "call outcome" or "disposition" for an Aircall tag; a HubSpot call outcome in its place (R1) |
 | Status | Decided; the tag-meaning mapping built in addition 0008zc, incorrect data in addition 0008zd |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R1", "Definitions: Conversation = connected call with ≥ 30 s talk and no tag meaning *not reached*" and "Definitions: tag meanings, one per tag, configuration only"; 25 October 2026 (Martin), docs/decisions.md, 25 Oct 2026, "Definitions: incorrect data as its own tag meaning"; the courtesy tags of the Subscriptions connection, docs/decisions.md, 25 Oct 2026, "The courtesy tags of the Subscriptions Aircall connection got their meanings in prod" |
-| Used by | `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.tag_split`, `intake.tagged_calls`, and through the meanings "not reached" and "incorrect data" every Conversation figure; through the courtesy completed meanings `courtesy.completed_calls`, `courtesy.outcomes`, `courtesy.completed`, `courtesy.completion_share`, `courtesy.cohorts`, `courtesy.per_person`; the `meaning` of every Legacy call outcome; Reports → Calls, Calls per agent, Intake; Configuration → Sources, Tags |
+| Used by | `calls.tag_bars`, `calls.tags_by_group`, `calls.calls_per_tag`, `calls_per_agent.tag_split`, `intake.tagged_calls`, and through the meanings "not reached" and "incorrect data" every Conversation figure; through the courtesy completed meanings `courtesy.completed_calls`, `courtesy.outcomes`, `courtesy.completed`, `courtesy.completion_share`, `courtesy.cohorts`, `courtesy.per_person`; the `meaning` of every Legacy call outcome; Reports → Calls, Calls per agent, Intake; Configuration → Sources, Tags |
 | As built today | `cma.telephony_tag` holds each tag's name with `is_counted`, and `cma.telephony_call_tag` the tagging history (`34`). Since `100` each tag has one `meaning` (null or one of the seven keys; `incorrect_data` since `102`), set in Configuration → Sources, Tags by `cma.set_telephony_tag_meaning` (`tenant.configure`, audited, the same gate as `is_counted`); ingest never writes it and a catalog refresh keeps it. Only `not_reached` and `incorrect_data` are read, by Conversation (`cma.tag_meaning_excludes_conversation`, `102`), and `is_counted` has no effect on them; no figure counts the calls tagged incorrect data apart yet (Gaps, D32); the three courtesy completed meanings are read by Courtesy through `cma.courtesy_outcome_of` (Completed courtesy call), `courtesy_attempt` has no effect beyond the meaning, and call type waits for its figure. The labels (Configuration → Sources, Tags, Meaning): None (Geen), Not reached (Niet bereikt), Incorrect data (Onjuiste gegevens), Call type (Gesprekstype), Courtesy attempt (Courtesy-poging), Courtesy completed, positive / neutral / negative (Courtesy afgerond, positief / neutraal / negatief; the Dutch proposed). Matches the definition |
 
 **Pulse4all Subscriptions mapping.** The tag meanings of the Subscriptions Aircall connection, set on Configuration → Sources, Tags (configuration, never code); a tag name with `*` stands for every tag whose name starts with it. Every other tag has the meaning None until a figure needs it. The meaning of the Data Issue Escalate tags is an Open decision (docs/open-decisions.md, the courtesy definitions).
@@ -280,15 +280,34 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Definition | A call without a current tag; a tag removed makes the call untagged (Aircall). Its share is over all calls in scope, missed inbound calls included. |
 | Source | Aircall, the call's current `tags` |
 | Counts / does not count | Counts a call without any current tag, missed inbound calls included. Does not count a call with any tag |
-| Unit and display | A count and its share of all calls in scope |
+| Unit and display | A count and its share of all calls in scope; in Calls per tag its share per direction, over that column's calls (outbound, inbound or all) |
 | Time rule | Day |
 | Scope | As Call |
 | Equivalent in the source system | Aircall Analytics' untagged calls: the first bar of the tags chart; a call whose tag is removed is untagged again (the Analytics article on the tags and missed-call reasons charts) |
 | Not to use | "Untagged conversations" as the measure (As built today) |
 | Status | Decided; built in addition 0008zc |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2"; evidence: "Definitions: Aircall reconciliation 23 Oct 2026 identical on every General Performance figure"; built with step 1, "Definitions: Untagged and the talk-time average built with step 1" |
-| Used by | `calls.untagged_share`, `calls_per_agent.untagged`; Reports → Calls, Calls per agent |
-| As built today | `untagged` of `cma.calls_figures_of` (`100`): the calls without a current tag, counted or not, missed inbound calls included; `untaggedPct` (`web/src/lib/reports.ts`) divides it by all calls in scope ("{untagged} of {calls} calls"). Calls per agent counts a person's own calls without a tag. The tag use and the tags per person have no untagged row. API `untagged`. Matches the definition |
+| Used by | `calls.untagged_share`, `calls.calls_per_tag`, `calls_per_agent.untagged`; Reports → Calls, Calls per agent |
+| As built today | `untagged` of `cma.calls_figures_of` (`100`): the calls without a current tag, counted or not, missed inbound calls included; `untaggedPct` (`web/src/lib/reports.ts`) divides it by all calls in scope ("{untagged} of {calls} calls"). Calls per agent counts a person's own calls without a tag. The tag use and the tags per person have no untagged row. API `untagged`. Calls per tag shows the same count as its Untagged row, with its share over the column's calls (`cma.calls_per_tag_of`, `246`). Matches the definition |
+
+### Calls per tag
+
+| Field | Value |
+|---|---|
+| Term | Calls per tag (nl: Gesprekken per tag); the table "Calls per tag, whole period" ("Gesprekken per tag, hele periode") on Reports → Calls |
+| Key | `calls.calls_per_tag`; API `callsPerTag` |
+| Definition | The calls in scope per current tag, split by direction. A call with two tags counts under each; a call without a current tag counts under Untagged. Any tag, counted or not (as Untagged: a tag that does not count still makes a call tagged). |
+| Source | Aircall, the call's current `tags`, the tag catalog (name, `is_counted`) and the tag-meaning mapping |
+| Counts / does not count | Counts every Call in scope, missed inbound calls included. Does not count a removed tag |
+| Unit and display | Per tag a count and its share of that column's calls (Outbound, Inbound, Total), shown "count · share"; rows by Total, most first; a tag that does not count is in Muted with "(does not count)"; then Untagged (nl: Zonder tag), then the Total row (Totaal), which is the calls in scope, not the sum of the rows |
+| Time rule | Day |
+| Scope | As Call, with the period, market and line filters; whole period only, Group by does not split it |
+| Equivalent in the source system | Aircall Analytics' tags chart (all calls, the untagged calls as the first bar); to confirm against Aircall Analytics (no reconciliation of per-tag counts is recorded) |
+| Not to use | "Tag use" for this table (the tag use counts conversations) |
+| Status | Decided; built in addition 0009zw |
+| Decided | 25 November 2026 (Martin); docs/decisions.md, 25 Nov 2026, "Definitions: Calls per tag" |
+| Used by | `calls.calls_per_tag`; Reports → Calls |
+| As built today | `cma.calls_per_tag_of` (`246`, one pass over `cma.calls_of`, the window and business-date filter of `cma.calls_tag_use_of` without its conversation filter) and the application's read `cma.calls_per_tag(from, to, market, line, totals)` (`reports.view` or `performance.team`; `row_kind` `tag`, `untagged` or `total`), both over `cma.calls_per_tag_rows_of`, which counts the tag rows, the Untagged row and the total from one set of calls; the total equals `cma.calls_figures_of`'s calls, inbound and outbound (`247` E4 checks it on every active tenant). The page takes the totals from the overview and streams the table after its first paint; the API's fields are `rows` (`tagKey`, `tagName`, `meaning`, `isCounted`, `outbound`, `inbound`, `calls`), `untagged` and `totals`. Day has the same gap as Reports → Calls: the date is the line's market zone, not the tenant's. The Tags card's note says the tag use counts only conversations and Calls per tag every call. Matches the definition |
 
 ### Last participant
 
@@ -344,7 +363,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Not to use | None yet |
 | Status | Decided (R2; the reconciliation of 23 October 2026, in Europe/Amsterdam); as built, Reports → Calls uses each line's market zone, a gap to fix |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2"; evidence: "Definitions: Aircall reconciliation 23 Oct 2026 identical on every General Performance figure"; 2 November 2026, "Definitions: Flash's labels after the second review" (addition 0008zn, #214) |
-| Used by | `calls.*`, `calls_per_agent.*` (`calls_per_agent.first_last_call` by time of day), `inbound.*`, `intake.calls_in`, `intake.calls_out`, `live.outbound.*`, `live.inbound.talk`, `live.inbound.hours`; Reports → Calls, Calls per agent, Inbound, Intake, Live board (Outbound today, Inbound today's Talk time, Inbound today by hour); Reports → Flash (the Day column of its Churn, Orders, Payments and Reviews lists) |
+| Used by | `calls.*` (among them `calls.calls_per_tag`), `calls_per_agent.*` (`calls_per_agent.first_last_call` by time of day), `inbound.*`, `intake.calls_in`, `intake.calls_out`, `live.outbound.*`, `live.inbound.talk`, `live.inbound.hours`; Reports → Calls, Calls per agent, Inbound, Intake, Live board (Outbound today, Inbound today's Talk time, Inbound today by hour); Reports → Flash (the Day column of its Churn, Orders, Payments and Reviews lists) |
 | As built today | `cma.calls_of` and `cma.inbound_calls_of` date (and hour) each call in its line's market zone, else the tenant's, so a GB line's call at 23:30 in London lands a day earlier than in Amsterdam; `cma.outbound_today_of` (`166`, the Live board's Outbound today) reads `cma.telephony_call` itself and dates today's calls the same way, to equal Reports → Calls; `cma.telephony_history_start_of` (`64`) does the same. Intake (`cma.intake_per_day`) dates calls in the tenant's zone, which matches. The Calls page's like-for-like label uses the viewer's zone (audit finding MA-004) |
 
 ### Speed to lead
@@ -1211,14 +1230,14 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Definition | Per subscription, Juo's renewal state of it, one of seven: Paid (status active, nothing open), In retry (status active, with a failed renewal of a cycle that no renewal of that cycle or a later one follows), Charged back (status active, the store order of its latest renewal, the highest cycle, or without a renewal its purchase's order, was charged back), Awaiting payment (status active, the latest invoice placed for a renewal with no paid invoice of it; `overdue` once an overdue invoice came), Failed (status failed), Paused (status paused) and Canceled (status canceled or expired). In that order of precedence for an active subscription: In retry, Charged back, Awaiting payment, Paid. The worst state over several subscriptions is failed, charged_back, in_retry, awaiting_payment, paused, paid. It is Juo's renewal state, not a payment in NetSuite, which still owns payments, days to pay and dunning stages. |
 | Source | `cma.subscription`, `cma.subscription_event` (its `renewed` and `renew_failed` events; where either lacks its cycle, a renewal after the failure closes it) and, since 0009ze, `cma.billing_event` (chargebacks linked by store order, and the invoice events), computed at read time by `cma.subscription_payment_state_of(tenant)` (or `(tenant, subscriptions)`, the same derivation for the given subscriptions) with no call to Juo |
 | Counts / does not count | One state per subscription the latest full read still returns (`source_deleted_at` empty) whose status is active, paused, canceled, expired or failed; a subscription with status merged or never-subscribed has none, and neither has one missing from the latest full read. Failed stays status-based: Juo moves most charged-back subscriptions to failed itself, so a failed subscription carries the chargeback's return code as `chargeback_return_code` (its reason), and Charged back is only an active subscription Juo left active. Awaiting payment exists only in a store that has invoice events (GB, DE and NL on 20 November 2026); elsewhere no subscription has it. Canceled covers the statuses canceled and expired and is kept apart from Cancellation: Customers → Cancellations counts cancellation requests, and Cancellation stays under Domains still to define. Paid is not a NetSuite payment: an invoice's payment status, days to pay and dunning stage are NetSuite's (README, Source of truth) |
-| Unit and display | A count per state; In retry also gives the open failure's cycle, its first failure and its highest attempt; `state_since` is when the state began (the first failure, the chargeback, the invoice placed, or the status change), `overdue` is true for an Awaiting payment with an overdue invoice, and Amount at risk the amount at stake; Reports → Flash (Subscriptions) shows the state per subscription and a count per state (nl: Betaalstand, apart from an order's financial status, "Financial status", nl "Financiële status") |
+| Unit and display | A count per state; In retry also gives the open failure's cycle, its first failure and its highest attempt; `state_since` is when the state began (the first failure, the chargeback, the invoice placed, or the status change), `overdue` is true for an Awaiting payment with an overdue invoice, and Amount at risk the amount at stake; Reports → Flash (Subscriptions) shows the state per subscription and a count per state, and Customers → Payments shows five of the states (not Paused and Canceled) as tiles with their share, in a cross table by payment instrument and as the list's state filter (nl: Betaalstand, apart from an order's financial status, "Financial status", nl "Financiële status") |
 | Time rule | As of now: computed from the stored rows at each read, with no state history (the events are the history). A subscription is as fresh as its last read: every `subscriptions_poll_interval_minutes` (default 5) when an event touched it, else the nightly full read; the take `cma.subscription_take` holds the state as of its last refresh |
 | Scope | As Subscription |
 | Equivalent in the source system | None: the CMA's own derivation from Juo's status, its renewal events, chargebacks and invoice events. HubSpot's warehouse object `juo_subscription` has a field "Payment state" with another meaning; the CMA never reads or writes it |
 | Not to use | "Payment status" and "dunning stage" (NetSuite's words for invoices and payments; README, Source of truth), so an order's payment status as the store states it is labelled Financial status (nl: Financiële status) on Reports → Flash; "failed payment" (Failed renewal); "paid" for a payment in NetSuite, since Paid here is Juo's renewal state; Paid (time), a person's time in paid statuses under Time terms, is another term and never a payment state |
 | Status | Proposed (for Kira to confirm); Charged back and Awaiting payment are Proposed with addition 0009ze, and Awaiting payment's meaning changed then from a renewal by draft order (Mollie) to invoice renewals |
 | Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Each subscription has a payment state, one of six" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214); 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214); 20 November 2026, "Charged back is built and Failed stays status-based", "Awaiting payment is built from invoice events", "The order of payment states for the worst state is failed, …" and "Definitions: Payment state gains Charged back …" (addition 0009ze, this PR) |
-| Used by | `cma.subscription_payment_state_of` (both forms), `cma.payment_states()`, `cma_read.subscription_payment_state`, `cma.subscription_take`; the installed base's records (`cma.flash_rows_of`, the page's subscriptions only); the worst state of Customers → Active's list (`cma.active_rows_of`) and its mix (`cma.active_rest_body_of`); the breakdown by payment state of `flash.subscriptions.*`; Reports → Flash (Subscriptions) and its files (KPI 4 and the device's subscription status come later: docs/open-decisions.md) |
+| Used by | `cma.subscription_payment_state_of` (both forms), `cma.payment_states()`, `cma_read.subscription_payment_state`, `cma.subscription_take`; the installed base's records (`cma.flash_rows_of`, the page's subscriptions only); the worst state of Customers → Active's list (`cma.active_rows_of`) and its mix (`cma.active_rest_body_of`); the breakdown by payment state of `flash.subscriptions.*`; Reports → Flash (Subscriptions) and its files (KPI 4 and the device's subscription status come later: docs/open-decisions.md); `cma.payments_page`, `cma.payment_rows`; Customers → Payments |
 | As built today | `cma.subscription_payment_state_of(tenant)` and its overload `(tenant, subscriptions)` (`210`, dropped and created from `118` and `148`, four columns more after the old nine): Failed for status failed (with the return code of a linked chargeback), Paused, Canceled, In retry, Charged back and Awaiting payment as above, else Paid; `amount_at_risk` is the amount per cycle while In retry, Failed, Charged back or an overdue Awaiting payment, in the subscription's `currency`. `cma_read.subscription_payment_state` reads it through a `SECURITY DEFINER` reader function and gains the new columns at its end. `cma.flash_rows_of` reads the overload for the page's subscriptions only. `211` A7 proves the result equal to `118`'s and `148`'s row for row but where a new state applies. Matches the definition |
 
 ### Failed renewal
@@ -1287,14 +1306,14 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Definition | One event of the subscription app about a payment or an order it could not place: a chargeback, a refund (created, completed, failed), an invoice renewal (placed, paid, overdue, payment failed) or an order that failed to place or was created as a draft. It carries ids, codes, an amount in its currency and a time, never a message, a note or a payment detail. |
 | Source | Juo's events `chargeback:created`, `refund:created`, `refund:completed`, `refund:failed`, `invoice:placed`, `invoice:paid`, `invoice:overdue`, `invoice:payment-failed`, `order:placement-failed` and `order:draft-created`, read as the billing family (its own query and backfill cursor) by the poll and `ingest-backfill --object billing_event`, written by `cma.ingest_upsert_billing_events`. The event's id, time, subscription (when Juo names it), customer id, order id (digits), renewal id, owner id, amount or total, currency, reason code, instrument type, attempt, error code and a refund's `partial` are read; a `reasonMessage`, an `errorMessage` and a refund's note never |
 | Counts / does not count | One row per event and connection, append-only (an event held already is left as it is). The subscription's own copies of a chargeback or refund (`subscription:chargeback-created`, `subscription:refund-*`) are the same event: they are skipped and counted `duplicate_skipped`. `subscription_source_id` may be empty (Juo's chargeback rows carry the customer and the store's order, not always the subscription): a chargeback joins a renewal by the order (`order_source_id` of `cma.subscription_event`) |
-| Unit and display | A count of events per kind; an amount per currency, never added across currencies; a code shows as the code. No page yet |
+| Unit and display | A count of events per kind; an amount per currency, never added across currencies; a code shows as the code. No page shows the events themselves yet (Customers → Payments' monthly part is Pending) |
 | Time rule | `occurred_at`, the instant Juo reports; the poll reads again from five minutes before its cursor, so the overlap stores nothing twice |
 | Scope | As Subscription |
 | Equivalent in the source system | Juo's event types of the same names (`GET /events`); the brief's probes of 18 November 2026 saw them in the GB store |
 | Not to use | "Payment status", "failed payment" and "dunning" (NetSuite's words, README, Source of truth); "payment" or "transaction" for a billing event (NetSuite's payments and the store's financial status are other facts) |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" (addition 0009za, B39a, this PR) |
-| Used by | `cma.billing_event`, `cma_read.billing_event`, `cma.ingest_upsert_billing_events`; the data map's table `billing_event`; no page yet (Parts C to F of brief B39: payment state, renewal outcomes, Customers → Payments) |
+| Used by | `cma.billing_event`, `cma_read.billing_event`, `cma.ingest_upsert_billing_events`; the data map's table `billing_event`; Customers → Payments through the payment state (chargebacks and invoices); the monthly renewals, chargebacks and refunds are a Pending part there |
 | As built today | `cma.billing_event` (`202`): unique per tenant, connection and `source_id`; checks on `kind` (the ten), the order (digits), the return code (Return code), the instrument (Payment instrument), `partial` only on a refund and `raw` (fixed keys, no @); indexes on the order, on the kind and time and on the subscription; the application can neither update nor delete a row. 203's Z1 reads every row for an email pattern. Matches the definition |
 
 ### Chargeback
@@ -1325,14 +1344,14 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Definition | The payment scheme's reason a chargeback gives, kept as a code: either four upper-case letters or digits, such as MD01 (a SEPA return reason), or a card dispute reason from the adapter's fixed list, such as `fraudulent`. The reason's message is never read. |
 | Source | A chargeback event's `data.reasonCode`. The fixed list (`map.mjs` `CARD_DISPUTE_REASONS`): bank_cannot_process, check_returned, credit_not_processed, customer_initiated, debit_not_authorized, duplicate, fraudulent, general, incorrect_account_details, insufficient_funds, noncompliant, product_not_received, product_unacceptable, subscription_canceled, unrecognized |
 | Counts / does not count | Only on a chargeback (a check). A code outside both forms, or a word outside the fixed list, is dropped and counted `return_code_dropped` (the value never logged); the dry run's `returnCodes` shows the codes seen, so a new reason is added to the list by a change. Neither form can hold an account number or a name |
-| Unit and display | The code as the code; its standard meaning shows in a hint from a tenant catalog only when Part E of brief B39 builds it |
+| Unit and display | The code as the code; its standard meaning shows in a hint from a tenant catalog only when a later increment builds it; Customers → Payments shows the code as the code |
 | Time rule | As its chargeback |
 | Scope | As Subscription |
 | Equivalent in the source system | Juo's chargeback `reasonCode` (a SEPA reason code such as AM04, MD01 and MD06 was seen, GB, 18 November 2026; a card dispute reason such as `fraudulent` in GB's probe the same day) |
 | Not to use | "Reason" or "reason code" for it: `reason_code` of `cma.subscription_event` is Juo's fixed reason of a failed renewal or cancellation, and `error_code` is a failed renewal's error; "reason message" (never read) |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 18 November 2026 (Proposed); docs/decisions.md, 18 Nov 2026, "Definitions: the subscription app read whole" and "The return code form" (confirmed 19 Nov 2026) (addition 0009za, B39a, #294) |
-| Used by | `cma.billing_event.return_code`, `cma_read.billing_event`; no page yet |
+| Used by | `cma.billing_event.return_code`, `cma_read.billing_event`; Customers → Payments (the list's Return code column and the file's, from the payment state's `chargeback_return_code`) |
 | As built today | The database check is `^([A-Z0-9]{4}|[a-z][a-z_]{1,39})$` on a chargeback; the adapter admits `^[A-Z0-9]{4}$` or a word of the fixed list. The form is wider than the brief's "upper case, 2 to 10 characters", to take card dispute reasons (decision row). Matches the definition |
 
 ### Refund
@@ -1389,7 +1408,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Not to use | "Payment method" for the code (Juo's payment method also holds a holder and digits, which the CMA never reads) |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 20 November 2026 (Proposed); docs/decisions.md, 20 Nov 2026, "BACS direct debit is its own payment instrument" and "Definitions: Payment instrument gains the eighth code" (addition 0009zb, B39a2, this PR); earlier "Definitions: Payment instrument widened to seven codes, and Line told apart from Subscription line" (18 Nov 2026) |
-| Used by | `cma.subscription.payment_instrument_type`, `cma.billing_event.instrument_type`, `cma.payment_instrument_type_ok`, `cma_read.subscription`, `cma_read.billing_event`; Subscription audit's check `instruments` |
+| Used by | `cma.subscription.payment_instrument_type`, `cma.billing_event.instrument_type`, `cma.payment_instrument_type_ok`, `cma_read.subscription`, `cma_read.billing_event`; Subscription audit's check `instruments`; Customers → Payments (the cross table Payment state by payment instrument and the list's column) |
 | As built today | One check function (`cma.payment_instrument_type_ok`, widened by `204`) holds the eight codes for both columns; the adapter maps Juo's types (`INSTRUMENTS` and `instrumentInfoOf`, `map.mjs`). A subscription stored as `other` changes at its next full read; a billing event stored as `other` keeps it (append-only), so the audit's `instruments` reads a billing event `other` as explain and a subscription `other` as fail. The CMA04 message of `cma.ingest_upsert_subscriptions` still names seven codes (Gaps, D35). Matches the definition |
 
 ### Subscription event types
@@ -1465,7 +1484,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Not to use | "Cut-off" or "go-live date" for it |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 23 November 2026 (Martin); docs/decisions.md, 23 Nov 2026, "Customers → Subscriptions's churn rate, failed rate and movements, and Customers → Active's Churn rate card, start at 1 June 2026 for every store, …" and "Definitions: Rates start month …" (addition 0009zl, PR #308); a store's own later start floors its rates and not its movements (decided, Martin, 23 November 2026) |
-| Used by | `cma.check_tenant_setting()`, `cma.subscription_rate_start_of`, `cma.subscription_store_start`, `cma_read.subscription_store_start`, `cma_read.subscription_churn_month`, `cma.subscriptions_page`, `cma.subscriptions_churn_card`; Churn rate, Failed rate, Recurring amount movement; Customers → Subscriptions, Customers → Active (the Churn rate card); catalog `subscriptions.rates_start_month` |
+| Used by | `cma.check_tenant_setting()`, `cma.subscription_rate_start_of`, `cma.subscription_store_start`, `cma_read.subscription_store_start`, `cma_read.subscription_churn_month`, `cma.subscriptions_page`, `cma.subscriptions_churn_card`; Churn rate, Failed rate, Recurring amount movement; Customers → Subscriptions, Customers → Payments (the Failed rate and its months), Customers → Active (the Churn rate card); catalog `subscriptions.rates_start_month` |
 | As built today | `224`: the setting in the catalog and checked by `cma.check_tenant_setting()`; the store's start is the later of its own and the floor; `225` proves it, and the seed sets 2026-06 for the subscriptions tenant (prod: after the migration, PROD_RUNBOOK 22.2b). Matches the definition |
 
 ### Migration share
@@ -1629,14 +1648,14 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Definition | The amount per cycle of a subscription while its Payment state is In retry, Failed, Charged back or an overdue Awaiting payment, in the subscription's currency; empty in every other state. |
 | Source | `cma.subscription.amount_per_cycle` and `currency` with the Payment state |
 | Counts / does not count | Per currency, never added across currencies. It is the recurring amount at stake, not an amount charged back (the chargeback's own amount is on Chargeback) and not a payment in NetSuite |
-| Unit and display | An amount in the subscription's currency, two decimals; no page yet (Part D builds it) |
+| Unit and display | An amount in the subscription's currency, two decimals; Customers → Payments shows it as a tile per currency (with its subscriptions and indicative euros) and as the list's default sort and column |
 | Time rule | As of now (the Payment state), and as of the take's last refresh in `cma.subscription_take` |
 | Scope | As Subscription |
 | Equivalent in the source system | None |
 | Not to use | "MRR at risk" (MRR is not the CMA's word: Monthly recurring amount); "unpaid" or "overdue amount" |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 20 November 2026 (Proposed); docs/decisions.md, 20 Nov 2026, "The order of payment states for the worst state is failed, …" and "Definitions: Amount at risk is a new term" (addition 0009ze, this PR) |
-| Used by | `cma.subscription_payment_state_of`, `cma.subscription_take`, `cma_read.subscription_payment_state`, `cma_read.subscription_take`; no page yet |
+| Used by | `cma.subscription_payment_state_of`, `cma.subscription_take`, `cma_read.subscription_payment_state`, `cma_read.subscription_take`; `cma.payments_page`, `cma.payment_rows`; Customers → Payments (tile, list, file) |
 | As built today | `210`: the amount per cycle for the four conditions, null otherwise. Matches the definition |
 
 ### Renewal attempt, Renewal success and Recovery
@@ -1686,14 +1705,14 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Definition | The subscriptions that moved to failed in a month divided by the Total subscriptions at the previous month end, per market, beside the Churn rate and never inside it. |
 | Source | `cma.subscription_month_take` (kinds `moved_to_failed` and `start`) |
 | Counts / does not count | Complete months only, from each store's start month: the month after the store's last month with migrated events (a straggler under `subscriptions.migration_bulk_min_pct`, default 5 % of the store's migrated events, is reported in `cma_read.subscription_store_start` and never moves the start), else the first complete calendar month after its first event; derived from the data, never a date in code, and never before the Rates start month (the later of the two applies), over the stores whose start month it is or later. Whether failed counts as churn stays `flash.ended_subscription_statuses` (Kira): while it does not, Churn rate does not count a move to failed. For a selection of markets or stores (no market filter: every market; a store filter: that store) it is the same ratio over the summed base of the selected stores whose month counts, as the Churn rate |
-| Unit and display | A share of the base (1 is 100 %), four decimals in the reader; Customers → Subscriptions shows it as a tile and by month, and Customers → Active's Churn rate card shows it under the Churn rate |
+| Unit and display | A share of the base (1 is 100 %), four decimals in the reader; Customers → Subscriptions shows it as a tile and by month, Customers → Payments shows the same figure as a tile and by month, and Customers → Active's Churn rate card shows it under the Churn rate |
 | Time rule | By calendar month in the tenant's zone |
 | Scope | Per market |
 | Equivalent in the source system | None |
 | Not to use | "Failed payment rate"; "dunning rate"; "Churn rate" for it |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 20 November 2026 (Proposed); docs/decisions.md, 20 Nov 2026, "The Churn rate counts per market from each store's first complete calendar month …" and "Definitions: Churn rate moves from Pending to Proposed …", "The Churn rate and the Failed rate start at the first month whose starting base holds a store's migrated subscriptions …" and "Definitions: the start of the Churn rate and the Failed rate per store …" (addition 0009ze, this PR); 21 November 2026, docs/decisions.md, 21 Nov 2026, "For a selection of markets or stores (no market filter: every market; …" and "Definitions: Churn rate and Failed rate gain the wording for a selection …" (addition 0009zh, this PR); 23 November 2026, docs/decisions.md, 23 Nov 2026, "Customers → Subscriptions's churn rate, failed rate and movements, and Customers → Active's Churn rate card, start at 1 June 2026 for every store, …" and "Definitions: Rates start month …" (addition 0009zl, PR #308) |
-| Used by | `cma_read.subscription_churn_month`, `cma_read.subscription_store_start` (the start month per store), `cma.subscription_store_start`; Customers → Subscriptions (tile, months), Customers → Active (the Churn rate card); `cma.subscriptions_page`, `cma.subscriptions_churn_card`; catalog `subscriptions.failed_rate` |
+| Used by | `cma_read.subscription_churn_month`, `cma_read.subscription_store_start` (the start month per store), `cma.subscription_store_start`; Customers → Subscriptions (tile, months), Customers → Payments (tile, months), Customers → Active (the Churn rate card); `cma.subscriptions_page`, `cma.payments_page`, `cma.subscriptions_churn_card`; catalog `subscriptions.failed_rate` |
 | As built today | `210`: `failed_rate` = `moved_to_failed` / `base`, null without a base. `211` checks it against a hand count. Matches the definition |
 
 ### Renewal survival
@@ -3123,7 +3142,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 |---|---|
 | Term | Team (nl: Team), a rail group label |
 | Key | Copy key `nav.team`; group id `team` |
-| Definition | The rail group of the pages about the people of the contact center: People, Quality monitoring and Roster, in that order. The word names a group of pages; "team" for a group of people inside an organisation is Team (Live board's Not to use). |
+| Definition | The rail group of the pages about the people of the contact center: People and Quality monitoring, in that order (Roster sits last in the Time group). The word names a group of pages; "team" for a group of people inside an organisation is Team (Live board's Not to use). |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
 | Counts / does not count | Every page keeps its href and its permission; a group with no page the person may see is absent. A person with `quality.manage` and no other permission of the group sees Quality monitoring alone (an analyst); a supervisor holds none of the group's permissions in the default ladder and sees no Team group |
 | Unit and display | A group after Time and before Reports. The group's breadcrumb leads to the first page of it the person may see: People for a manager, Quality monitoring for an analyst. The digit keys of its pages follow the visible order |
@@ -3132,8 +3151,27 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 | Equivalent in the source system | None |
 | Not to use | "Team" for one group of people (a team inside an organisation is a different term) |
 | Status | Decided (the label and the order) |
-| Decided | 13 November 2026 (Martin); docs/decisions.md, 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (#278); 14 Nov 2026, "Quality monitoring's permission is `quality.manage`, …" and "Definitions: Fulfillment and Storage (rail pages), …" (#278) |
-| Used by | `nav.team`, `nav.people`, `nav.qualityMonitoring`, `nav.roster`; Team → People (`users.manage_agents` or `users.manage_all`), Quality monitoring (`quality.manage`), Roster (`roster.manage`) |
+| Decided | 13 November 2026 (Martin); docs/decisions.md, 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (#278); 14 Nov 2026, "Quality monitoring's permission is `quality.manage`, …" and "Definitions: Fulfillment and Storage (rail pages), …" (#278); 25 Nov 2026, "Definitions: Roster moves …" (this PR) |
+| Used by | `nav.team`, `nav.people`, `nav.qualityMonitoring`; Team → People (`users.manage_agents` or `users.manage_all`), Quality monitoring (`quality.manage`) |
+| As built today | Matches the definition |
+
+### Time (rail group)
+
+| Field | Value |
+|---|---|
+| Term | Time (nl: Time), a rail group label |
+| Key | Copy key `nav.time`; group id `time` |
+| Definition | The rail group of the pages about time worked and planned: My day, My hours, My schedule, Team hours and Roster, in that order. |
+| Source | `web/src/lib/nav.ts` (`navEntries()`) |
+| Counts / does not count | Every page keeps its href and its permission (My day and My hours `workday.own`, My schedule `roster.view`, Team hours `workday.team`, Roster `roster.manage`); a group with no page the person may see is absent |
+| Unit and display | A group after Live and before Team. The group's breadcrumb leads to the first page of it the person may see; Roster's breadcrumb is Welcome › Time › Roster. For a manager and an admin the digit keys are Welcome 1, Messages 2, Live board 3, My day 4, My hours 5, My schedule 6, Team hours 7, Roster 8, People 9, and Quality monitoring has no key |
+| Time rule | None |
+| Scope | The rail of every tenant; an agent sees My day, My hours and My schedule, a supervisor adds Team hours |
+| Equivalent in the source system | None |
+| Not to use | "Team" for the group that holds Roster |
+| Status | Decided (the order) |
+| Decided | 25 November 2026 (Martin); docs/decisions.md, 25 Nov 2026, "Roster moves …" and "Definitions: Roster moves …" (this PR) |
+| Used by | `nav.time`, `nav.roster`; Time → My day, My hours, My schedule, Team hours, Roster (`roster.manage`) |
 | As built today | Matches the definition |
 
 ### Sales (rail group)
@@ -3161,7 +3199,7 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 |---|---|
 | Term | Customers (nl: Klanten), a rail group label |
 | Key | Copy key `nav.customers`; group id `customers` |
-| Definition | The rail group of the pages about customers: Active, Subscriptions, Payments, Courtesy, Compliance, Reviews and Cancellations, in that order. Payments and Compliance are placeholders; Subscriptions is built (addition 0009zh). The word is a label for a group of pages; it does not define "customer", which is still pending (Domains still to define, Customers and orders). |
+| Definition | The rail group of the pages about customers: Active, Subscriptions, Payments, Courtesy, Compliance, Reviews and Cancellations, in that order. Compliance is a placeholder; Subscriptions is built (addition 0009zh) and Payments (addition 0009zy). The word is a label for a group of pages; it does not define "customer", which is still pending (Domains still to define, Customers and orders). |
 | Source | `web/src/lib/nav.ts` (`navEntries()`) |
 | Counts / does not count | Every page keeps its href, its permission and its per-person key; a group with no page the person may see is absent |
 | Unit and display | A group with a person icon, after Sales and before Assets |
@@ -3218,18 +3256,18 @@ Decided by Martin on 5 November 2026 (addition 0008zv, #235; the Assets group an
 |---|---|
 | Term | Payments (nl: Betalingen), a rail page |
 | Key | Copy key `nav.payments`; `/reports/payments` |
-| Definition | The page, in the Customers group, that will hold the financial status the store gives each order and the subscription app's renewals and failed renewals. It is not Flash's Payments overview and not NetSuite's payments. |
-| Source | Will be fed by the financial status the store gives each order (Shopify) and the subscription app's renewals and failed renewals (Juo), per the Decision log of 1 Nov 2026 |
-| Counts / does not count | Shows no number, no zero and no dash that reads as zero, and no customer data. Links to Today in Flash: Payments (`/reports/flash?o=payments`). The page says financial status, in the store's own word. |
-| Unit and display | A placeholder page (`web/src/components/PlaceholderPage.tsx`): the page's purpose in one sentence, a neutral "Not connected yet" badge, what will feed it, its definition status (Pending) and the banner "Placeholder: this page is not built yet. Nothing here is real data." |
-| Time rule | None until built |
-| Scope | Per tenant, for `reports.view` or `performance.team`; a person without it is refused |
+| Definition | The page, in the Customers group, that shows the payment state of the subscription base and what is at risk, from the subscription facts' stored takes: the five payment states with each one's share, the Amount at risk, the Failed rate, the Failed rate by month, the Payment state by payment instrument and the list of subscriptions in a payment state. It is the state of the subscription base over months; Flash's Payments overview is the flow per market and day. It is not NetSuite's payments. |
+| Source | The subscription facts' stored takes (`cma.subscription_take`, `cma.subscription_month_take`, `cma.subscription_store_start`, `cma.subscription_take_state`); the list, the file and the cross table add the subscription number, the payment instrument and the matched CRM contact from the mirror `cma.subscription` by the take's key. No event is read on the page |
+| Counts / does not count | Ids, codes, counts, months, amounts and links only, never a name or an email address, and no number, zero or dash that reads as zero where a figure is not known. The base is every present subscription in one of the five payment states (Paid, In retry, Charged back, Awaiting payment, Failed), not the Total subscriptions under `flash.device_holding_statuses`; Paused and Canceled are not on the page. The shares are of that base. Amounts are per currency and never added across currencies; the indicative euro line appears only while every currency has a rate. The Failed rate is Customers → Subscriptions' own figure (the last complete month, from the Rates start month at the earliest). An order's Financial status is not on the page (it stays on Flash's Payments overview). Renewals, failed renewals, chargebacks and refunds by month are a Pending part (docs/open-decisions.md, The facts refresh) |
+| Unit and display | `/reports/payments` (`web/src/components/PaymentsReport.tsx`, copy section `payments`): the filters of Customers → Subscriptions (Market, Store, Proposition, Billing interval, From, To); seven tiles (Paid, In retry, Charged back, Awaiting payment with its overdue, Failed, each with its share of the base; the Amount at risk per currency with its subscriptions and indicative euros; the Failed rate of the last complete month); Failed rate by month (per market, from each store's start and the Rates start month); Payment state by payment instrument (a cross table); the list (50 a page; state at risk by default, one of the five or all five; sorts Amount at risk by default, State since, Subscription, Market, Payment state; ids, codes, times, amounts and a contact link) with a list file and a months file, each recorded in the audit log; a Pending part "Renewals, chargebacks and refunds by month"; a link to Flash: Payments for this month to today. While no subscriptions connection is set up the page shows the placeholder (`placeholders.*`, `intro_payments`, `fedBy_payments`) instead |
+| Time rule | As of the take's Refreshed at (the stored takes, refreshed by the facts' job); months are calendar months in the tenant's zone and only complete months carry a rate |
+| Scope | Per tenant and per market or store; for `reports.view` or `performance.team`, a person without it is refused |
 | Equivalent in the source system | None |
-| Not to use | "Failed payment" (Failed renewal); "dunning"; "payment status" (Payment state); NetSuite's payments (out of scope, Decision log, 1 Nov 2026) |
-| Status | Pending: how this page differs from Flash's Payments overview (docs/open-decisions.md, Placeholder pages to build) |
-| Decided | 13 November 2026 (Martin); docs/decisions.md, 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (this PR) |
-| Used by | `nav.payments`, `placeholders.*`; Customers → Payments (the rail and its breadcrumb) |
-| As built today | Matches the definition; no read, no transaction |
+| Not to use | "Failed payment" (Failed renewal); "dunning"; "payment status" (Payment state; an order's is Financial status); Flash's Payments overview as this page (it is the flow per market and day); NetSuite's payments (out of scope, Decision log, 1 Nov 2026) |
+| Status | Decided; the monthly renewals, chargebacks and refunds are Pending (docs/open-decisions.md, The facts refresh) |
+| Decided | 13 November 2026 (Martin); docs/decisions.md, 13 Nov 2026, "Five rail pages are placeholders, …" and "Definitions: Team (rail group), …" (this PR); 25 November 2026 (Martin), docs/decisions.md, 25 Nov 2026, "Customers → Payments (`/reports/payments`) is the payment state of the subscription base over months …", the three choices "Laten staan", "Alleen abonnementen" and "Eerst Pending part" and "Definitions: Payments (rail page) moves from Pending to Proposed …" (addition 0009zy, #334); 26 November 2026 (Martin), docs/decisions.md, 26 Nov 2026, "Customers → Payments' four build choices are confirmed" (#334); 26 November 2026, Decided: confirmed by Martin on 26 November 2026, verified in prod on 26 November 2026 (`250`/`251`, PASS, A ONLY), merged in #334; docs/decisions.md, 26 Nov 2026, "Definitions: Payments (rail page) moves from Proposed to Decided" (this PR) |
+| Used by | `nav.payments`, `payments.*` (copy section, en and nl), `placeholders.*` (while no subscriptions connection is set up); `GET /api/v1/reports/payments`, `/rows` and `/file`; `cma.payments_page`, `cma.payment_rows`, `cma.payment_file_record`; Customers → Payments (the rail and its breadcrumb) |
+| As built today | `250` (`cma.payments_page`, `cma.payment_rows`, `cma.payment_file_record`, with `cma.assert_payment_list`, `cma.payment_rows_of` and `cma.payments_page_of`); `251` checks the page against the takes and the Failed rate against Subscriptions' (B3, B3b). Matches the definition |
 
 ### Compliance (rail page)
 
@@ -3453,14 +3491,14 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Definition | A person is on the roster when their time is kept (`cma.time_is_kept`: active, holding `workday.own`) and they hold `roster.planned`. Roles combine, so a person holding admin and agent is on the roster |
 | Source | The CMA: `cma.user_permission` through `cma.has_permission` and `cma.time_is_kept` |
 | Counts / does not count | Counts agents, supervisors and managers in the default ladder (`cma.seed_default_roles`; migration 198 gave the permission to the system roles agent, supervisor and manager of existing tenants). Does not count a person whose role lacks `roster.planned` (admin and analytics in the default ladder) or a deactivated person. A tenant's own role changes stay as they are |
-| Unit and display | A person; no label of its own. Decides who the planner's grid lists (`cma.roster_people`), who `cma.roster_set_entry` accepts and `cma.roster_copy_week` copies, whose entries `cma.roster_entries` and `cma.roster_coverage` show and count, and who has a row in `cma.roster_today` |
+| Unit and display | A person; no label of its own. Decides who the planner's grid lists (`cma.roster_people`), who `cma.roster_set_entry` accepts and Copy week (`cma.roster_copy_week_report`) copies, whose entries `cma.roster_entries` and `cma.roster_coverage` show and count, and who has a row in `cma.roster_today` |
 | Time rule | Now: a person's permissions and activity as they stand when read |
 | Scope | One person, one tenant |
 | Equivalent in the source system | None |
 | Not to use | A role key (agent, supervisor) for who is planned: surfaces follow permissions (Role and surface); "has a roster" or "rostered" for this meaning (a shift is the planned entry, Rostering) |
 | Status | Decided |
 | Decided | 17 November 2026 (Martin, D1 and D2); docs/decisions.md, 17 Nov 2026, "Roster: only people on the roster …" and "Definitions: On the roster …" (addition 0009y, #293) |
-| Used by | `live.people.shift_today`, `roster.planner.planned_minutes_per_person`, `roster.planner.headcount_per_day`, `roster.planner.coverage`; Team → Roster (the planner), the Live board's shift line |
+| Used by | `live.people.shift_today`, `roster.planner.planned_minutes_per_person`, `roster.planner.headcount_per_day`, `roster.planner.coverage`; Time → Roster (the planner), the Live board's shift line |
 | As built today | Matches the definition. A person who leaves the roster keeps stored entries (they are not shown, counted or copied); My schedule (`roster.view`) still shows a person's own published entries |
 
 ### Remove day
@@ -3639,7 +3677,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Field | Value |
 |---|---|
 | Term | Hours market (nl: Urenmarkt), the market under which time is registered and billed |
-| Key | SQL `cma.time_event.hours_market_code` (nullable, an hours market of the tenant), `cma.market.hours_market_code` (the mapping; not null, its own code by default), `cma_read.time_event.hours_market_code`, `cma_read.market.hours_market_code` and `cma_read.time_interval.hours_market_code` (each last); `cma.hours_markets()`, `cma.resolve_hours_market`, `cma.clock_in_hours_market`; API `hoursMarket` (`code`, `name`, `isActive` in `GET /api/v1/me/hours-markets`), `hoursMarketCode` on a market; copy `myDay.hoursMarket`, `dayEditor.hoursMarket`, `live.hoursMarket`, `exports.hoursMarket`, `configMarkets.hoursMarket` |
+| Key | SQL `cma.roster_assignment.hours_market_code` (the plan's block; null is Own market, except a pause, which has no Hours market), `cma.time_event.hours_market_code` (nullable, an hours market of the tenant), `cma.market.hours_market_code` (the mapping; not null, its own code by default), `cma_read.time_event.hours_market_code`, `cma_read.market.hours_market_code` and `cma_read.time_interval.hours_market_code` (each last); `cma.hours_markets()`, `cma.resolve_hours_market`, `cma.clock_in_hours_market`; API `hoursMarket` (`code`, `name`, `isActive` in `GET /api/v1/me/hours-markets`), `hoursMarketCode` on a market; copy `myDay.hoursMarket`, `dayEditor.hoursMarket`, `live.hoursMarket`, `exports.hoursMarket`, `configMarkets.hoursMarket` |
 | Definition | A market of the tenant that maps to itself and under which time is booked and billed. A tenant maps each market to an hours market in Configuration → Markets (Pulse4all: BE → NL, AT → DE; every other market maps to itself). The mapping is configuration, never code: no migration or seed names a tenant's market. Every start and status event carries the hours market it was booked under (pauses included, so nobody has to think about when it applies; only a status with a work area needs one for billing), and a status interval carries the hours market of the event that opened it. |
 | Source | The CMA: `cma.time_event`, written by the agent on My day (`cma.set_status`), by clock-in (opening a day: the person's Default market, else the market of the person's last day, else none; clocking in again: the day's own market first) and by a manager's correction (Correct day's Hours market column) |
 | Counts / does not count | A dimension of the time figures, never a figure: worked, paid, billable and productive time do not change, and a status with time under two markets on one day is two rows whose sums equal the one before. Time without a market is counted under No market, never dropped. A market that is no hours market is not offered on My day or as a Default market |
@@ -3647,10 +3685,10 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Time rule | The market in force at the moment of the event: a status change keeps it until the agent picks another, and picking another books a new status event with the same status and the new market, so time counts for the new market from that moment. A kept market books as it books now (`cma.resolve_hours_market`), so remapping a market never blocks a day; a correction row added without a market keeps the market in force at its time |
 | Scope | Per tenant; every start and status event; the mapping per market |
 | Equivalent in the source system | None |
-| Not to use | "Market" for it: Market keeps its meaning, the country (the deal's, the line's, the customer's); "billing market" or "country" for an hours market; "activity" or "work type" for the work area (what an agent does comes from HubSpot, so My day has no activity choice) |
+| Not to use | "Market" for it: Market keeps its meaning, the country (the deal's, the line's, the customer's); "billing market" or "country" for an hours market; "activity" or "work type" for the work area; for an hours market an Assignment's market is called `hoursMarket` in the API, never "market" |
 | Status | Decided |
-| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "Hours market (nl Urenmarkt) is …" and the rows that follow it, and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo) |
-| Used by | No catalog key: no metric reads it. Pages: My day, Correct day (Team hours), People, the Live board, Configuration → Markets; `GET /api/v1/me/hours-markets`, `POST /api/v1/me/status`, `GET /api/v1/me/day`, `GET /api/v1/team/now`, `GET /api/v1/live/board`, `GET /api/v1/team/days/{userId}/{date}`, `POST .../corrections`, `GET` and `PUT /api/v1/configuration/markets`, `GET /api/v1/team/status-time`, `GET /api/v1/team/exports/hours` and `/status-changes` |
+| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "Hours market (nl Urenmarkt) is …" and the rows that follow it, and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo); 25 November 2026 (Martin, D11), docs/decisions.md, 25 Nov 2026, "From brief B the CMA sets the agent's activity from the plan …" (this PR, addition 0009zx), which reverses "My day has no activity choice"; 26 November 2026 (Martin), docs/decisions.md, 26 Nov 2026, "A pause block has no Hours market …" (this PR, addition 0009zz) |
+| Used by | No catalog key: no metric reads it. Pages: Time → Roster (an Assignment's market), My schedule, My day, Correct day (Team hours), People, the Live board, Configuration → Markets; `GET /api/v1/me/hours-markets`, `POST /api/v1/me/status`, `GET /api/v1/me/day`, `GET /api/v1/team/now`, `GET /api/v1/live/board`, `GET /api/v1/team/days/{userId}/{date}`, `POST .../corrections`, `GET` and `PUT /api/v1/configuration/markets`, `GET /api/v1/team/status-time`, `GET /api/v1/team/exports/hours` and `/status-changes` |
 | As built today | `230` (columns, foreign keys to a market of the same tenant, the kind check on `time_event`, triggers for the mapping rules serialised per tenant, the functions and reads) and `231` (verify); the rules hold in the tables, so a direct write cannot break them. `cma.open_workday` keeps its one-argument signature (an explicit market at clock-in is a market change right after). The capture is built; the billing statement is not (backlog CMA-137). Matches the definition |
 
 ### Default market
@@ -3677,8 +3715,8 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Field | Value |
 |---|---|
 | Term | No market (nl: Geen markt), the label of time without an Hours market |
-| Key | `hours_market_code` null on `cma.time_event`, `cma_read.time_interval` and the reads built on them; `hoursMarket` null in the API; a null element of `hoursMarkets` on a day of the hours export; copy `myDay.noMarket`, `dayEditor.noMarket`, `live.noMarket`, `exports.noMarket` |
-| Definition | The label shown where an event or a stretch has no Hours market, for example before anyone chose one on a day of a person without a Default market. Such time is counted under the label, never dropped. |
+| Key | `hours_market_code` null on `cma.time_event`, `cma_read.time_interval` and the reads built on them; `hoursMarket` null in the API; a null element of `hoursMarkets` on a day of the hours export; copy `myDay.noMarket`, `dayEditor.noMarket`, `live.noMarket`, `exports.noMarket`, `assignmentsDay.noMarket`, `assignmentsDay.pauseNoMarket`, `assignments.meterNoMarket` |
+| Definition | The label shown where an event or a stretch has no Hours market, for example before anyone chose one on a day of a person without a Default market. Such time is counted under the label, never dropped. In the planner it is also the label of a pause block ("No market: a pause", nl "Geen markt: een pauze"), which has no Hours market, and of a person without a Default market. |
 | Source | The CMA: a start or status event booked without a market, and every stretch it opens |
 | Counts / does not count | Counts all time without a market in worked, paid, billable and productive time as any other time; it is its own row in a split per market. A day's end and a void carry no market and are not time under No market |
 | Unit and display | The words "No market" (nl "Geen markt"), in the Hours market select, the Hours market column of Correct day, the Live board's table and the CSVs' last columns; the hours CSV's cell lists the day's markets in order and "No market" for time without one, joined by " + " |
@@ -3687,8 +3725,8 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Equivalent in the source system | None |
 | Not to use | "Unknown market", "Other" or "None" for it; an empty cell where a label is shown; a stretch without a market is never left out of a sum |
 | Status | Decided |
-| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "People gets a Default market per person …" and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo) |
-| Used by | No catalog key. My day, Correct day, the Live board, the Team hours and status-changes CSVs |
+| Decided | 23 November 2026 (Martin and Kira); docs/decisions.md, 23 Nov 2026, "People gets a Default market per person …" and "Definitions: Hours market, Default market and No market are new terms" (this PR, #314, addition 0009zo); 26 November 2026 (Martin), docs/decisions.md, 26 Nov 2026, "A pause block has no Hours market …" (this PR, addition 0009zz) |
+| Used by | No catalog key. My day, Correct day, the Live board, the Team hours and status-changes CSVs, Time → Roster (the Day view's market dropdown, the planner's panel and meter) |
 | As built today | `web/src/lib/copy.ts` (`noMarket` in the myDay, dayEditor, live and exports groups), `web/src/lib/csv.ts` (`hoursMarketsCell`). Matches the definition |
 
 ### Office hours
@@ -3709,6 +3747,253 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Decided | 25 November 2026 (Martin); docs/decisions.md, 25 Nov 2026, "Definitions: Office hours is a new term …" and the rows of this PR's auto-close order (this PR, addition 0009zv) |
 | Used by | No catalog key of its own. Speed to lead (the keys that read business time in docs/metrics/catalog.json), the hourly auto-close sweep (the forgotten-day close keys citing `cma.close_forgotten_workdays`), Configuration → Markets, Configuration → Exports (the setting `workday.auto_close_office_hours`) |
 | As built today | `cma.business_hours` and `cma.business_holiday` (32, with the overlap check); `cma.business_calendar_of` (178) resolves each market's schedule (its own rows, else `*`) with its zone and holidays, and Speed to lead's functions and, since `244`, `cma.close_forgotten_workdays` (through `cma.office_hours_end_in`) take their hours from it; the older `cma.business_seconds`, `cma.business_seconds_of` and `cma.next_business_noon` apply the same resolution. Matches the definition |
+
+### Assignment
+
+| Field | Value |
+|---|---|
+| Term | Assignment (nl: Inzet), a planned block of one Assignment type inside a person's shift |
+| Key | SQL `cma.roster_assignment` (`cma_read.roster_assignment`), `cma.roster_published_assignment` (the published blocks), `cma.roster_assignments`, `cma.roster_set_assignments`, `cma.roster_cell`; API `assignments` (`code`, `start`, `end`, `hoursMarket`, `note`) on `GET /api/v1/roster/weeks/{monday}`, `PUT .../assignments` and `PUT .../cells`; copy groups `assignments`, `assignmentsDay` |
+| Definition | One block of one Assignment type with a start and an end inside a person's shift on one business date, and an optional Hours market (empty: the person's Default market, Own market; a block of kind pause has none). Within a shift the unit is the Assignment; two Assignments of one person and date never overlap (an exclusion constraint on the table), and gaps inside a shift are allowed and shown. |
+| Source | The CMA: `cma.roster_assignment`, written by the planner (`cma.roster_set_assignments`, the one writer is `cma.roster_put_assignments`), Copy week and Apply standard week |
+| Counts / does not count | Counts the current version of a block, and for every reader outside the planner the version as of the week's latest publication. A shift cleared, changed to an absence or shortened ends the blocks outside it; ended versions stay as history, nothing is deleted. A person-date with a shift and no blocks is planned on the day level only |
+| Unit and display | A bar in the planner's Day view (and, as text, in the week's cell): consecutive slots of one Assignment draw as one bar with the code once, hovering shows the type's name; My schedule lists the published blocks with the Hours market's time in brackets |
+| Time rule | Local times in the person's zone on the person-date's business date, on the Slot grid and inside the shift; the Day view shows them in the Planner zone. The past is locked. A change to today in a published week publishes the week at once, a block or the cell's shift, absence or clear alike, after asking when other changes wait (D8); a future date stays draft until Publish |
+| Scope | Per tenant, person and business date; the week of the shift's roster |
+| Equivalent in the source system | None (Pulse4all plans these in Excel today) |
+| Not to use | "Activity", "task", "skill" or "shift" for it (a shift is the planned day, Rostering; a skill is a proficiency, Teams and skills); "slot" for a block (a Slot is one grid cell) |
+| Status | Decided |
+| Decided | 25 November 2026 (Martin, D1, D6, D7); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); docs/decisions.md, 25 Nov 2026, "The unit within a shift is an Assignment …"; 26 November 2026 (Martin), docs/decisions.md, 26 Nov 2026, "A pause block has no Hours market …" and "The Assignment field is a dropdown …" (this PR, addition 0009zz) |
+| Used by | No catalog key: no metric reads it yet. Time → Roster (the planner, week and Day view), My schedule, `cma.roster_today` (assignments last, for the Live board of a later brief); `GET /api/v1/roster/weeks/{monday}`, `PUT /api/v1/roster/weeks/{monday}/assignments` and `/cells`, `GET /api/v1/roster/weeks/{monday}/assignments`, `GET /api/v1/me/roster` |
+| As built today | `248` (tables, triggers for the grid and the hours market, the exclusion constraint, versioning, the functions and reads) `252` (a pause has no Hours market) and `249`, `253` (verifies). Brief B (the assignment on the time events) and brief C (plan against actual) are not built; the model needs no schema change for them. Matches the definition |
+
+### Assignment type
+
+| Field | Value |
+|---|---|
+| Term | Assignment type (nl: Inzettype), the kind of work a block is planned for |
+| Key | SQL `cma.assignment_type`, `cma.assignment_types()`, `cma.upsert_assignment_type`; API `GET /api/v1/roster/assignment-types` (active types, any person), `GET` and `PUT /api/v1/configuration/assignment-types` (`code`, `name`, `kind`, `statusKey`, `isExtra`, `sortOrder`, `active`); copy group `configAssignments` |
+| Definition | Tenant configuration: a code (1 to 6 characters, A-Z and 0-9, unique per tenant, never changed), a name, a sort order, a status (active or inactive), a kind (work or pause), the work status it books (`cma.work_status`, none for an extra type) and the flag is_extra. It has no colour and no skill of its own: its colour follows from what it books and its Work area from the status it books. A work type books a working status, a pause type a status that is not working; once a block or the Standard week holds a type, its kind, status and extra flag are frozen (CMA03) |
+| Source | The CMA: `cma.assignment_type`, set in Configuration → Roster; Pulse4all Subscriptions' types are seed data in db/02 (SL, MC, CC, GO, PR, RET, OPC, MEX, SB, LB, X), never code or migration |
+| Counts / does not count | A retired type is not offered to the planner and keeps its history; blocks that hold it stay readable |
+| Unit and display | The code as text in the bar, the name on hover and in Configuration → Roster. Colours (Pulse4all-Style, the status group colours of 23 November 2026): Sales Leaf Green with Inkt text, Operations Deep Blue with white text, kind pause Soft Rose with Inkt text, an extra type white with a dashed Inkt border; an absence a Background Blue bar with the absence name in Deep Blue; an empty slot is the page background |
+| Time rule | None: configuration read when a block is planned and shown |
+| Scope | Per tenant |
+| Equivalent in the source system | None |
+| Not to use | "Activity" or "work type" for it (a work type is a skill dimension, Teams and skills; the Work area is Sales or Operations); "project" or "task" |
+| Status | Decided |
+| Decided | 25 November 2026 (Martin, D2, D3, D13); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); docs/decisions.md, 25 Nov 2026, "An Assignment type is tenant configuration …" and "Assignment codes are 1 to 6 characters …" |
+| Used by | No catalog key. Configuration → Roster, Time → Roster, My schedule; `GET /api/v1/roster/assignment-types`, `GET` and `PUT /api/v1/configuration/assignment-types` |
+| As built today | `248` (`cma.assignment_type`, trigger `cma.assignment_type_rules`, the freeze of kind, status and extra flag once a plan holds the type) and `02` (Pulse4all's seed). Matches the definition: 1 to 6 characters, as Martin decided on 25 Nov 2026 over the brief's 2 to 6 (the seeded X has one) |
+
+### Extra hours (X)
+
+| Field | Value |
+|---|---|
+| Term | Extra hours (nl: Extra uren), code X in Pulse4all Subscriptions: an Assignment type without a status |
+| Key | SQL `cma.assignment_type.is_extra` true, `status_key` null; API `isExtra`; copy `configAssignments.extra` |
+| Definition | An Assignment type of kind work that books no status of its own: time in an X block counts under the status, and so the Work area and Hours market, the agent is on during it. Brief B decides what Clock in does on an X block; brief C marks those hours as extra |
+| Source | The CMA: `cma.assignment_type` (Pulse4all's X is seed data) |
+| Counts / does not count | Counts as planned work in Working and Planned hours per assignment; adds no worked, paid or billable time by itself, since no time is booked from the plan yet |
+| Unit and display | A white bar with a dashed Inkt border and the code X |
+| Time rule | As an Assignment's |
+| Scope | Per tenant; a tenant may have none or several extra types |
+| Equivalent in the source system | None |
+| Not to use | "Overtime" for it: overtime is a pay rule, which the CMA does not model here |
+| Status | Decided |
+| Decided | 25 November 2026 (Martin, D3 and D4); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx) |
+| Used by | No catalog key. Configuration → Roster, Time → Roster |
+| As built today | `248`: the trigger lets an extra type be of kind work with no status. Matches the definition |
+
+### Own market
+
+| Field | Value |
+|---|---|
+| Term | Own market (nl: Eigen markt), an Assignment without an Hours market (a pause excluded) |
+| Key | `hours_market_code` null on `cma.roster_assignment`; API `hoursMarket` null; copy `assignmentsDay.ownMarket` (a block of kind work only) |
+| Definition | The Hours market of a block left empty: the person's Default market. The planner accepts "CODE" (own market) or "CODE-MARKET" (SL-GB); the market part must be an hours market of the tenant (`cma.hours_markets()`), the alias UK is read as GB and GB is always shown. The market is part of the block, not of the code. A block of kind pause is never in its own market: it has no Hours market at all (No market). The Day view's Hours market dropdown offers Own market as its default. Brief B fixes the own market at booking |
+| Source | The CMA: `cma.roster_assignment.hours_market_code` with `cma.app_user.default_hours_market_code` |
+| Counts / does not count | Counts under the person's Default market in Planned hours per assignment and in the slot figures; a person without a Default market counts under No market |
+| Unit and display | No label in the bar; the Hours market shows as a small label inside the bar only when it differs from the person's Default market |
+| Time rule | The Default market as it stands when the plan is read |
+| Scope | Per block |
+| Equivalent in the source system | None |
+| Not to use | "Home market" or "market" alone for it (Market keeps its meaning, the country; the API field is `hoursMarket`) |
+| Status | Decided |
+| Decided | 25 November 2026 (Martin, D1 and D5); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); 26 November 2026 (Martin), docs/decisions.md, 26 Nov 2026, "A pause block has no Hours market …" (this PR, addition 0009zz) |
+| Used by | No catalog key. Time → Roster, `PUT /api/v1/roster/weeks/{monday}/assignments`, `GET /api/v1/roster/weeks/{monday}/planned-hours` |
+| As built today | `248` (hours market check on the block) and `web/src/lib/assignments.ts` (`parseAssignment`, `MARKET_ALIASES`, `plannedByKey`). Matches the definition |
+
+### Standard week
+
+| Field | Value |
+|---|---|
+| Term | Standard week (nl: Standaardweek), the tenant's template week |
+| Key | SQL `cma.standard_week_entry`, `cma.standard_week_assignment`, `cma.standard_week()`, `cma.save_standard_week`, `cma.apply_standard_week`; API `GET /api/v1/roster/standard-week`, `POST /api/v1/roster/weeks/{monday}/standard-week` (Save as standard week), `POST /api/v1/roster/weeks/{monday}/apply-standard-week`; copy `assignments.saveStandard` and `assignments.applyStandard` |
+| Definition | One per tenant: per person and ISO weekday, the shift or an absence that carries over and the Assignments, without dates. Save as standard week replaces the rows of the people on the chosen roster's grid from a chosen week (other people's rows stay); Apply standard week fills a week's empty person-dates only and never overwrites. Both report what they did and what they skipped and why |
+| Source | The CMA: the two `standard_week_*` tables, versioned like the roster (valid_to, superseded_by) so a replaced Standard week stays readable |
+| Counts / does not count | Counts a shift, and an absence only when its type Carries over. Does not touch the past, a person not on the roster or a person planned on another roster; Apply never publishes |
+| Unit and display | The Save as standard week and Apply standard week buttons in the planner's header, each answering a report (days done, days skipped with reasons, blocks left out) |
+| Time rule | Weekdays, not dates; applied to the dates of the week it is applied to |
+| Scope | Per tenant |
+| Equivalent in the source system | None |
+| Not to use | "Shift template" or "preset" for it (the planned shift templates of 9 October 2026 are replaced by it); "Default week" |
+| Status | Decided |
+| Decided | 25 November 2026 (Martin, D9); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); docs/decisions.md, 25 Nov 2026, "One Standard week per tenant …" and "Save as standard week replaces …" |
+| Used by | No catalog key. Time → Roster; the routes above |
+| As built today | `248`: `cma.save_standard_week` replaces the rows of the people on the chosen roster's grid only; `cma.apply_standard_week` reports the reasons past, not_empty, other_roster, absence_not_carried and blocks_dropped. Matches the definition |
+
+### Carries over
+
+| Field | Value |
+|---|---|
+| Term | Carries over (nl: Gaat mee bij kopiëren), a flag of an absence type |
+| Key | SQL `cma.absence_type.carries_over` (`cma_read.absence_type.carries_over`, last), `cma.set_absence_carries_over`; API `carriesOver`, `PUT /api/v1/configuration/absence-types/{key}/carries-over`; copy `configAssignments.carriesOver` |
+| Definition | Whether Copy week and Save as standard week take an absence of this type; Apply standard week then applies it. Copy week and Apply take the Assignments with the shifts. Default false. Pulse4all: Day off and Paternity leave true; Holiday (paid), Leave, Sick, Public holiday and Other false |
+| Source | The CMA: `cma.absence_type`, set in Configuration → Roster; Pulse4all's values are seed data in db/02 |
+| Counts / does not count | An absence whose type does not carry over stays behind and is reported as skipped (`absence_not_carried`). Every default type is false, so a tenant that has not set the flag copies no absences with Copy week, Day off included |
+| Unit and display | A checkbox per absence type in Configuration → Roster |
+| Time rule | The flag as it stands when the copy or save runs |
+| Scope | Per absence type and tenant |
+| Equivalent in the source system | None |
+| Not to use | "Recurring" or "repeat" for it |
+| Status | Decided |
+| Decided | 25 November 2026 (Martin, D10); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); docs/decisions.md, 25 Nov 2026, "Absence types get the flag carries_over …" |
+| Used by | No catalog key. Configuration → Roster, Time → Roster (Copy week, Save as standard week); `PUT /api/v1/configuration/absence-types/{key}/carries-over`, `POST /api/v1/roster/weeks/{monday}/copy` |
+| As built today | `248`; `cma.roster_copy_week_report` skips absences that do not carry over, and `cma.roster_copy_week` keeps its signature and answers the report's count. Matches the definition |
+
+### Slot
+
+| Field | Value |
+|---|---|
+| Term | Slot (nl: Vak), one cell of the planner's time grid |
+| Key | Setting `roster.slot_minutes` (5, 10, 15, 20, 30 or 60; default 15; Pulse4all 15); `cma.roster_slot_coverage`; API `GET /api/v1/roster/days/{date}/coverage`; copy `configAssignments.slotMinutes` |
+| Definition | The grid a tenant plans on: an Assignment's start and end lie on it, inside the shift, enforced in the table. It is a tenant setting, not code |
+| Source | The CMA: `cma.tenant_setting` (`roster.slot_minutes`) |
+| Counts / does not count | Counts the grid cells of the Planner zone's day; a slot without a block has no row in the coverage answer |
+| Unit and display | Minutes; a column of the Day view |
+| Time rule | Planner zone |
+| Scope | Per tenant |
+| Equivalent in the source system | None |
+| Not to use | "Slot" for an Assignment or for a HubSpot or Aircall slot of a form or call line (those keep their own words) |
+| Status | Decided |
+| Decided | 25 November 2026 (Martin, D6); docs/decisions.md, 25 Nov 2026, "The grid is the tenant setting roster.slot_minutes …"; docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx) |
+| Used by | No catalog key. Time → Roster; `GET /api/v1/roster/days/{date}/coverage` |
+| As built today | `248` (the setting with its check, the trigger on the block's times). Matches the definition |
+
+### Planner zone
+
+| Field | Value |
+|---|---|
+| Term | Planner zone (nl: Tijdzone van de planner), the time zone the Day view and the slot figures are drawn in |
+| Key | Setting `roster.planner_timezone` (text; default empty: the tenant's zone; Pulse4all Europe/Madrid); `cma.roster_planner_zone()`; copy `configAssignments.plannerZone` |
+| Definition | The zone in which the planner's Day view shows times and `cma.roster_slot_coverage` cuts its slots. Each person's shift and blocks are stored in the person's zone; the Day view converts between the two. A trigger on `cma.tenant_setting` (`check_roster_setting`) refuses a name that is no IANA zone (CMA04) |
+| Source | The CMA: `cma.tenant_setting`, else the tenant's zone |
+| Counts / does not count | Changes how times are shown and where slots are cut, never a stored time |
+| Unit and display | An IANA zone name in Configuration → Roster |
+| Time rule | The zone as it stands when the Day view or the coverage is read |
+| Scope | Per tenant |
+| Equivalent in the source system | None |
+| Not to use | "Planner time" or "office time" for it (Office hours are a market's ranges of time) |
+| Status | Decided |
+| Decided | 25 November 2026 (Martin); docs/decisions.md, 25 Nov 2026, "Three more planner settings: …"; docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx) |
+| Used by | No catalog key. Time → Roster (Day view); `GET /api/v1/roster/days/{date}/coverage` |
+| As built today | `248` (setting, trigger, `cma.roster_planner_zone()`) and `web/src/lib/assignments.ts` (`toPlannerMinutes`, `fromPlannerMinutes`). Matches the definition |
+
+### Plan check
+
+| Field | Value |
+|---|---|
+| Term | Plan check (nl: Plancontrole), the warnings the planner shows before Publish |
+| Key | Settings `roster.lunch_after_minutes` (default 360) and `roster.lunch_type_code` (default empty: any pause block; Pulse4all LB); `planCheck` in `web/src/lib/assignments.ts`; copy group `assignments` (`checkTitle`, `checkLunch`, `checkGap`) |
+| Definition | Two warnings that never block a publication: a shift longer than `roster.lunch_after_minutes` without a lunch block (a block of the type `roster.lunch_type_code` names; without one, any block of kind pause), and a gap inside a shift that holds blocks. A shift without any block is not checked |
+| Source | Computed in the web from the planner's current blocks and the settings; nothing is stored |
+| Counts / does not count | Counts gaps and missing lunch blocks of the dates shown; does not count a shift planned on the day level only |
+| Unit and display | A list under the grid with the person, the date and the reason, with "and {n} more" |
+| Time rule | Planner zone, current rows |
+| Scope | Per tenant settings; per week shown |
+| Equivalent in the source system | None |
+| Not to use | "Validation" or "error" for it: it warns, it never refuses |
+| Status | Decided |
+| Decided | 25 November 2026 (Martin); docs/decisions.md, 25 Nov 2026, "Three more planner settings: …"; docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx) |
+| Used by | No catalog key. Time → Roster |
+| As built today | `web/src/lib/assignments.ts` (`planCheck`), verified by `verify:roster`. Matches the definition |
+
+### Working (per slot)
+
+| Field | Value |
+|---|---|
+| Term | Working (nl: Aan het werk), the people working in a slot |
+| Key | `cma.roster_slot_coverage` (people working and people per type and hours market per slot); copy `assignmentsDay.working` |
+| Definition | Per slot of the Planner zone's day, the number of people whose Assignment in that slot is of kind work (an extra type included, a pause not), counted from published or current blocks and never stored. Inside someone's shift a slot with nobody working shows 0, and outside every shift it stays empty |
+| Source | The CMA: `cma.roster_assignment` with `cma.assignment_type` |
+| Counts / does not count | Counts a person once per slot; does not count a pause block, an empty slot or an absence |
+| Unit and display | A count per slot above the grid of the Day view (0 inside someone's shift, empty outside every shift); the same slot's people per Assignment type and Hours market |
+| Time rule | Planner zone; the planner reads current rows |
+| Scope | Per date and team, or the tenant |
+| Equivalent in the source system | None |
+| Not to use | "Online", "available" or "logged in" for it (those are the clock and the status, Clocked in) |
+| Status | Decided |
+| Decided | 25 November 2026 (Martin, D12); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); 26 November 2026 (Martin), docs/decisions.md, 26 Nov 2026, "Working shows 0, not blank …" (this PR, addition 0009zz) |
+| Used by | No catalog key; `GET /api/v1/roster/days/{date}/coverage`; Time → Roster (Day view) |
+| As built today | `248` (`cma.roster_slot_coverage`) and `web/src/lib/assignments.ts` (`slotFigures`). Matches the definition |
+
+### Planned hours per assignment
+
+| Field | Value |
+|---|---|
+| Term | Planned hours per assignment (nl: Geplande uren per inzet) |
+| Key | `cma.roster_planned_hours`; API `GET /api/v1/roster/weeks/{monday}/planned-hours` (planned minutes per person, date, type and `hoursMarket`); copy `assignments.meter*` (the Planned hours meter's split, which replaced the Day view's former panel, `assignmentsDay.totals*`) |
+| Definition | Per person and day, and per week, the duration of the published or current blocks per Assignment type and Hours market, never stored. A block in its Own market counts under the person's Default market. A pause is read under no market (`hoursMarket` null) and apart, and is never part of Planned (roster) |
+| Source | The CMA: `cma.roster_assignment` |
+| Counts / does not count | Counts the minutes of the work blocks (an extra type included) per type and market; a pause is listed on its own line per type under no market and adds to no total. Does not count the shift's minutes outside any block: a shift without any block counts whole in Planned (roster), as "Shifts without assignments" |
+| Unit and display | Hours and minutes per type and market, per day and for the week, in the Planned hours meter's "Per assignment" split above the grid in Week and Day view, with the pauses apart and "Shifts without assignments" as its own line |
+| Time rule | Business date in the person's zone; current rows for the planner |
+| Scope | Per week and team, or the tenant |
+| Equivalent in the source system | None |
+| Not to use | "Billable hours" or "worked hours" for it: it is a plan, and no time is booked from it |
+| Status | Decided |
+| Decided | 25 November 2026 (Martin, D12); docs/decisions.md, 25 Nov 2026, "Definitions: Assignment (nl Inzet), Assignment type (nl Inzettype), Extra hours (X), Own market, Standard week (nl Standaardweek), Carries over, Slot, Planner zone, Plan check, Working and Planned hours per assignment are new terms …" (this PR, addition 0009zx); 26 November 2026 (Martin), docs/decisions.md, 26 Nov 2026, "D12 updated: Planned per person …" and "A Planned hours meter sits above the grid …" (this PR, addition 0009zz) |
+| Used by | Catalog key `roster.planner.planned_hours_meter`. Time → Roster (the meter); `GET /api/v1/roster/weeks/{monday}/planned-hours` |
+| As built today | `248` (`cma.roster_planned_hours`, `cma.roster_block_minutes`) and `web/src/lib/assignments.ts` (`plannedByKey`), `web/src/components/PlannedMeter.tsx` (the meter, computed in the browser from the week the planner already reads, with the same rule; `252` re-creates the function with it). Matches the definition. Brief C's Plan at day start against actual (CMA-137) reads these figures; it is not built |
+
+### Planned (roster)
+
+| Field | Value |
+|---|---|
+| Term | Planned (nl: Gepland), the hours a person is planned to work on the roster |
+| Key | Catalog keys `roster.planner.planned_minutes_per_person`, `roster.print.planned_minutes_per_person`, `my_schedule.planned_total`, `roster.planner.planned_hours_meter`; copy `assignments.meterDayLevel`, `assignments.plannedHint` |
+| Definition | Per person and business date, the duration of the work blocks of the shift (an extra type included) and never a pause; a shift without any block counts whole, because it is planned on the day level only, and an absence or an empty cell counts 0. The label of the whole-shift part in a split is "Shifts without assignments" (nl "Diensten zonder inzet"). |
+| Source | The CMA: `cma.roster_entry` with `cma.roster_assignment` and `cma.assignment_type` (the planner reads current rows, My schedule the published ones) |
+| Counts / does not count | Counts work blocks and a shift without blocks; does not count a pause, an absence, or the shift's minutes outside the blocks of a shift that has some. A pause stays in the Planned hours per assignment panel on its own line |
+| Unit and display | Hours and minutes: the planner's Planned column (Day and Week view), the print view, My schedule's planned total, and the Planned hours meter's total with a bar measured against the hours on shift ("72h 00m of 75h 30m on shift") |
+| Time rule | Business date in the person's zone; the planner reads current rows, My schedule published ones. Durations are wall-clock minutes, as the shift's |
+| Scope | Per person and date, summed per week and for the roster on screen |
+| Equivalent in the source system | None |
+| Not to use | "Worked hours", "paid hours" or "billable hours" for it: it is a plan; "Planned hours" alone for it where the Planned hours per assignment split is meant |
+| Status | Decided (the whole-shift rule and the bar's measure confirmed by Martin, 26 Nov 2026) |
+| Decided | 26 November 2026 (Martin); docs/decisions.md, 26 Nov 2026, "D12 updated: Planned per person …", "A Planned hours meter sits above the grid …" and "Definitions: Person-day (nl Persoonsdag) is a new term …" (this PR, addition 0009zz) |
+| Used by | `roster.planner.planned_minutes_per_person`, `roster.print.planned_minutes_per_person`, `my_schedule.planned_total`, `roster.planner.planned_hours_meter`; Time → Roster (Day and Week view, the print view), My schedule |
+| As built today | `252` (`cma.roster_planned_hours`), `web/src/lib/assignments.ts` (`plannedMinutes`), `web/src/components/PlannedMeter.tsx`, the print page and `/schedule`. Matches the definition |
+
+### Person-day
+
+| Field | Value |
+|---|---|
+| Term | Person-day (nl: Persoonsdag), one person on one business date of a roster |
+| Key | SQL a person-date (`user_id`, `business_date`) of `cma.roster_entry`; copy `assignments.reportCopied`, `assignments.reportApplied`, `assignments.reportSaved` |
+| Definition | The unit Copy week, Apply standard week and Save as standard week report in: "4 person-days copied" is four people's days, one row per person and date in the report. |
+| Source | The CMA: the report of `cma.roster_copy_week_report`, `cma.apply_standard_week` and `cma.save_standard_week` |
+| Counts / does not count | Counts a person once per business date; two people on one date are two person-days, and a person-date the action skipped is listed in the report with its reason, not counted as done |
+| Unit and display | "{n} person-days copied", "{n} person-days filled from the standard week", "{n} person-days saved as the standard week" (nl "persoonsdagen") |
+| Time rule | The business date in the person's zone |
+| Scope | Per action and roster week |
+| Equivalent in the source system | None |
+| Not to use | "Days" alone for it where the count is of people's days; "shift" for it (a shift is the planned day of one person, Rostering) |
+| Status | Decided |
+| Decided | 26 November 2026 (Martin); docs/decisions.md, 26 Nov 2026, "The reports of Copy week, Apply standard week and Save as standard week count person-days …" and "Definitions: Person-day (nl Persoonsdag) is a new term …" (this PR, addition 0009zz) |
+| Used by | No catalog key. Time → Roster (the report after Copy week, Apply standard week and Save as standard week); `POST /api/v1/roster/weeks/{monday}/copy`, `/standard-week` and `/apply-standard-week` |
+| As built today | `web/src/lib/copy.ts` (`reportCopied`, `reportApplied`, `reportSaved`). Matches the definition |
 
 ## Intake terms
 

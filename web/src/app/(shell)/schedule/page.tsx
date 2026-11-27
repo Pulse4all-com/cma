@@ -4,15 +4,22 @@ import { WeekBar } from "@/components/WeekBar";
 import { Badge, Card, Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock } from "@/lib/data";
 import { firstPage } from "@/lib/nav";
-import { cellLabel, shiftMinutes, weekDays } from "@/lib/roster";
+import { cellLabel, weekDays } from "@/lib/roster";
 import { dateKeyInZone, fmtDate, fmtMinutes, isDateKey, startOfWeek } from "@/lib/time";
 import { resolve } from "@/app/access";
+import { instantOf, pct, plannedMinutes, toMinutes, toneOf, TONE_CLASS } from "@/lib/assignments";
+import { localParts } from "@/lib/corrections";
+import type { PublishedAssignment } from "@/lib/data";
 
 /**
  * My schedule (Time group, migration 0005): the person's own week from the published rosters,
  * read only, in their own zone; a week that is not published yet says so. Shown to people
  * holding roster.view; the database answers only the caller's own rows (cma.my_roster, CMA06
- * without the permission). Never a colleague's schedule: that is the planner's.
+ * without the permission). Never a colleague's schedule: that is the planner's. Since addition
+ * 0009zx each day shows its published assignments as the planner's bar (D13) with the blocks and
+ * times listed under it, in the person's zone; a block whose hours market lies in another zone that
+ * day (GB for Spain) shows the market's own time after it in brackets. Planned (Martin, 26 November 2026) counts the
+ * published blocks of kind work and a shift without blocks whole, never a pause; a pause shows no market (0009zz).
  */
 export default async function MySchedulePage({ searchParams }: PageProps<"/schedule">) {
   const r = await resolve();
@@ -40,7 +47,10 @@ export default async function MySchedulePage({ searchParams }: PageProps<"/sched
   const weekStart = isDateKey(sp.week) ? startOfWeek(sp.week) : thisWeek;
   const days = weekDays(weekStart);
   const rows = await data().getMyRoster(me, { from: days[0]!, to: days[6]! });
-  const plannedMinutes = rows.reduce((n, d) => n + (d.kind === "shift" && d.start && d.end ? shiftMinutes(d.start, d.end) : 0), 0);
+  const planned = rows.reduce((n, d) => n + (d.kind === "shift" && d.start && d.end
+    ? plannedMinutes({ start: toMinutes(d.start), end: toMinutes(d.end) },
+        d.assignments.map((b) => ({ code: b.code, start: toMinutes(b.start), end: toMinutes(b.end) })), new Map(d.assignments.map((b) => [b.code, b.kind])))
+    : 0), 0);
 
   return (
     <Shell copy={copy} me={me} active="my-schedule">
@@ -66,7 +76,12 @@ export default async function MySchedulePage({ searchParams }: PageProps<"/sched
                     ) : d.kind === null ? (
                       <span className="text-p4a-muted">{t.noShift}</span>
                     ) : d.kind === "shift" ? (
-                      cellLabel({ kind: "shift", start: d.start, end: d.end, absenceName: null })
+                      <>
+                        {cellLabel({ kind: "shift", start: d.start, end: d.end, absenceName: null })}
+                        {d.assignments.length > 0 && d.start && d.end ? (
+                          <DayBlocks date={d.date} start={d.start} end={d.end} blocks={d.assignments} zone={me.timeZone} label={copy.assignments.scheduleAssignments} />
+                        ) : null}
+                      </>
                     ) : (
                       <Badge tone="neutral">{d.absenceName ?? ""}</Badge>
                     )}
@@ -80,7 +95,7 @@ export default async function MySchedulePage({ searchParams }: PageProps<"/sched
           <tfoot>
             <tr className="text-small font-semibold text-p4a-heading">
               <td className="px-3 py-3">{t.plannedTotal}</td>
-              <td className="tabular px-3 py-3">{fmtMinutes(plannedMinutes)}</td>
+              <td className="tabular px-3 py-3">{fmtMinutes(planned)}</td>
               <td colSpan={2} />
             </tr>
           </tfoot>
@@ -93,5 +108,47 @@ export default async function MySchedulePage({ searchParams }: PageProps<"/sched
         </div>
       ) : null}
     </Shell>
+  );
+}
+
+/**
+ * A day's published blocks (addition 0009zx): the bar across the shift in the planner's colours (D13), then each block
+ * with its times, code and name; the code is always text, so colour never carries meaning alone. A block under an hours
+ * market whose zone differs from the person's that day shows the market's time in brackets (GB for an agent in Spain)
+ */
+function DayBlocks({ date, start, end, blocks, zone, label }: { date: string; start: string; end: string; blocks: PublishedAssignment[]; zone: string; label: string }) {
+  const s = toMinutes(start);
+  const span = Math.max(1, toMinutes(end) - s);
+  const there = (b: PublishedAssignment, time: string) => {
+    if (!b.hoursMarket || !b.hoursMarketZone || b.hoursMarketZone === zone) return null;
+    const at = instantOf(date, time, zone);
+    if (at === null) return null;
+    const p = localParts(at, b.hoursMarketZone);
+    const own = localParts(at, zone);
+    return p.time === own.time ? null : p.time;
+  };
+  return (
+    <div className="mt-2 flex flex-col gap-1 pb-2" data-testid="schedule-blocks">
+      <div className="relative h-2 w-full max-w-md overflow-hidden rounded-button bg-p4a-neutral-surface" aria-hidden="true">
+        {blocks.map((b) => (
+          <span key={`${b.start}-${b.code}`} className={`absolute inset-y-0 ${TONE_CLASS[toneOf({ ...b, statusIsProductive: null })]}`}
+            style={{ left: `${pct(toMinutes(b.start) - s, span)}%`, width: `${pct(toMinutes(b.end) - toMinutes(b.start), span)}%` }} />
+        ))}
+      </div>
+      <ul aria-label={label} className="flex flex-col text-small">
+        {blocks.map((b) => {
+          const a = there(b, b.start);
+          const z = there(b, b.end);
+          return (
+            <li key={`${b.start}-${b.code}`} className="tabular">
+              {b.start}–{b.end}
+              {a && z ? <span className="text-p4a-muted"> ({a}–{z} {b.hoursMarket})</span> : null}
+              <span className="ml-2 font-semibold">{b.code}</span> {b.name}
+              {b.hoursMarket && !b.ownMarket ? <span className="text-p4a-muted"> · {b.hoursMarket}</span> : null}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

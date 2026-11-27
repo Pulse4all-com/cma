@@ -21,7 +21,7 @@ export type SubscriptionsFilterWords = Pick<SubscriptionsCopy, "filtersLabel" | 
   | "propositionFilter" | "allPropositions" | "noProposition" | "intervalFilter" | "allIntervals" | "interval_monthly" | "interval_quarterly" | "interval_yearly"
   | "interval_other" | "interval_unknown" | "fromLabel" | "toLabel">;
 
-export function SubscriptionsFilters({ filter, from, to, markets, stores, propositions, intervals, months, keep, t }: {
+export function SubscriptionsFilters({ filter, from, to, markets, stores, propositions, intervals, months, keep, t, path = SUBSCRIPTIONS_PATH }: {
   filter: SubscriptionsFilter; from: string; to: string; markets: string[]; stores: { connectionId: string; handle: string; market: string }[];
   propositions: string[]; intervals: SubscriptionsInterval[];
   /** The months a range may take, newest first, as { value: YYYY-MM, label } */
@@ -29,6 +29,8 @@ export function SubscriptionsFilters({ filter, from, to, markets, stores, propos
   /** What the filters keep in the address (the movements' view, the list's measure and sort) */
   keep: Record<string, string>;
   t: SubscriptionsFilterWords;
+  /** The page the filters lead to: Customers → Subscriptions, or Customers → Payments, which shares its filters (addition 0009zy) */
+  path?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -37,7 +39,7 @@ export function SubscriptionsFilters({ filter, from, to, markets, stores, propos
 
   function go(next: SubscriptionsFilter, range: { from: string; to: string }) {
     const qs = new URLSearchParams({ ...keep, ...subscriptionsQuery(next), from: monthAddress(range.from), to: monthAddress(range.to) }).toString();
-    startTransition(() => router.push(`${SUBSCRIPTIONS_PATH}?${qs}` as Route));
+    startTransition(() => router.push(`${path}?${qs}` as Route));
   }
   const range = { from, to };
 

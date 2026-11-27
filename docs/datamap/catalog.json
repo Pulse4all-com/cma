@@ -406,12 +406,32 @@
         {
           "name": "roster_week",
           "what": "A team's roster week and its version",
-          "how": "Roster screen"
+          "how": "Roster screen; a save of today's blocks in a published week publishes it (D8, addition 0009zx)"
         },
         {
           "name": "roster_entry",
           "what": "Planned shifts and absences",
-          "how": "Roster screen"
+          "how": "Roster screen (Apply standard week fills only person-dates without an entry)"
+        },
+        {
+          "name": "assignment_type",
+          "what": "Assignment types of a tenant: code, name, kind work or pause, the work status it books (none for an extra type), is_extra and sort order",
+          "how": "CMA (planner): Configuration, Roster page; refreshed on write"
+        },
+        {
+          "name": "roster_assignment",
+          "what": "The planned blocks inside a shift: person, date, assignment type, start and end on the slot grid, an optional hours market (empty: the person's default market; a pause block written from 0009zz on has none, and every read shows a pause without one), versioned like roster_entry",
+          "how": "CMA (planner): the Roster planner's blocks, refreshed on write; a shift cleared, changed to an absence or shortened ends the blocks outside it"
+        },
+        {
+          "name": "standard_week_entry",
+          "what": "The Standard week of a tenant: per person and ISO weekday the shift or an absence that carries over, without dates, versioned",
+          "how": "CMA (planner): Save as standard week replaces the rows of the people on the chosen roster's grid; refreshed on write"
+        },
+        {
+          "name": "standard_week_assignment",
+          "what": "The blocks of the Standard week, per person and ISO weekday, versioned",
+          "how": "CMA (planner): written with standard_week_entry by Save as standard week; refreshed on write"
         },
         {
           "name": "roster_publication",
@@ -609,7 +629,7 @@
         },
         {
           "name": "absence_type",
-          "what": "Absence types (paid or not)",
+          "what": "Absence types (paid or not, and whether Copy week and Save as standard week carry them over)",
           "how": "Configuration"
         },
         {
@@ -806,6 +826,10 @@
     {
       "name": "roster_published_entry",
       "what": "The published version of every roster entry"
+    },
+    {
+      "name": "roster_published_assignment",
+      "what": "The published version of every planned block (assignment), as of each week's latest publication (addition 0009zx)"
     },
     {
       "name": "open_lead",

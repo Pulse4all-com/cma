@@ -10,14 +10,14 @@ import { addDays, dateKeyInZone, isDateKey, startOfWeek } from "@/lib/time";
 import { onRoster } from "@/lib/roster";
 import type {
   LiveBoardData, DataQualityReport,
-  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MessageStat, MessageTarget, MessagesWritten, MyMessage, MyMessages, MyProfile, MyRosterDay, SentMessage, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
+  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MessageStat, MessageTarget, MessagesWritten, MyMessage, MyMessages, MyProfile, MyRosterDay, SentMessage, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, AssignmentBlock, AssignmentBlockInput, AssignmentType, PublishedAssignment, RosterAssignment, RosterAssignmentsResult, RosterCellResult, RosterPlannedRow, RosterReportRow, RosterSlotCoverageRow, StandardWeekDay, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
   SkillInfo, SkillInput, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow,
   TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday, HoursMarket,
   CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadAttempt, SpeedToLeadDeals, SpeedToLeadFigures, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadView,
   AlertRule, LinkedAccount, MarketConfig, MarketHoliday, OfficeHours, SourceCallOutcome, SourceConnection, SourceDetail, SourceRead, SourceForm, SourceKind,
   SourceLine, SourcePipeline, SourceStore, SourceTag,
   InboundFigures, InboundGroup, InboundNow, OutboundNow, InboundService, MissedReason, SourceMissedReason,
-  CallsFilter, CallsGroup, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsTagUse, HoursRange,
+  CallsFilter, CallsGroup, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerTag, CallsTagUse, HoursRange,
   FormCategory, FormsAnswers, FormsFilter, FormsGroup, FormsReport, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
   FollowUpCallbacks, FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummaryAt, MyFollowUp, MyFollowUpCounts, OpenLead, OpenTask, OpenTicket, SourceTaskStatus, SourceTaskType,
@@ -55,7 +55,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { INVITE_TOKEN_RE } from "@/lib/invitations";
 import { recordUrlPreview, settingsProblem } from "@/lib/sources";
 import {
-  applyConnections, callRecords, callRules, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead, speedFigures,
+  applyConnections, callRecords, callRules, callsFigures, callsPerPerson, callsPerPersonTags, callsPerTag, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead, speedFigures,
   SPEED_DEALS_PAGE, speedDealsPage, speedPeriodFigures, speedTrendGroup,
   historyStartOf, inboundCalls, inboundFigures, missedReasonOf, parseCallsFilter, PER_AGENT_PERMISSION, previousCalls, previousPeriod, rangeProblem,
   FORMS_GROUPS, formsAnswersOf, formsFigures, formsHistoryStart, parseAnswerFilter, parseFormsFilter, previousForms, type FormSubmissionRecord,
@@ -80,6 +80,7 @@ import { FLASH_CARD_ORDER, FLASH_OVERVIEWS } from "@/lib/flash";
 import { mockActive, mockActiveNow, mockActiveRows } from "./mock-active";
 import { mockFleetAreas, mockFleetPage, mockFleetRows } from "./mock-fleet";
 import { mockSubscriptionRows, mockSubscriptionsChurnCard, mockSubscriptionsPage } from "./mock-subscriptions";
+import { mockPaymentRows, mockPaymentsPage } from "./mock-payments";
 
 // ---- Intake reports fixture (B11, 12 October 2026) -------------------------------------------
 // Fictional, shaped like the rows of migration 0007d: invented deal ids, fictional record links,
@@ -1572,6 +1573,11 @@ function assertExport(me: Principal): void {
 
 /** Fixture settings shaped like cma.tenant_settings: the fictional tenant uses Dutch spreadsheet conventions */
 const MOCK_SETTINGS: TenantSetting[] = [
+  // the roster planner (addition 0009zx): the grid and the plan check at their defaults, the lunch type and Arno's zone
+  { key: "roster.slot_minutes", value: "15", isDefault: true },
+  { key: "roster.lunch_after_minutes", value: "360", isDefault: true },
+  { key: "roster.lunch_type_code", value: "LB", isDefault: false },
+  { key: "roster.planner_timezone", value: "Europe/Madrid", isDefault: false },
   { key: "export.csv.date_format", value: "dd-mm-yyyy", isDefault: false },
   { key: "export.csv.decimal_mark", value: "comma", isDefault: false },
   { key: "export.csv.duration_format", value: "decimal_hours", isDefault: true },
@@ -1655,7 +1661,7 @@ const key = (me: Principal, date: DateKey): Key => `${owner(me)}${date}` as Key;
  */
 type MockConfig = {
   statuses: ConfigStatus[]; links: ConfigAppLink[]; absences: AbsenceType[]; targets: CoverageTargetRow[];
-  settings: TenantSetting[]; teams: TeamInfo[]; skills: SkillInfo[];
+  settings: TenantSetting[]; teams: TeamInfo[]; skills: SkillInfo[]; assignmentTypes?: AssignmentType[];
 };
 /**
  * A fictional message as cma.message with its deliveries (0008). "everyone" messages hand a delivery to
@@ -2253,16 +2259,36 @@ type MockRosterWeek = {
   cells: Map<string, RosterEntry>;
   /** The cells as of the last publish; null for a draft */
   published: Map<string, RosterEntry> | null;
+  /** `${userId}:${date}` -> current blocks (addition 0009zx), and as of the last publish */
+  blocks: Map<string, AssignmentBlock[]>;
+  publishedBlocks: Map<string, AssignmentBlock[]> | null;
+  /** Person-dates written since the last publish (D8's count of other changes) */
+  changed: Set<string>;
 };
 
 /** Fixture absence types shaped like cma.absence_type rows; the screens never branch on a key */
 const MOCK_ABSENCES: AbsenceType[] = [
-  { key: "off", name: "Day off", isPaid: false, sortOrder: 10, isActive: true },
-  { key: "leave", name: "Leave", isPaid: true, sortOrder: 20, isActive: true },
-  { key: "sick", name: "Sick", isPaid: true, sortOrder: 30, isActive: true },
-  { key: "public_holiday", name: "Public holiday", isPaid: true, sortOrder: 40, isActive: true },
-  { key: "other", name: "Other", isPaid: false, sortOrder: 50, isActive: true },
+  { key: "off", name: "Day off", isPaid: false, sortOrder: 10, isActive: true, carriesOver: true },
+  { key: "leave", name: "Leave", isPaid: true, sortOrder: 20, isActive: true, carriesOver: false },
+  { key: "sick", name: "Sick", isPaid: true, sortOrder: 30, isActive: true, carriesOver: false },
+  { key: "public_holiday", name: "Public holiday", isPaid: true, sortOrder: 40, isActive: true, carriesOver: false },
+  { key: "other", name: "Other", isPaid: false, sortOrder: 50, isActive: true, carriesOver: false },
 ];
+
+/** Fixture assignment types (addition 0009zx) booking the fixture statuses; the screens never branch on a code */
+const MOCK_ASSIGNMENT_TYPES: AssignmentType[] = [
+  { code: "SL", name: "Sales", sortOrder: 10, isActive: true, kind: "work", statusKey: "available", statusName: "Available", workArea: "sales", isExtra: false, statusIsProductive: true },
+  { code: "MC", name: "Missed calls – call back", sortOrder: 20, isActive: true, kind: "work", statusKey: "back_office", statusName: "Back office", workArea: "operations", isExtra: false, statusIsProductive: true },
+  { code: "GO", name: "General Ops", sortOrder: 40, isActive: true, kind: "work", statusKey: "back_office", statusName: "Back office", workArea: "operations", isExtra: false, statusIsProductive: true },
+  { code: "TR", name: "Training", sortOrder: 60, isActive: true, kind: "work", statusKey: "training", statusName: "Training", workArea: null, isExtra: false, statusIsProductive: false },
+  { code: "SB", name: "Short break", sortOrder: 90, isActive: true, kind: "pause", statusKey: "break", statusName: "Break", workArea: null, isExtra: false, statusIsProductive: false },
+  { code: "LB", name: "Lunch break", sortOrder: 95, isActive: true, kind: "pause", statusKey: "lunch", statusName: "Lunch", workArea: null, isExtra: false, statusIsProductive: false },
+  { code: "X", name: "Extra hours", sortOrder: 99, isActive: true, kind: "work", statusKey: null, statusName: null, workArea: null, isExtra: true, statusIsProductive: null },
+];
+
+function mockAssignmentTypes(): AssignmentType[] {
+  return state.config?.assignmentTypes ?? MOCK_ASSIGNMENT_TYPES;
+}
 
 /** The permission catalog as the mock knows it (keys of the default ladder) */
 const MOCK_PERMISSIONS = [
@@ -2299,6 +2325,7 @@ function seedConfig(): MockConfig {
 const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "export.csv.separator": "comma", "export.csv.decimal_mark": "point", "export.csv.date_format": "yyyy-mm-dd",
   "export.csv.duration_format": "decimal_hours", "export.csv.utf8_bom": "true", "roster.adherence_tolerance_minutes": "5",
+  "roster.slot_minutes": "15", "roster.lunch_after_minutes": "360", "roster.lunch_type_code": "", "roster.planner_timezone": "",
   "workday.auto_close_grace_minutes": "120", "telephony.connected_min_seconds": "0",
   "auth.invitation_valid_days": "7", "auth.invitation_email_domains": "",
   "reports.cancellation_kind": "", "speed_to_lead.target_minutes": "60", "speed_to_lead.next_day_cutoff": "12:00", "speed_to_lead.goal_within_target_pct": "", "speed_to_lead.goal_before_cutoff_pct": "", "speed_to_lead.stale_business_days": "2", "tickets.sla_minutes": "240", "tickets.sla_warning_pct": "75", "leads.age_buckets_business_days": "1,2,5", "tasks.callback_window_minutes": "240",
@@ -2339,7 +2366,7 @@ function rosterWeekOf(teamKey: string | null, weekStart: DateKey): MockRosterWee
   const k = rosterKey(teamKey, weekStart);
   let w = weeks.get(k);
   if (!w) {
-    w = { teamKey, weekStart, version: 0, publishedAt: null, publishedByName: null, cells: new Map(), published: null };
+    w = { teamKey, weekStart, version: 0, publishedAt: null, publishedByName: null, cells: new Map(), published: null, blocks: new Map(), publishedBlocks: null, changed: new Set() };
     weeks.set(k, w);
   }
   return w;
@@ -2362,7 +2389,12 @@ function seedRosters(): Map<string, MockRosterWeek> {
     w.publishedAt = new Date().toISOString();
     w.publishedByName = by;
     w.published = new Map([...w.cells].map(([k, e]) => [k, { ...e }]));
+    w.publishedBlocks = new Map([...w.blocks].map(([k, b]) => [k, b.map((x) => ({ ...x }))]));
+    w.changed = new Set();
   };
+  // Arno's day in blocks (addition 0009zx): sales in the morning, lunch, operations in the afternoon, one block under GB
+  const blocks = (w: MockRosterWeek, userId: string, date: DateKey, list: [string, string, string, string | null][]) =>
+    w.blocks.set(`${userId}:${date}`, list.map(([code, start, end, market]) => ({ assignmentId: crypto.randomUUID(), code, start, end, hoursMarket: market, note: null })));
   const nl = rosterWeekOf("nl", week);
   const nordics = rosterWeekOf("nordics", week);
   for (let i = 0; i < 5; i++) {
@@ -2371,12 +2403,17 @@ function seedRosters(): Map<string, MockRosterWeek> {
     put(nl, TEAM[0]!.userId, d, { kind: "shift", start: "09:00", end: "17:30" });
     put(nl, TEAM[2]!.userId, d, i === 2 ? { kind: "absence", absenceKey: "leave" } : { kind: "shift", start: "08:30", end: "17:00" });
     if (i < 4) put(nordics, TEAM[4]!.userId, d, { kind: "shift", start: "10:00", end: "18:00" });
+    blocks(nl, MOCK_PRINCIPAL.userId, d, [["SL", "09:00", "12:30", null], ["LB", "12:30", "13:00", null], ["GO", "13:00", "15:00", null], ["SL", "15:00", "17:30", "GB"]]);
+    blocks(nl, TEAM[0]!.userId, d, [["GO", "09:00", "11:00", null], ["SB", "11:00", "11:15", null], ["MC", "11:15", "13:00", null], ["LB", "13:00", "13:30", null], ["SL", "13:30", "17:30", null]]);
+    if (i !== 2) blocks(nl, TEAM[2]!.userId, d, [["SL", "08:30", "12:00", "GB"], ["LB", "12:00", "12:30", null], ["SL", "12:30", "16:00", "GB"]]);
   }
   put(nordics, TEAM[4]!.userId, addDays(week, 4), { kind: "absence", absenceKey: "leave" });
   publish(nl);
   publish(nordics);
   // One change after the publish: the planner shows it, the agent keeps the published time
   put(nl, MOCK_PRINCIPAL.userId, addDays(week, 4), { kind: "shift", start: "09:00", end: "15:00", note: "Dentist, agreed with the team lead" });
+  blocks(nl, MOCK_PRINCIPAL.userId, addDays(week, 4), [["SL", "09:00", "12:30", null], ["LB", "12:30", "13:00", null], ["GO", "13:00", "15:00", null]]);
+  nl.changed.add(`${MOCK_PRINCIPAL.userId}:${addDays(week, 4)}`);
   const draft = rosterWeekOf("nl", next);
   for (let i = 0; i < 5; i++) {
     const d = addDays(next, i);
@@ -2388,7 +2425,7 @@ function seedRosters(): Map<string, MockRosterWeek> {
 
 function rosterHeaderOf(w: MockRosterWeek): RosterWeekHeader {
   const team = w.teamKey ? MOCK_TEAMS.find((t) => t.key === w.teamKey) : null;
-  const changed = w.published !== null && (w.cells.size !== w.published.size ||
+  const changed = w.published !== null && (w.changed.size > 0 || w.cells.size !== w.published.size ||
     [...w.cells].some(([k, e]) => { const p = w.published!.get(k); return !p || p.entryId !== e.entryId; }));
   return {
     weekId: w.version > 0 || w.cells.size > 0 ? `mock:${rosterKey(w.teamKey, w.weekStart)}` : null,
@@ -2408,6 +2445,28 @@ function rosterPeopleOf(teamKey: string | null): DirectoryPerson[] {
   return [...seedPeople().values()]
     .filter((p) => onRosterMock(p) && (!teamKey || p.teams.some((t) => t.key === teamKey)))
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+/** The Standard week of the mock tenant (addition 0009zx, D9): `${userId}:${isoWeekday}` -> the day */
+function mockStandardWeek(): Map<string, StandardWeekDay> {
+  const g2 = globalThis as unknown as { __cmaMockStandardWeek?: Map<string, StandardWeekDay> };
+  return (g2.__cmaMockStandardWeek ??= new Map());
+}
+
+/** A person-date's published blocks as the agent sees them (cma.my_roster's assignments) */
+function publishedBlocksOf(me: Principal, w: MockRosterWeek, userId: string, date: DateKey): PublishedAssignment[] {
+  const own = seedPeople().get(userId)?.defaultHoursMarket ?? null;
+  const zones = new Map(seedIntakeConfig(me).markets.map((m) => [m.code, m.timeZone]));
+  return (w.publishedBlocks?.get(`${userId}:${date}`) ?? []).map((b) => {
+    const t = mockAssignmentTypes().find((x) => x.code === b.code);
+    // a pause has no hours market (0009zz)
+    const pause = t?.kind === "pause";
+    const market = pause ? null : b.hoursMarket ?? own;
+    return {
+      code: b.code, name: t?.name ?? b.code, kind: t?.kind ?? "work", workArea: t?.workArea ?? null, isExtra: t?.isExtra ?? false,
+      start: b.start, end: b.end, hoursMarket: market, ownMarket: !pause && b.hoursMarket === null, hoursMarketZone: market ? zones.get(market) ?? null : null,
+    };
+  });
 }
 
 /** The published cell of a person on a date across every roster, with the week it came from */
@@ -3868,9 +3927,26 @@ export const mockData: CmaData = {
       people: people.map((p) => ({
         userId: p.userId, displayName: p.displayName, organisationName: p.organisationName, timeZone: p.timeZone,
         teamKeys: p.teams.map((t) => t.key), workTypeKeys: p.skills.filter((k) => k.dimension === "work_type").map((k) => k.key),
+        defaultHoursMarket: p.defaultHoursMarket ?? null,
       })),
       entries,
       coverage,
+      assignments: [...w.blocks].flatMap(([k, list]) => {
+        const [userId, date] = k.split(":") as [string, DateKey];
+        if (!people.some((p) => p.userId === userId)) return [];
+        return list.map((b): RosterAssignment => {
+          const t = mockAssignmentTypes().find((x) => x.code === b.code);
+          return {
+            assignmentId: b.assignmentId, userId, date, code: b.code, name: t?.name ?? b.code, kind: t?.kind ?? "work", workArea: t?.workArea ?? null,
+            isExtra: t?.isExtra ?? false, start: `${b.start}:00`, end: `${b.end}:00`, hoursMarket: b.hoursMarket, note: b.note, recordedAt: new Date().toISOString(),
+          };
+        });
+      }),
+      planner: {
+        slotMinutes: Number(mockSetting("roster.slot_minutes")) || 15, lunchAfterMinutes: Number(mockSetting("roster.lunch_after_minutes")) || 360,
+        lunchTypeCode: mockSetting("roster.lunch_type_code"), plannerZone: mockSetting("roster.planner_timezone") || "Europe/Amsterdam",
+        types: mockAssignmentTypes().map((t) => ({ ...t })), hoursMarkets: mockHoursMarkets(me),
+      },
     };
   },
 
@@ -4061,7 +4137,7 @@ export const mockData: CmaData = {
     const c = seedConfig();
     const cur = c.absences.find((x) => x.key === input.key);
     if (cur) Object.assign(cur, input, { isActive: true });
-    else c.absences.push({ ...input, isActive: true });
+    else c.absences.push({ ...input, isActive: true, carriesOver: false });
   },
 
   async retireAbsenceType(me, key) {
@@ -4158,7 +4234,7 @@ export const mockData: CmaData = {
     return (state.config ? state.config.absences : MOCK_ABSENCES).map((a) => ({ ...a }));
   },
 
-  async setRosterEntry(me, weekStart, teamKey, userId, date, cell): Promise<RosterEntry | null> {
+  async setRosterEntry(me, weekStart, teamKey, userId, date, cell, publishOthers = false): Promise<RosterCellResult> {
     assertRosterManage(me);
     const person = seedPeople().get(userId);
     if (!person) throw new CmaDbError("CMA02", "unknown person");
@@ -4172,10 +4248,205 @@ export const mockData: CmaData = {
       }
     }
     const w = rosterWeekOf(teamKey, weekStart);
+    const k = `${userId}:${date}`;
+    // D8 for a cell (cma.roster_set_cell): today in a published week publishes at once, after asking while others wait
+    const today = date === dateKeyInZone(new Date(), person.timeZone) && w.version > 0;
+    const others = [...w.changed].filter((x) => x !== k).length;
+    if (today && others > 0 && !publishOthers) return { status: "confirm", otherChanges: others };
     const entry = mockEntry(userId, date, cell, me.displayName);
-    if (entry) w.cells.set(`${userId}:${date}`, entry);
-    else w.cells.delete(`${userId}:${date}`);
-    return entry;
+    if (entry) w.cells.set(k, entry);
+    else w.cells.delete(k);
+    w.changed.add(k);
+    // The blocks outside the new shift end with it (addition 0009zx): all of them for a clear or an absence
+    const before = w.blocks.get(k) ?? [];
+    const kept = cell.kind === "shift" ? before.filter((b) => b.start >= cell.start && b.end <= cell.end) : [];
+    w.blocks.set(k, kept);
+    if (today) await mockData.publishRoster(me, weekStart, teamKey);
+    return { status: "saved", entry, assignments: kept.map((b) => ({ ...b })), endedAssignments: before.length - kept.length, published: today };
+  },
+
+  async setRosterAssignments(me, weekStart, teamKey, userId, date, input, publishOthers): Promise<RosterAssignmentsResult> {
+    assertRosterManage(me);
+    const person = seedPeople().get(userId);
+    if (!person) throw new CmaDbError("CMA02", "unknown person");
+    if (date < weekStart || date > addDays(weekStart, 6)) throw new CmaDbError("CMA04", "date outside the week");
+    if (!rosterPeopleOf(teamKey).some((p) => p.userId === userId)) throw new CmaDbError("CMA04", "person not on this roster");
+    const today = dateKeyInZone(new Date(), person.timeZone);
+    if (date < today) throw new CmaDbError("CMA04", "the past is not planned");
+    const w = rosterWeekOf(teamKey, weekStart);
+    const k = `${userId}:${date}`;
+    const shift = w.cells.get(k);
+    if (input.length > 0 && shift?.kind !== "shift") throw new CmaDbError("CMA04", "an assignment lies inside a shift");
+    const slot = Number(mockSetting("roster.slot_minutes")) || 15;
+    const min = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+    const sorted = [...input].sort((a, b) => min(a.start) - min(b.start));
+    for (const [i, b] of sorted.entries()) {
+      const t = mockAssignmentTypes().find((x) => x.code === b.code);
+      if (!t) throw new CmaDbError("CMA02", `assignment type ${b.code} does not exist`);
+      if (min(b.end) <= min(b.start) || min(b.start) % slot !== 0 || min(b.end) % slot !== 0) throw new CmaDbError("CMA04", "a block starts and ends on the grid");
+      if (shift && (b.start < shift.start!.slice(0, 5) || b.end > shift.end!.slice(0, 5))) throw new CmaDbError("CMA04", "the block lies outside the shift");
+      if (i > 0 && min(sorted[i - 1]!.end) > min(b.start)) throw new CmaDbError("CMA04", "the blocks overlap");
+      if (b.hoursMarket && t.kind === "pause") {
+        throw new CmaDbError("CMA04", `assignment type ${t.code} is a pause, and a pause has no hours market: plan ${t.code} without one, not ${t.code}-${b.hoursMarket}`);
+      }
+      if (b.hoursMarket) assertMockHoursMarket(me, b.hoursMarket);
+    }
+    const before = w.blocks.get(k) ?? [];
+    const same = (a: AssignmentBlockInput, b: AssignmentBlock) => a.code === b.code && a.start === b.start && a.end === b.end && (a.hoursMarket ?? null) === b.hoursMarket && (a.note ?? null) === b.note;
+    const kept = before.filter((b) => sorted.some((a) => same(a, b)));
+    const added = sorted.filter((a) => !before.some((b) => same(a, b)));
+    const ended = before.length - kept.length;
+    const changes = ended + added.length > 0;
+    let published = false;
+    if (changes && date === today && w.version > 0) {
+      const others = [...w.changed].filter((x) => x !== k).length;
+      if (others > 0 && !publishOthers) return { status: "confirm", otherChanges: others };
+      published = true;
+    }
+    const next = [...kept, ...added.map((a) => ({ assignmentId: crypto.randomUUID(), code: a.code, start: a.start, end: a.end, hoursMarket: a.hoursMarket ?? null, note: a.note ?? null }))]
+      .sort((a, b) => min(a.start) - min(b.start));
+    w.blocks.set(k, next);
+    if (changes) w.changed.add(k);
+    if (published) await mockData.publishRoster(me, weekStart, teamKey);
+    return { status: "saved", kept: kept.length, ended, added: added.length, published, version: w.version, blocks: next.map((b) => ({ ...b })) };
+  },
+
+  async getRosterSlotCoverage(me, date, teamKey): Promise<RosterSlotCoverageRow[]> {
+    assertRosterManage(me);
+    const w = rosterWeekOf(teamKey, startOfWeek(date));
+    const slot = Number(mockSetting("roster.slot_minutes")) || 15;
+    const min = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+    const out: RosterSlotCoverageRow[] = [];
+    for (let s = 0; s < 1440; s += slot) {
+      const counts = new Map<string, { code: string; market: string | null; people: number }>();
+      const working = new Set<string>();
+      for (const [k, list] of w.blocks) {
+        const [userId, d] = k.split(":");
+        if (d !== date) continue;
+        for (const b of list) {
+          if (min(b.start) > s || s >= min(b.end)) continue;
+          const pause = mockAssignmentTypes().find((x) => x.code === b.code)?.kind === "pause";
+          const market = pause ? null : b.hoursMarket ?? seedPeople().get(userId!)?.defaultHoursMarket ?? null;
+          const key = `${b.code}/${market ?? ""}`;
+          counts.set(key, { code: b.code, market, people: (counts.get(key)?.people ?? 0) + 1 });
+          if (mockAssignmentTypes().find((x) => x.code === b.code)?.kind === "work") working.add(userId!);
+        }
+      }
+      const time = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+      for (const c of counts.values()) out.push({ slotStart: instantsForLocal(date, time, "Europe/Amsterdam")[0]?.at ?? date, slotTime: time, working: working.size, code: c.code, hoursMarket: c.market, people: c.people });
+    }
+    return out;
+  },
+
+  async getRosterPlannedHours(me, weekStart, teamKey): Promise<RosterPlannedRow[]> {
+    assertRosterManage(me);
+    const w = rosterWeekOf(teamKey, weekStart);
+    const min = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+    const out = new Map<string, RosterPlannedRow>();
+    for (const [k, list] of w.blocks) {
+      const [userId, date] = k.split(":") as [string, DateKey];
+      for (const b of list) {
+        const kind = mockAssignmentTypes().find((x) => x.code === b.code)?.kind ?? "work";
+        const market = kind === "pause" ? null : b.hoursMarket ?? seedPeople().get(userId)?.defaultHoursMarket ?? null;
+        const key = `${userId}:${date}:${b.code}:${market ?? ""}`;
+        const cur = out.get(key) ?? { userId, date, code: b.code, kind, hoursMarket: market, plannedMinutes: 0 };
+        cur.plannedMinutes += min(b.end) - min(b.start);
+        out.set(key, cur);
+      }
+    }
+    return [...out.values()];
+  },
+
+  async getStandardWeek(me): Promise<StandardWeekDay[]> {
+    assertRosterManage(me);
+    return [...mockStandardWeek().values()].map((d) => ({ ...d, assignments: d.assignments.map((b) => ({ ...b })) }));
+  },
+
+  async saveStandardWeek(me, weekStart, teamKey): Promise<RosterReportRow[]> {
+    assertRosterManage(me);
+    const w = rosterWeekOf(teamKey, weekStart);
+    const sw = mockStandardWeek();
+    const people = rosterPeopleOf(teamKey);
+    for (const p of people) for (const k of [...sw.keys()]) if (k.startsWith(`${p.userId}:`)) sw.delete(k);
+    const out: RosterReportRow[] = [];
+    for (const e of [...w.cells.values()].sort((a, b) => a.date.localeCompare(b.date))) {
+      if (!people.some((p) => p.userId === e.userId)) continue;
+      const absence = e.absenceKey ? (state.config?.absences ?? MOCK_ABSENCES).find((a) => a.key === e.absenceKey) : null;
+      if (e.kind === "absence" && !absence?.carriesOver) {
+        out.push({ userId: e.userId, date: e.date, outcome: "skipped", reason: "absence_not_carried", blocks: 0, blocksDropped: 0 });
+        continue;
+      }
+      const isoWeekday = ((new Date(`${e.date}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+      const list = w.blocks.get(`${e.userId}:${e.date}`) ?? [];
+      sw.set(`${e.userId}:${isoWeekday}`, {
+        userId: e.userId, isoWeekday, kind: e.kind, start: e.start, end: e.end, absenceKey: e.absenceKey, absenceName: e.absenceName, note: e.note,
+        assignments: e.kind === "shift" ? list.map((b) => ({ code: b.code, start: b.start, end: b.end, hoursMarket: b.hoursMarket, note: b.note })) : [],
+        recordedAt: new Date().toISOString(),
+      });
+      out.push({ userId: e.userId, date: e.date, outcome: "done", reason: null, blocks: e.kind === "shift" ? list.length : 0, blocksDropped: 0 });
+    }
+    return out;
+  },
+
+  async applyStandardWeek(me, weekStart, teamKey): Promise<RosterReportRow[]> {
+    assertRosterManage(me);
+    const w = rosterWeekOf(teamKey, weekStart);
+    const people = rosterPeopleOf(teamKey);
+    const out: RosterReportRow[] = [];
+    for (const d of [...mockStandardWeek().values()].sort((a, b) => a.isoWeekday - b.isoWeekday)) {
+      const person = people.find((p) => p.userId === d.userId);
+      if (!person) continue;
+      const date = addDays(weekStart, d.isoWeekday - 1);
+      const k = `${d.userId}:${date}`;
+      const row = (outcome: "done" | "skipped", reason: RosterReportRow["reason"], blocks = 0) => out.push({ userId: d.userId, date, outcome, reason, blocks, blocksDropped: 0 });
+      if (date < dateKeyInZone(new Date(), person.timeZone)) { row("skipped", "past"); continue; }
+      if ([...seedRosters().values()].some((o) => o !== w && o.weekStart === weekStart && o.cells.has(k))) { row("skipped", "other_roster"); continue; }
+      if (w.cells.has(k)) { row("skipped", "not_empty"); continue; }
+      const cell: RosterCellInput = d.kind === "shift" ? { kind: "shift", start: d.start!.slice(0, 5), end: d.end!.slice(0, 5), note: d.note } : { kind: "absence", absenceKey: d.absenceKey!, note: d.note };
+      const entry = mockEntry(d.userId, date, cell, me.displayName);
+      if (entry) w.cells.set(k, entry);
+      w.blocks.set(k, d.assignments.map((b) => ({ assignmentId: crypto.randomUUID(), code: b.code, start: b.start, end: b.end, hoursMarket: b.hoursMarket, note: b.note })));
+      w.changed.add(k);
+      row("done", null, d.assignments.length);
+    }
+    return out;
+  },
+
+  async getRosterConfiguration() {
+    return {
+      types: mockAssignmentTypes().map((t) => ({ ...t })), statuses: MOCK_STATUSES.map((x) => ({ ...x })),
+      settings: (state.config?.settings ?? MOCK_SETTINGS).map((x) => ({ ...x })),
+    };
+  },
+
+  async listAssignmentTypes(): Promise<AssignmentType[]> {
+    return mockAssignmentTypes().map((t) => ({ ...t }));
+  },
+
+  async upsertAssignmentType(me, input): Promise<void> {
+    assertConfigure(me);
+    const c = seedConfig();
+    c.assignmentTypes ??= MOCK_ASSIGNMENT_TYPES.map((t) => ({ ...t }));
+    if (!/^[A-Z0-9]{1,6}$/.test(input.code)) throw new CmaDbError("CMA04", "an assignment code is 1 to 6 of A-Z and 0-9");
+    const status = input.isExtra ? null : MOCK_STATUSES.find((x) => x.key === input.statusKey);
+    if (!input.isExtra && !status) throw new CmaDbError("CMA02", "unknown work status");
+    if (status && (input.kind === "work") !== status.isWorking) throw new CmaDbError("CMA04", "the kind does not match the status");
+    const next: AssignmentType = {
+      code: input.code, name: input.name.trim(), sortOrder: input.sortOrder, isActive: input.isActive, kind: input.isExtra ? "work" : input.kind,
+      statusKey: status?.key ?? null, statusName: status?.name ?? null, workArea: status?.workArea ?? null, isExtra: input.isExtra,
+      statusIsProductive: status ? status.isProductive : null,
+    };
+    const i = c.assignmentTypes.findIndex((t) => t.code === input.code);
+    if (i >= 0) c.assignmentTypes[i] = next;
+    else c.assignmentTypes.push(next);
+    c.assignmentTypes.sort((a, b) => Number(!a.isActive) - Number(!b.isActive) || a.sortOrder - b.sortOrder || (a.code < b.code ? -1 : 1));
+  },
+
+  async setAbsenceCarriesOver(me, key, carriesOver): Promise<void> {
+    assertConfigure(me);
+    const a = seedConfig().absences.find((x) => x.key === key);
+    if (!a) throw new CmaDbError("CMA02", "unknown absence type");
+    a.carriesOver = carriesOver;
   },
 
   async publishRoster(me, weekStart, teamKey): Promise<RosterWeekHeader> {
@@ -4185,25 +4456,35 @@ export const mockData: CmaData = {
     w.publishedAt = new Date().toISOString();
     w.publishedByName = me.displayName;
     w.published = new Map([...w.cells].map(([k, e]) => [k, { ...e }]));
+    w.publishedBlocks = new Map([...w.blocks].map(([k, b]) => [k, b.map((x) => ({ ...x }))]));
+    w.changed = new Set();
     return rosterHeaderOf(w);
   },
 
-  async copyRosterWeek(me, fromWeekStart, toWeekStart, teamKey): Promise<number> {
+  async copyRosterWeek(me, fromWeekStart, toWeekStart, teamKey): Promise<RosterReportRow[]> {
     assertRosterManage(me);
+    if (fromWeekStart === toWeekStart) throw new CmaDbError("CMA04", "a week cannot be copied onto itself");
     const from = rosterWeekOf(teamKey, fromWeekStart);
     const to = rosterWeekOf(teamKey, toWeekStart);
     const people = rosterPeopleOf(teamKey);
-    let n = 0;
-    for (const e of from.cells.values()) {
-      const person = people.find((p) => p.userId === e.userId);
-      if (!person) continue;
+    const out: RosterReportRow[] = [];
+    for (const e of [...from.cells.values()].sort((a, b) => a.date.localeCompare(b.date))) {
       const offset = Math.round((Date.parse(e.date) - Date.parse(fromWeekStart)) / 86_400_000);
       const date = addDays(toWeekStart, offset);
-      if (date < dateKeyInZone(new Date(), person.timeZone)) continue;
-      to.cells.set(`${e.userId}:${date}`, { ...e, entryId: crypto.randomUUID(), date, recordedAt: new Date().toISOString(), recordedByName: me.displayName });
-      n += 1;
+      const row = (outcome: "done" | "skipped", reason: RosterReportRow["reason"], blocks = 0) => out.push({ userId: e.userId, date, outcome, reason, blocks, blocksDropped: 0 });
+      const person = people.find((p) => p.userId === e.userId);
+      if (!person) { row("skipped", "not_on_roster"); continue; }
+      if (date < dateKeyInZone(new Date(), person.timeZone)) { row("skipped", "past"); continue; }
+      const absence = e.absenceKey ? (state.config?.absences ?? MOCK_ABSENCES).find((a) => a.key === e.absenceKey) : null;
+      if (e.kind === "absence" && !absence?.carriesOver) { row("skipped", "absence_not_carried"); continue; }
+      const k = `${e.userId}:${date}`;
+      to.cells.set(k, { ...e, entryId: crypto.randomUUID(), date, recordedAt: new Date().toISOString(), recordedByName: me.displayName });
+      const list = e.kind === "shift" ? (from.blocks.get(`${e.userId}:${e.date}`) ?? []) : [];
+      to.blocks.set(k, list.map((b) => ({ ...b, assignmentId: crypto.randomUUID() })));
+      to.changed.add(k);
+      row("done", null, list.length);
     }
-    return n;
+    return out;
   },
 
   async getMyRoster(me, range): Promise<MyRosterDay[]> {
@@ -4217,6 +4498,7 @@ export const mockData: CmaData = {
         date: d, isPublished: found !== null, kind: e?.kind ?? null, start: e?.start ?? null, end: e?.end ?? null,
         absenceKey: e?.absenceKey ?? null, absenceName: e?.absenceName ?? null, note: e?.note ?? null,
         teamName: found ? team?.name ?? null : null, publishedAt: found?.week.publishedAt ?? null,
+        assignments: e?.kind === "shift" ? publishedBlocksOf(me, found!.week, me.userId, d) : [],
       });
     }
     return out;
@@ -4816,6 +5098,14 @@ export const mockData: CmaData = {
     return { ...range, group, filter, telephony, rows: callsTagUse(mockCallRecords(me, range, filter), range.from, range.to, group, mockCallTags(me)) };
   },
 
+  async getCallsPerTag(me, range, filter, opts): Promise<CallsPerTag> {
+    assertCalls(me, range, filter, null, ["reports.view", "performance.team"]);
+    const connected = connectionsOf(me).telephony;
+    const { rows, untagged, totals } = callsPerTag(mockCallRecords(me, range, filter), range.from, range.to, mockCallTags(me));
+    return { ...range, filter, telephony: (opts?.withConnections ?? true) ? connected : null, rows: connected ? rows : [], untagged,
+      totals: (opts?.withTotals ?? true) ? totals : null };
+  },
+
   async getCallsPerAgent(me, range, filter): Promise<CallsPerAgent> {
     assertCalls(me, range, filter, null, [PER_AGENT_PERMISSION]);
     const telephony = connectionsOf(me).telephony;
@@ -5390,6 +5680,20 @@ export const mockData: CmaData = {
   },
 
   async recordSubscriptionFile() {
+    // nothing is kept in the mock: the audit log is the database's
+  },
+
+  async getPaymentsPage(me, query) {
+    await new Promise((r) => setTimeout(r, 60));
+    return mockPaymentsPage(me, query);
+  },
+
+  async getPaymentRows(me, query) {
+    await new Promise((r) => setTimeout(r, 40));
+    return mockPaymentRows(me, query);
+  },
+
+  async recordPaymentFile() {
     // nothing is kept in the mock: the audit log is the database's
   },
 

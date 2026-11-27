@@ -88,7 +88,7 @@ export const IDENTITY_HEADERS = {
 
 /**
  * Dev test identities live under system "mock" (db/06_seed_dev_time_model.sql:
- * agent-one, agent-two, supervisor, manager), so a mock subject can never match
+ * agent-one, agent-one-invest, agent-two, supervisor, manager), so a mock subject can never match
  * or impersonate a real Google row.
  */
 export const MOCK_PROVIDER = "mock";

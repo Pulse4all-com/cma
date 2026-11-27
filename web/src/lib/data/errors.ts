@@ -18,12 +18,19 @@ export const CMA_SQLSTATE = {
 
 export class CmaDbError extends Error {
   readonly sqlState: CmaSqlState | 'DB_UNAVAILABLE' | 'DB_ERROR';
+  /** The database's own message, for the server log only (never sent to a caller) */
   readonly detail: string | undefined;
-  constructor(sqlState: CmaDbError['sqlState'], message: string, detail?: string) {
+  /**
+   * The function's DETAIL field when it set one: a machine-readable value for the data layer, such as D8's
+   * publish_others=<n> (addition 0009zx). Never sent to a caller as it is
+   */
+  readonly pgDetail: string | undefined;
+  constructor(sqlState: CmaDbError['sqlState'], message: string, detail?: string, pgDetail?: string) {
     super(message);
     this.name = 'CmaDbError';
     this.sqlState = sqlState;
     this.detail = detail;
+    this.pgDetail = pgDetail;
   }
 }
 

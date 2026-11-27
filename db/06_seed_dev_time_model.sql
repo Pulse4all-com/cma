@@ -42,7 +42,8 @@ begin
     (v_subs, 'manager@example.com',    'manager'),
     (v_subs, 'analyst@example.com',    'analyst'),      -- analytics: no workday.own, so no clock (0003d)
     (v_subs, 'admin@example.com',      'admin'),        -- admin (0004): the Team screen's full rights
-    (v_inv,  'agent.one@example.com',  'agent-one')     -- same person in two tenants: the login shows a tenant picker
+    (v_inv,  'agent.one@example.com',  'agent-one-invest')  -- the Invest tenant's Agent One under a login of its own: the app
+                                                             -- has no tenant picker and refuses a login that matches two tenants
   ) as s(tenant_id, email, subject)
   join cma.app_user u on u.tenant_id = s.tenant_id and u.email = s.email
   on conflict do nothing;
