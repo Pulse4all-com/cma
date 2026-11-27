@@ -18,6 +18,9 @@
  * The API, invitations, the Log out pages and No access yet are not redirected; in mock mode neither are
  * the verifiers' header requests, and ?as= starts the session on its 303 to the same path.
  *
+ * Every request it passes on gets the Content-Security-Policy's step 2 (brief N07, WP8; src/lib/csp.ts): a fresh nonce
+ * for script-src on the request and on the answer.
+ *
  * Incoming x-cma-identity-* headers are always removed first, so nothing a
  * client sends can impersonate anyone; the app only ever sees what this file
  * set. IAP's own headers (the assertion and its plain identity headers) are
@@ -34,6 +37,7 @@ import { config as appConfig } from "@/lib/config";
 import { IDENTITY_HEADERS, MOCK_IDENTITY, mockIdentity, type Identity } from "@/lib/auth/identity";
 import { IapVerifyError, verifyIapJwt } from "@/lib/auth/iap";
 import { onOpen, SESSION_COOKIE, SESSION_COOKIE_OPTIONS } from "@/lib/session";
+import { contentSecurityPolicy, newNonce } from "@/lib/csp";
 
 /** Behind IAP with the Google-managed OAuth client every identity is a Google account */
 const IAP_PROVIDER = "google";
@@ -126,7 +130,13 @@ function pass(headers: Headers, identity: Identity) {
   headers.set(IDENTITY_HEADERS.provider, identity.provider);
   headers.set(IDENTITY_HEADERS.subject, identity.subject);
   headers.set(IDENTITY_HEADERS.email, identity.email);
-  return NextResponse.next({ request: { headers } });
+  // The Content-Security-Policy, step 2 (src/lib/csp.ts): a fresh nonce per request, on the request (Next reads it there
+  // and puts it on every script it renders; a client's own header of that name is replaced) and on the answer
+  const csp = contentSecurityPolicy(newNonce(), { dev: process.env.NODE_ENV === "development" });
+  headers.set("content-security-policy", csp);
+  const res = NextResponse.next({ request: { headers } });
+  res.headers.set("Content-Security-Policy", csp);
+  return res;
 }
 
 function badMockSubject() {
@@ -144,6 +154,9 @@ function unauthenticated(reason: "missing" | "invalid") {
   });
 }
 
+// The exceptions are the health check and the icon exactly (anchored, the dot escaped: 26 November 2026, so a path that
+// only begins with one of them gets the gate and the CSP's step 2 like any page), Next's static files and images, and
+// the brand images under /brand/ (a folder: a missing file there renders the 404 page with step 1 only, no request data)
 export const config = {
-  matcher: ["/((?!api/health|_next/static|_next/image|icon.png|brand/).*)"],
+  matcher: ["/((?!api/health$|_next/static|_next/image|icon\\.png$|brand/).*)"],
 };

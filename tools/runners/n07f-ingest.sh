@@ -30,7 +30,7 @@ step "what ships: prod's reconcile image now, and the ingest commits since" 120 
   if git cat-file -e "${tag}^{commit}" 2>/dev/null; then git log --oneline "${tag}..HEAD" -- ingest/; else echo "(tag ${tag:-?} is not a commit here)"; fi'
 
 no_run_proxy
-step "deploy.sh dev --jobs (builds the image if it is missing)" 2700 rc "bash docs/ingest/deploy.sh dev --jobs" \
+step "deploy.sh dev --jobs (builds the image if it is missing)" 2700 info "bash docs/ingest/deploy.sh dev --jobs" \
   || note "the dev deploy's exit is not trusted (a gcloud write can hang after it applied): the reads below decide"
 step "the image exists" 1500 rc '
   for i in $(seq 1 80); do
@@ -40,7 +40,7 @@ step "the image exists" 1500 rc '
   done; exit 1' || stop_run "no image ${IMAGE}"
 if ! step "dev: every job on the image (read)" 900 rc 'jobs_on_image p4a-cma-dev "$IMAGE"'; then
   no_run_proxy
-  step "deploy.sh dev --jobs, once more" 1800 rc "bash docs/ingest/deploy.sh dev --jobs" || note "the second dev deploy's exit is not trusted either"
+  step "deploy.sh dev --jobs, once more" 1800 info "bash docs/ingest/deploy.sh dev --jobs" || note "the second dev deploy's exit is not trusted either"
   step "dev: every job on the image (read), again" 900 rc 'jobs_on_image p4a-cma-dev "$IMAGE"' || stop_run "dev's jobs are not on ${IMAGE}"
 fi
 step "dev: the reconcile's schedule (read)" 120 rc \
@@ -52,11 +52,11 @@ step "dev: the reconcile runs (polled)" 3900 rc 'wait_execution p4a-cma-dev' || 
 step "dev: the retention lines, one per tenant" 600 rc 'purge_lines p4a-cma-dev' || stop_run "no clean retention line in dev"
 
 no_run_proxy
-step "deploy.sh prod --jobs (no build: the image dev ran)" 1800 rc "bash docs/ingest/deploy.sh prod --jobs" \
+step "deploy.sh prod --jobs (no build: the image dev ran)" 1800 info "bash docs/ingest/deploy.sh prod --jobs" \
   || note "the prod deploy's exit is not trusted (a gcloud write can hang after it applied): the reads below decide"
 if ! step "prod: every job on the image (read)" 900 rc 'jobs_on_image p4a-cma-prod "$IMAGE"'; then
   no_run_proxy
-  step "deploy.sh prod --jobs, once more" 1800 rc "bash docs/ingest/deploy.sh prod --jobs" || note "the second prod deploy's exit is not trusted either"
+  step "deploy.sh prod --jobs, once more" 1800 info "bash docs/ingest/deploy.sh prod --jobs" || note "the second prod deploy's exit is not trusted either"
   step "prod: every job on the image (read), again" 900 rc 'jobs_on_image p4a-cma-prod "$IMAGE"' || stop_run "prod's jobs are not on ${IMAGE}"
 fi
 step "prod: the reconcile's schedule (read)" 120 rc \
