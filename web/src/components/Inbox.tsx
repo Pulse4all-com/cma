@@ -16,6 +16,7 @@ import { Badge, Button, Card } from "./primitives";
 import { announceUnread, MESSAGES_ARRIVED_EVENT, MESSAGES_CHANGED_EVENT } from "./MessageCenter";
 import { MessageWithdraw } from "./MessageWithdraw";
 import { fmtDateTimeShort } from "@/lib/time";
+import { clientFetch } from "@/lib/client-fetch";
 
 const HEADERS = { "content-type": "application/json", "x-cma-request": "1" } as const;
 type Permission = "unsupported" | "default" | "granted" | "denied";
@@ -72,7 +73,7 @@ export function Inbox({ initial, copy, timeZone, locale, canWithdraw = false }: 
 
   useEffect(() => {
     const refresh = async () => {
-      const res = await fetch(`/api/v1/me/messages?limit=${initial.messages.length < 50 ? 50 : initial.messages.length}`, { cache: "no-store" });
+      const res = await clientFetch(`/api/v1/me/messages?limit=${initial.messages.length < 50 ? 50 : initial.messages.length}`, { cache: "no-store" });
       if (!res.ok) return;
       const { data } = (await res.json()) as { data: MyMessages };
       setList(data.messages);
@@ -90,7 +91,7 @@ export function Inbox({ initial, copy, timeZone, locale, canWithdraw = false }: 
       const change = { ids, ack, at: new Date().toISOString() };
       applyShown(change);
       announceUnread(applyRead(shown, change).filter((m) => m.readAt === null).length);
-      const res = await fetch(ack ? `/api/v1/me/messages/${ids[0]}/ack` : "/api/v1/me/messages/read",
+      const res = await clientFetch(ack ? `/api/v1/me/messages/${ids[0]}/ack` : "/api/v1/me/messages/read",
         { method: "POST", headers: HEADERS, body: ack ? undefined : JSON.stringify({ ids }) }).catch(() => null);
       const answer = res?.ok ? ((await res.json().catch(() => null)) as { data?: { unreadCount?: number } } | null)?.data : null;
       if (res?.ok) {

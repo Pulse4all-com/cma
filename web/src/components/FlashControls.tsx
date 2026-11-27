@@ -12,6 +12,7 @@ import { commitDate } from "@/lib/date-field";
 import { changeLineOf, definitionChanged, flashHref, splitItemsOf, splitLine, type FlashPath, type FlashSplitItem } from "@/lib/flash";
 import { Keycap } from "./primitives";
 import { PENDING_ROW, usePendingChoice, usePendingPush } from "./usePendingPush";
+import { clientFetch } from "@/lib/client-fetch";
 
 function go(push: (href: Route) => void, path: FlashPath, query: Record<string, string>, change: Record<string, string | null>) {
   const q: Record<string, string> = { ...query };
@@ -175,7 +176,7 @@ export function FlashLiveFigure({ overview, market, from, to, previous, previous
     if (initial !== undefined) return undefined;
     const q = new URLSearchParams({ overview, part: "headline", ...(market ? { market } : {}), ...(from ? { from } : {}), ...(to ? { to } : {}) });
     let gone = false;
-    fetch(`/api/v1/reports/flash?${q.toString()}`, { headers: { accept: "application/json" } })
+    clientFetch(`/api/v1/reports/flash?${q.toString()}`, { headers: { accept: "application/json" } })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((j: { data?: { value?: number | null; split?: unknown; definitionVersion?: string | null } }) => {
         if (!gone) {

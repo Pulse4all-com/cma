@@ -40,6 +40,7 @@ import { agentGroupOf, GROUP_BG } from "@/lib/dashboard";
 import { Badge, Button, Card, Keycap } from "./primitives";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { dayEnded, dayWithStatus, workedSeconds } from "@/lib/live";
+import { clientFetch } from "@/lib/client-fetch";
 import { fmtTime } from "@/lib/time";
 
 /** A one-second clock as an external store: no setState in effects, no hydration mismatch */
@@ -181,7 +182,7 @@ export function WorkdayPanel({
     startTransition(async () => {
       // At once, within the click's frame (D3): the new status pressed, its badge, its time and the clock
       showDay(dayWithStatus(day, status, Date.now()));
-      const res = await fetch("/api/v1/me/status", {
+      const res = await clientFetch("/api/v1/me/status", {
         method: "POST",
         headers: { "content-type": "application/json", "x-cma-request": "1" },
         body: JSON.stringify({ key }),
@@ -209,7 +210,7 @@ export function WorkdayPanel({
     startTransition(async () => {
       showDay(dayWithStatus(day, null, Date.now(), code));
       // The market alone: the database books the status in force again under it (addition 0009zo, D3)
-      const res = await fetch("/api/v1/me/status", {
+      const res = await clientFetch("/api/v1/me/status", {
         method: "POST",
         headers: { "content-type": "application/json", "x-cma-request": "1" },
         body: JSON.stringify({ hoursMarket: code }),
@@ -235,7 +236,7 @@ export function WorkdayPanel({
       // The same guarded route the API verifier covers (assertSameSiteWrite), not a server action: one
       // write rule for every write (the IT audit of 17 October 2026). A refusal shows the status problem
       // line; the refresh then shows the day as the database has it (ended in another tab, for example)
-      const res = await fetch("/api/v1/me/day/end", { method: "POST", headers: { "x-cma-request": "1" } }).catch(() => null);
+      const res = await clientFetch("/api/v1/me/day/end", { method: "POST", headers: { "x-cma-request": "1" } }).catch(() => null);
       const answer = res?.ok ? await answerOf(res) : null;
       if (answer) setServed({ from: workday, day: answer });
       else if (res?.status !== 409) setStatusFailed(true);

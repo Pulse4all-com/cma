@@ -19,6 +19,7 @@ import { dateKeyInZone, fmtDate, fmtDateTimeShort } from "@/lib/time";
 import { HeaderHint } from "./HeaderHint";
 import { HintLabel } from "./HintLabel";
 import { RecordLink } from "./RecordLink";
+import { clientFetch } from "@/lib/client-fetch";
 
 type Loaded = { state: "loading" } | { state: "failed" } | { state: "done"; attempts: DealAttempt[] };
 
@@ -45,7 +46,7 @@ export function AttemptDealList({ rows, hints, copy, locale, timeZone }: {
 
   function load(dealId: string) {
     setLoaded((prev) => ({ ...prev, [dealId]: { state: "loading" } }));
-    fetch(`/api/v1/reports/attempts/deals/${dealId}`, { cache: "no-store" })
+    clientFetch(`/api/v1/reports/attempts/deals/${dealId}`, { cache: "no-store" })
       .then(async (res) => {
         if (!res.ok) throw new Error(String(res.status));
         const attempts = ((await res.json()) as { data: DealAttempt[] }).data;

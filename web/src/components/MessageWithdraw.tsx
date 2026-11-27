@@ -11,6 +11,7 @@ import type { Copy } from "@/lib/copy";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MESSAGES_CHANGED_EVENT } from "./MessageCenter";
 import { Button } from "./primitives";
+import { clientFetch } from "@/lib/client-fetch";
 
 const HEADERS = { "content-type": "application/json", "x-cma-request": "1" } as const;
 
@@ -28,7 +29,7 @@ export function MessageWithdraw({ id, title, copy, onWithdrawn }: {
   async function withdraw() {
     setBusy(true);
     setFailed(false);
-    const res = await fetch(`/api/v1/messages/${id}/withdraw`, { method: "POST", headers: HEADERS }).catch(() => null);
+    const res = await clientFetch(`/api/v1/messages/${id}/withdraw`, { method: "POST", headers: HEADERS }).catch(() => null);
     setBusy(false);
     setAsking(false);
     if (res?.ok) {

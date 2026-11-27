@@ -18,6 +18,7 @@
  * someone's shift so gaps show (hover for each assignment and market), and per person the Planned hours: the work blocks,
  * a shift without blocks whole, never a pause (hover for the split). Staff data only.
  */
+import { clientFetch } from "@/lib/client-fetch";
 import { useMemo, useRef, useState, useTransition, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
@@ -42,7 +43,7 @@ type Pending = { userId: string; prev: Block[]; next: Block[]; others: number };
 const typedProblem = (p: RowProblem | null): boolean => p === "unknown" || p === "retired" || p === "market" || p === "pauseMarket" || p === "format";
 
 async function send(path: string, body: unknown): Promise<Response> {
-  return fetch(path, { method: "PUT", headers: { "content-type": "application/json", "x-cma-request": "1" }, body: JSON.stringify(body) });
+  return clientFetch(path, { method: "PUT", headers: { "content-type": "application/json", "x-cma-request": "1" }, body: JSON.stringify(body) });
 }
 
 export function RosterDay({

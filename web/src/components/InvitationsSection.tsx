@@ -17,6 +17,7 @@ import { HeaderHint } from "./HeaderHint";
 import { HintLabel } from "./HintLabel";
 import { InviteDialog, type InviteContext, type InviteDialogMode } from "./InviteDialog";
 import { Badge, Button, Notice } from "./primitives";
+import { clientFetch } from "@/lib/client-fetch";
 
 const TONE = { open: "info", expired: "warning", accepted: "success", revoked: "neutral" } as const;
 
@@ -33,7 +34,7 @@ export function InvitationsSection({ invitations, context, copy }: { invitations
   const th = "h-10 whitespace-nowrap px-3 text-left font-semibold";
 
   async function post(path: string): Promise<Response> {
-    return fetch(path, { method: "POST", headers: { "content-type": "application/json", "x-cma-request": "1" }, body: "{}" });
+    return clientFetch(path, { method: "POST", headers: { "content-type": "application/json", "x-cma-request": "1" }, body: "{}" });
   }
 
   function renew(i: Invitation) {

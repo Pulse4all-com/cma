@@ -21,6 +21,7 @@ import type { MyMessage, MyMessages } from "@/lib/data";
 import { arrivals, POLL_HIDDEN_MS, POLL_VISIBLE_MS, titleWithUnread, TOAST_MS } from "@/lib/messages";
 import { useCloseNavGroup, usePathUnder } from "./NavGroup";
 import { Button } from "./primitives";
+import { clientFetch } from "@/lib/client-fetch";
 
 /** Fired by the inbox after it changed something, so the centre polls right away */
 export const MESSAGES_CHANGED_EVENT = "cma-messages-changed";
@@ -112,7 +113,7 @@ export function MessageCenter({ copy }: { copy: Copy["messages"] }) {
   const poll = useCallback(async (): Promise<boolean> => {
     try {
       const url = since.current ? `/api/v1/me/messages?since=${encodeURIComponent(since.current)}` : "/api/v1/me/messages";
-      const res = await fetch(url, { cache: "no-store" });
+      const res = await clientFetch(url, { cache: "no-store" });
       if (!res.ok) { failures.current += 1; return false; }
       failures.current = 0;
       const { data } = (await res.json()) as { data: MyMessages };
@@ -206,7 +207,7 @@ export function MessageCenter({ copy }: { copy: Copy["messages"] }) {
   /** Reads messages: the badge counts them read at once, then takes the write's answer; a refusal reads the inbox again */
   async function markRead(ids: string[]) {
     setUnread((u) => (u === null ? u : Math.max(0, u - ids.length)));
-    const res = await fetch("/api/v1/me/messages/read", { method: "POST", headers: HEADERS, body: JSON.stringify({ ids }) }).catch(() => null);
+    const res = await clientFetch("/api/v1/me/messages/read", { method: "POST", headers: HEADERS, body: JSON.stringify({ ids }) }).catch(() => null);
     const n = res?.ok ? ((await res.json().catch(() => null)) as { data?: { unreadCount?: number } } | null)?.data?.unreadCount : undefined;
     if (typeof n === "number") {
       setUnread(n);
@@ -236,7 +237,7 @@ export function MessageCenter({ copy }: { copy: Copy["messages"] }) {
     setAckFailed(false);
     setUrgent((u) => u.filter((x) => x.id !== m.id));
     try {
-      const res = await fetch(`/api/v1/me/messages/${m.id}/ack`, { method: "POST", headers: HEADERS }).catch(() => null);
+      const res = await clientFetch(`/api/v1/me/messages/${m.id}/ack`, { method: "POST", headers: HEADERS }).catch(() => null);
       if (res?.ok) {
         const n = ((await res.json().catch(() => null)) as { data?: { unreadCount?: number } } | null)?.data?.unreadCount;
         if (typeof n === "number") setUnread(n);

@@ -12,6 +12,7 @@ import type { Copy } from "@/lib/copy";
 import type { MessageTarget, MessageUrgency, SkillInfo, TeamInfo, TeamPerson } from "@/lib/data";
 import { BODY_MAX, TITLE_MAX } from "@/lib/messages";
 import { Button, Card, Notice } from "./primitives";
+import { clientFetch } from "@/lib/client-fetch";
 
 type Mode = "everyone" | "teams" | "language" | "users";
 const HEADERS = { "content-type": "application/json", "x-cma-request": "1" } as const;
@@ -47,7 +48,7 @@ export function MessageComposer({ teams, languages, people, copy }: { teams: Tea
     if (!t) return;
     setResult(null);
     startTransition(async () => {
-      const res = await fetch("/api/v1/messages", { method: "POST", headers: HEADERS, body: JSON.stringify({ title: title.trim(), body, urgency, target: t }) });
+      const res = await clientFetch("/api/v1/messages", { method: "POST", headers: HEADERS, body: JSON.stringify({ title: title.trim(), body, urgency, target: t }) });
       if (res.status === 201) {
         const { data } = (await res.json()) as { data: { recipients: number } };
         setResult({ tone: "info", text: data.recipients === 1 ? copy.sentToOne : copy.sentTo.replace("{n}", String(data.recipients)) });

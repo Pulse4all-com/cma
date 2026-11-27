@@ -9,6 +9,7 @@ import { useEffect, useId, useOptimistic, useRef, useState, useTransition, type 
 import { useRouter } from "next/navigation";
 import type { Copy } from "@/lib/copy";
 import { Button, Notice } from "../primitives";
+import { clientFetch } from "@/lib/client-fetch";
 
 // the field and table classes live in a plain module, so the Sources list (a server component) gets the strings too
 export { field, label, td, th, tr } from "./tableClasses";
@@ -17,7 +18,7 @@ export type SaveState = { kind: "idle" } | { kind: "saving" } | { kind: "saved" 
 
 /** One write to a configuration route; the answer's status decides the message, never its SQL */
 export async function send(method: "PUT" | "POST" | "PATCH", path: string, body?: unknown): Promise<Response> {
-  return fetch(path, {
+  return clientFetch(path, {
     method,
     headers: { "content-type": "application/json", "x-cma-request": "1" },
     body: body === undefined ? undefined : JSON.stringify(body),

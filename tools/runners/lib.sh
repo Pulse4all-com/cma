@@ -39,7 +39,7 @@ run_init () {
   RUN_LOG="$RUN_REC/$1.log"
   RUN_TMP="$(mktemp -d)"
   export RUN_TMP
-  trap 'stop_run "interrupted"' INT TERM
+  trap 'stop_run "interrupted"' INT TERM HUP
   say ""
   say "== $(date +%T)  $RUN_NAME on $(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short=7 HEAD), log $RUN_LOG"
 }
@@ -50,6 +50,7 @@ run_init () {
 #   verify    a verify: exit 0 and a verdict row that says PASS or verified, no failure count, not PROVOKED
 #   provoked  a provoked verify: the verdict row says PROVOKED and counts no passing check (0 OK / 0 PASS)
 #   refused   a dev-only verify in prod: the script refused the database (REFUSED: …)
+#   info      reported, never gating: OK with the output's last line (a verifier whose known problems are compared by hand)
 verdict_of () {
   local check=$1 f=$2 rc=$3 row
   row="$(grep -E '^[[:space:]]*verdict[[:space:]]*\|' "$f" | tail -1 | tr -s ' ' | sed 's/^ //')"
@@ -61,6 +62,7 @@ verdict_of () {
     provoked) if grep -q 'PROVOKED' <<<"$row" && ! grep -qE '(^|[^0-9])[1-9][0-9]* (OK|PASS|ok)' <<<"$row"; then
                 echo "OK $row"; else echo "FAIL not provoked, or a check passed: ${row:-no verdict row}"; fi ;;
     refused)  if grep -q 'REFUSED: ' "$f"; then echo "OK refused, as expected: $(grep -o 'REFUSED: [^"]*' "$f" | head -1 | cut -c1-90)"; else echo "FAIL no refusal"; fi ;;
+    info)     echo "OK info, exit ${rc}: $(grep -v '^[[:space:]]*$' "$f" | tail -1 | tr -s ' ' | cut -c1-120)" ;;
     *)        echo "FAIL unknown check $check" ;;
   esac
 }
@@ -112,7 +114,9 @@ note () { say "-- $*"; RUN_SUMMARY+=("$(printf '%-4s %s' NOTE "$*" | cut -c1-230
 
 run_finish () {
   local el=$(( $(date +%s) - RUN_T0 )) rc
-  trap - INT TERM
+  trap - INT TERM HUP
+  # a runner's own cleanup (RUN_ON_FINISH, a function name: the dev proxy), also when it stopped
+  if [ -n "${RUN_ON_FINISH:-}" ]; then "$RUN_ON_FINISH"; fi
   say ""
   say "== $(date +%T)  SUMMARY ${RUN_NAME} (${el} s)"
   local l
@@ -142,7 +146,7 @@ end_step () {
   STEP_PID_FILE=""
 }
 
-stop_run () { trap - INT TERM; end_step; say ""; say "== $(date +%T)  STOPPED: $*"; RUN_FAILED=1; run_finish; exit 1; }
+stop_run () { trap - INT TERM HUP; end_step; say ""; say "== $(date +%T)  STOPPED: $*"; RUN_FAILED=1; run_finish; exit 1; }
 
 # The database ------------------------------------------------------------------------------------------------------
 
@@ -187,13 +191,16 @@ db_connect () {
 REGION=europe-west4
 export REGION
 
-# A gcloud write hangs while "gcloud run services proxy" runs: stop any first
+# A gcloud write hangs while "gcloud run services proxy" runs: stop any first. The pattern names the gcloud command
+# itself (gcloud, or gcloud.py as python runs it), so a shell whose command text only mentions the words is left alone
+RUN_PROXY_RE='gcloud(\.py)? run services proxy'
+export RUN_PROXY_RE
 no_run_proxy () {
-  if pgrep -f "run services proxy" >/dev/null; then
-    pkill -f "run services proxy"
+  if pgrep -f "$RUN_PROXY_RE" >/dev/null; then
+    pkill -f "$RUN_PROXY_RE"
     sleep 3
-    pgrep -f "run services proxy" >/dev/null && { pkill -KILL -f "run services proxy"; sleep 1; }
-    pgrep -f "run services proxy" >/dev/null && stop_run "a 'gcloud run services proxy' keeps running: stop it, then rerun"
+    pgrep -f "$RUN_PROXY_RE" >/dev/null && { pkill -KILL -f "$RUN_PROXY_RE"; sleep 1; }
+    pgrep -f "$RUN_PROXY_RE" >/dev/null && stop_run "a 'gcloud run services proxy' keeps running: stop it, then rerun"
     note "stopped a running 'gcloud run services proxy' (a gcloud write hangs while it runs)"
   fi
 }

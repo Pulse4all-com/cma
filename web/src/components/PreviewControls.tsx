@@ -11,11 +11,12 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { Copy } from "@/lib/copy";
 import { Button } from "./primitives";
+import { clientFetch } from "@/lib/client-fetch";
 
 const HEADERS = { "content-type": "application/json", "x-cma-request": "1" } as const;
 
 async function postPreview(roleKey: string | null): Promise<boolean> {
-  const res = await fetch("/api/v1/me/preview", { method: "POST", headers: HEADERS, body: JSON.stringify({ roleKey }) }).catch(() => null);
+  const res = await clientFetch("/api/v1/me/preview", { method: "POST", headers: HEADERS, body: JSON.stringify({ roleKey }) }).catch(() => null);
   return !!res?.ok;
 }
 

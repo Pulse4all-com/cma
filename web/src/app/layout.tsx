@@ -7,6 +7,7 @@ import { DesktopOnly } from "@/components/DesktopOnly";
 import { FIT_SCRIPT } from "@/lib/desktop-fit";
 import { ErrorCopyProvider } from "@/components/ErrorCopy";
 import { NavigationBeacon } from "@/components/NavigationBeacon";
+import { SessionExpiredNotice } from "@/components/SessionExpiredNotice";
 
 // Montserrat is the only typeface (style guide 3.1). The variable font ships with the app, so no request leaves the
 // browser for fonts. Since night N06 (5 November 2026) it is a woff2 subset of the Latin ranges the Workspace's
@@ -40,6 +41,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <link rel="manifest" href="/app.webmanifest" crossOrigin="use-credentials" />
         {/* The navigation beacon (brief N07, WP1): one log line per load and client navigation, routes and milliseconds only */}
         <NavigationBeacon />
+        {/* A session that ended while the tab was open (brief N07, WP8): the polls stop, a notice offers a reload */}
+        <SessionExpiredNotice copy={copy.sessionExpired} />
         {/* The error boundary's words (app/error.tsx) travel as a context: Next gives the boundary no props */}
         <ErrorCopyProvider copy={copy.errorPage}>
           <DesktopOnly copy={copy}>{children}</DesktopOnly>

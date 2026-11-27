@@ -47,11 +47,12 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { Badge, Button, Keycap, LinkButton, Notice } from "./primitives";
 import { WeekBar } from "./WeekBar";
 import { PENDING_ROW, usePendingChoice } from "./usePendingPush";
+import { clientFetch } from "@/lib/client-fetch";
 
 type CellState = { status: "idle" } | { status: "saving" } | { status: "saved" } | { status: "problem"; problem: CellProblem | "past" | "conflict" | "scope" | "failed" };
 
 async function send(method: "PUT" | "POST", path: string, body: unknown): Promise<Response> {
-  return fetch(path, { method, headers: { "content-type": "application/json", "x-cma-request": "1" }, body: JSON.stringify(body) });
+  return clientFetch(path, { method, headers: { "content-type": "application/json", "x-cma-request": "1" }, body: JSON.stringify(body) });
 }
 
 export function RosterPlanner({

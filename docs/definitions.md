@@ -3457,7 +3457,7 @@ Proposed in the brief of 3 November 2026 and decided by Martin that day (additio
 | Time rule | The person's zone; the workday window of the business date (`workday.window_start`, `workday.window_end`) |
 | Scope | One workday; allowed per tenant by `workday.clock_in_again` (default false; Pulse4all Subscriptions true). A supervisor's correction may write several sessions in every tenant |
 | Equivalent in the source system | None |
-| Not to use | "Shift" or "split" as the label; "re-open" (the day is not reopened: a new session is a new clock-in) |
+| Not to use | "Shift" or "split" as the label; "re-open" (the day is not reopened: a new session is a new clock-in); the code names `sessionExpired` and `SessionExpiredNotice` mean the end of the person's sign-in to the Workspace, never a Session |
 | Status | Decided |
 | Decided | 3 November 2026 (Martin, D1 to D4; night defaults confirmed 4 Nov 2026: N1 the setting and its defaults, N2 no maximum, N3 strictly after the end, N4 the default status, N5 an unchanged answer outside the conditions); docs/decisions.md, 3 Nov 2026, "Split shifts: ..." and "Definitions: Workday, Session and Clocked in defined (Time terms)" (#217) |
 | Used by | `workday.clock_in_again`; `cma.workday_can_clock_in_again`; Welcome, My day, My hours, Team hours, Log out and signed-out pages; API `/api/v1/me/day`, `/api/v1/me/day/start`, `/api/v1/me/day/end`, `/api/v1/team/now`, `/api/v1/me/hours`, `/api/v1/team/hours` |
