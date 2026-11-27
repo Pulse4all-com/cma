@@ -14,9 +14,15 @@
 -- search path with pg_temp last") fails in dev on cma.workday_stretches_reader_of and cma.workday_summary_reader_of,
 -- which 134 made with search_path = pg_catalog, cma. A SECURITY DEFINER function runs with its owner's rights; without
 -- pg_temp named last, the session's temporary schema is searched first (PostgreSQL's documentation, "Writing SECURITY
--- DEFINER Functions Safely"), so a caller's temporary object could stand in for one the function names without a schema.
--- Both bodies name every object with its schema today, so nothing is exposed; the rule holds for every definer function
--- all the same, and A5 checks it.
+-- DEFINER Functions Safely") for relations and data types, so a caller's temporary object can stand in for one the
+-- function names without a schema. Here that is a type: both wrappers call cma_read.reader_sees, which casts with an
+-- unqualified ::uuid and has no search path of its own. Shown locally on 27 November 2026 (Postgres 16): a login holding
+-- cma_readonly and TEMP on the database made a temporary domain pg_temp.uuid whose check called its own temporary
+-- function, set app.tenant_id to a tenant and read cma_read.workday_summary; with 134's path the function ran as
+-- cma_owner once per workday read, with this script's path as the reader only. So this closes an owner's-rights path
+-- open since 134 for a reader that can run its own SQL with TEMP (no table, row or grant changes).
+-- A later re-create of either wrapper (create or replace, which replaces its settings) must carry
+-- search_path = pg_catalog, cma, pg_temp: its "based on" is 134, whose text still says pg_catalog, cma.
 --
 -- What it changes
 --   cma.workday_stretches_reader_of(uuid, uuid, timestamptz)   search_path = pg_catalog, cma, pg_temp
@@ -25,8 +31,8 @@
 -- commit while one lacks pg_temp last (A5's rule), naming them.
 --
 -- Verifies that read what this changes, run again after this script: 77 (its A5; dev only), 135 (the two wrappers and the
--- readers' views over them), and, through cma_read.time_interval and cma_read.workday_summary, 07 (dev only), 47, 51 and
--- 231 (grep -lw 'cma\.workday_(stretches|summary)_reader_of' db/*verify*.sql, and the views' readers). None is edited.
+-- readers' views over them), and, through cma_read.time_interval and cma_read.workday_summary, 07 (its blocks E, H and
+-- K in dev only; they skip in prod), 47, 51 and 231 (grep -lw 'cma\.workday_(stretches|summary)_reader_of' db/*verify*.sql, and the views' readers). None is edited.
 -- =============================================================================================
 
 do $$

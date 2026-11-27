@@ -9,10 +9,13 @@
 --   S1  0010b recorded
 --   D1  the two wrappers: search_path exactly pg_catalog, cma, pg_temp; still SECURITY DEFINER, stable, owner cma_owner,
 --       rows 12 and 1 (as 134 made them); execute for cma_readonly only (not public, not cma_app)
---   D2  every SECURITY DEFINER function of cma and cma_read ends its search path in pg_temp (77's A5), with the counts
+--   D2  every SECURITY DEFINER function of cma and cma_read ends its search path in pg_temp (77's A5), with the counts,
+--       and no SECURITY DEFINER function in any other schema but the system's (pg_catalog, information_schema, pg_toast)
 --   D3  the wrappers answer as the core functions they wrap: cma.workday_stretches_of and cma.workday_summary_of against
---       the two readers' functions over the 25 latest workdays (by id), row for row both ways (as the owner, whom
---       cma_read.reader_sees lets see every tenant); a database without workdays says so and passes on the catalog alone
+--       the two readers' functions over the 25 latest workdays (by id), row for row both ways; app.tenant_id is cleared
+--       first, so cma_read.reader_sees (which decides on that setting, not on the role) lets the wrappers see every
+--       tenant; provoked, one wrapper row is left out, so the comparison must find that difference; a database without
+--       workdays says so and passes on the catalog alone
 -- =============================================================================================
 
 do $$
@@ -24,6 +27,7 @@ end
 $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);                 -- 'true' to make every check fail
+select set_config('app.tenant_id', '', false);                       -- the wrappers see every tenant (cma_read.reader_sees)
 
 drop table if exists pg_temp.verify_0010b;
 create temporary table verify_0010b (ord integer, check_name text, result text, detail text);
@@ -79,8 +83,13 @@ begin
     into n_cma, n_read, v_bad
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname in ('cma', 'cma_read') and p.prosecdef;
-  perform pg_temp.v10b_row(3, 'D2', 'every SECURITY DEFINER function ends its search path in pg_temp', v_bad is null and n_cma >= 2,
-    format('%s in cma, %s in cma_read%s', n_cma, n_read, coalesce('; without pg_temp last: ' || v_bad, '')));
+  select string_agg(n.nspname || '.' || p.proname, ', ' order by n.nspname collate "C", p.proname collate "C") into v_txt
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where p.prosecdef and n.nspname not in ('cma', 'cma_read', 'pg_catalog', 'information_schema', 'pg_toast')
+    and n.nspname not like 'pg_temp_%' and n.nspname not like 'pg_toast_temp_%';
+  perform pg_temp.v10b_row(3, 'D2', 'every SECURITY DEFINER function ends its search path in pg_temp', v_bad is null and v_txt is null and n_cma >= 2,
+    format('%s in cma, %s in cma_read, none elsewhere%s%s', n_cma, n_read, coalesce('; without pg_temp last: ' || v_bad, ''),
+           coalesce('; definer functions in other schemas: ' || v_txt, '')));
 
   -- D3: the wrappers answer as the core functions they wrap, over the 25 latest workdays
   create temporary table v10b_days on commit drop as
@@ -104,9 +113,18 @@ begin
      except all
      select d.id, x.* from v10b_days d cross join lateral cma.workday_summary_of(d.tenant_id, d.id, d.day_end) x)) z;
   select count(*) into n_rows from v10b_days d cross join lateral cma.workday_stretches_reader_of(d.tenant_id, d.id, d.day_end) x;
-  perform pg_temp.v10b_row(4, 'D3', 'the wrappers answer as the core functions', n_diff = 0,
+  -- provoked: the comparison itself is put to the test, one wrapper row left out, so it must count one difference
+  if current_setting('verify.provoke')::boolean and n_rows > 0 then
+    select count(*) into n_diff from (
+      (select d.id, x.* from v10b_days d cross join lateral cma.workday_stretches_of(d.tenant_id, d.id, d.day_end) x
+       except all
+       (select d.id, x.* from v10b_days d cross join lateral cma.workday_stretches_reader_of(d.tenant_id, d.id, d.day_end) x
+        order by 1 offset 1))) z;
+  end if;
+  perform pg_temp.v10b_row(4, 'D3', 'the wrappers answer as the core functions', n_diff = 0 and (n_days = 0 or n_rows > 0),
     case when n_days = 0 then 'no workday in this database: the catalog checks alone'
-         else format('%s workdays, %s stretches through the wrapper, %s rows differ', n_days, n_rows, n_diff) end);
+         else format('%s workdays, %s stretches through the wrapper, %s rows differ%s', n_days, n_rows, n_diff,
+                     case when current_setting('verify.provoke')::boolean then ' (one row left out on purpose)' else '' end) end);
   drop table if exists v10b_days;
 end
 $$;
