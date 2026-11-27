@@ -126,7 +126,8 @@ export function LiveBoard({
   const byEmployer = employers.length > 1;
   const select =
     "h-10 min-w-56 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue";
-  const th = "px-3 py-2 font-semibold";
+  const th = "px-2 py-2 font-semibold";
+  const teamsOf = (r: (typeof shown)[number]) => r.teams.map((x) => x.name).join(", ");
 
   return (
     <div className="flex flex-col gap-6">
@@ -224,8 +225,8 @@ export function LiveBoard({
       {shown.length === 0 ? (
         <p className="text-body text-p4a-muted">{t.empty}</p>
       ) : (
-        // At 1280 px the ten columns can be wider than the main area: the table scrolls inside its own
-        // box, never the page (as the report tables, addition 0008i)
+        // The ten columns fit the main area at 1280 px with the report tables' cell padding (px-2); a wider
+        // table (a long team list, the employer column) scrolls inside its own box, never the page (addition 0008i)
         <div className="overflow-x-auto" data-testid="live-people-scroll" role="region" aria-label={t.title} tabIndex={0}>
         <table className="w-full border-collapse text-body leading-table">
           <thead>
@@ -245,10 +246,15 @@ export function LiveBoard({
           <tbody>
             {shown.map((r) => (
               <tr key={r.userId} className="h-10 border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
-                <td className="whitespace-nowrap px-3">{r.displayName}</td>
-                {byEmployer ? <td className="whitespace-nowrap px-3 text-p4a-muted">{r.organisationName}</td> : null}
-                <td className="whitespace-nowrap px-3 text-p4a-muted">{r.teams.map((x) => x.name).join(", ")}</td>
-                <td className="whitespace-nowrap px-3">
+                <td className="whitespace-nowrap px-2">{r.displayName}</td>
+                {byEmployer ? <td className="whitespace-nowrap px-2 text-p4a-muted">{r.organisationName}</td> : null}
+                {/* the team list is capped at 9rem (the column 10rem with its padding) and ends in an ellipsis, the whole list in its title (on an inner block: a
+                    max-width on a table cell is not defined in every browser), so a person in several teams never widens the
+                    table past the main area at 1280 px; the row keeps its 40 px */}
+                <td className="whitespace-nowrap px-2 text-p4a-muted">
+                  <span className="block max-w-36 truncate" title={teamsOf(r)}>{teamsOf(r)}</span>
+                </td>
+                <td className="whitespace-nowrap px-2">
                   <span className="flex items-center gap-2">
                     <span className={`tabular ${r.shift.label ? "" : "text-p4a-muted"}`}>
                       {!r.shift.published ? t.shiftNotPublished : r.shift.label ?? t.noShift}
@@ -258,23 +264,23 @@ export function LiveBoard({
                     ) : null}
                   </span>
                 </td>
-                <td className="px-3">
+                <td className="px-2">
                   <span className="flex items-center gap-2 whitespace-nowrap">
                     {isGroup(r.group) ? <Swatch group={r.group} /> : null}
                     {r.statusName ?? label(r.group).label}
                     {r.statusName && !r.statusActive ? <Badge tone="neutral">{t.inactive}</Badge> : null}
                   </span>
                 </td>
-                <td className="whitespace-nowrap px-3" data-testid="live-hours-market">
+                <td className="whitespace-nowrap px-2" data-testid="live-hours-market">
                   {r.hoursMarket === undefined ? "" : r.hoursMarket ?? <span className="text-p4a-muted">{t.noMarket}</span>}
                 </td>
-                <td className="tabular whitespace-nowrap px-3 text-right"><Since at={r.statusSince} /></td>
-                <td className="tabular whitespace-nowrap px-3 text-right">
+                <td className="tabular whitespace-nowrap px-2 text-right"><Since at={r.statusSince} /></td>
+                <td className="tabular whitespace-nowrap px-2 text-right">
                   {r.inLabel ?? ""}
                   {r.zoneLabel ? <span className="ml-1 text-caption text-p4a-grey">{r.zoneLabel}</span> : null}
                 </td>
-                <td className="tabular whitespace-nowrap px-3 text-right">{r.outLabel ?? ""}</td>
-                <td className="tabular whitespace-nowrap px-3 text-right"><Worked clock={r.clock} /></td>
+                <td className="tabular whitespace-nowrap px-2 text-right">{r.outLabel ?? ""}</td>
+                <td className="tabular whitespace-nowrap px-2 text-right"><Worked clock={r.clock} /></td>
               </tr>
             ))}
           </tbody>

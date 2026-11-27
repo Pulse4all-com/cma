@@ -83,8 +83,8 @@ export function Switch<V extends string>({ label, options, current, href, testId
   );
 }
 
-/** A headline tile: its label with the hint, the figure, what stands under it */
-function Tile({ testId, label, hint, copy, value, children }: { testId: string; label: string; hint: string; copy: Copy; value: ReactNode; children?: ReactNode }) {
+/** A headline tile: its label with the hint, the figure, what stands under it (Customers → Payments' tiles too) */
+export function Tile({ testId, label, hint, copy, value, children }: { testId: string; label: string; hint: string; copy: Copy; value: ReactNode; children?: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col rounded-card border border-p4a-border bg-white p-5" data-tile="" data-testid={testId}>
       <p className="text-caption text-p4a-grey" data-hint-anchor="">
@@ -201,8 +201,8 @@ function SourceLine({ t, sc, text, stores, gaps, link: toDq, locale, testId }: {
   );
 }
 
-/** A table inside its scroll container (Pulse4all-Style 7.6) */
-function Scroll({ testId, label, children, fit = false, numbers = false }: { testId: string; label: string; children: ReactNode; fit?: boolean; numbers?: boolean }) {
+/** A table inside its scroll container (Pulse4all-Style 7.6; Customers → Payments' tables too) */
+export function Scroll({ testId, label, children, fit = false, numbers = false }: { testId: string; label: string; children: ReactNode; fit?: boolean; numbers?: boolean }) {
   return (
     <div className="min-h-0 overflow-auto" data-testid={`${testId}-scroll`} role="region" aria-label={label} tabIndex={0}>
       <table className={`${fit ? "w-auto" : "w-full"} ${numbers ? cellStyle : ""} border-collapse text-body leading-table [&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10 [&_thead_th]:bg-p4a-bgblue`} data-testid={testId}>{children}</table>

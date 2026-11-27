@@ -721,6 +721,161 @@ export interface AbsenceType {
   isPaid: boolean;
   sortOrder: number;
   isActive: boolean;
+  /** Carries over (nl Gaat mee bij kopiëren, addition 0009zx, D10): Copy week and Save as standard week take it */
+  carriesOver: boolean;
+}
+
+/**
+ * An Assignment type (nl Inzettype, addition 0009zx, D2): tenant configuration. Its colour and Work area follow from
+ * the status it books (D13); an extra type books none (D4). docs/definitions.md, Assignment type
+ */
+export interface AssignmentType {
+  /** 1 to 6 of A-Z and 0-9, unique per tenant, never changed */
+  code: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+  kind: "work" | "pause";
+  /** The work status a block books; null for an extra type */
+  statusKey: string | null;
+  statusName: string | null;
+  workArea: WorkArea | null;
+  isExtra: boolean;
+  /** Whether the booked status is productive; null for an extra type */
+  statusIsProductive: boolean | null;
+}
+
+export interface AssignmentTypeInput {
+  code: string;
+  name: string;
+  kind: "work" | "pause";
+  statusKey: string | null;
+  isExtra: boolean;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+/** One block of the planner's week (cma.roster_assignments): local hh:mm:ss in the person's zone, current rows */
+export interface RosterAssignment {
+  assignmentId: string;
+  userId: string;
+  date: DateKey;
+  code: string;
+  name: string;
+  kind: "work" | "pause";
+  workArea: WorkArea | null;
+  isExtra: boolean;
+  start: string;
+  end: string;
+  /** null: own market, the person's Default market at booking (D1); always null for a pause (0009zz) */
+  hoursMarket: string | null;
+  note: string | null;
+  recordedAt: Instant;
+}
+
+/** A block as the planner writes it (cma.roster_set_assignments): hh:mm local in the person's zone, 24:00 allowed as an end */
+export interface AssignmentBlockInput {
+  code: string;
+  start: string;
+  end: string;
+  /** An hours market code; null is own market */
+  hoursMarket: string | null;
+  note: string | null;
+}
+
+/** A block of a person-date after a write, as cma.roster_set_assignments and cma.roster_cell answer */
+export interface AssignmentBlock {
+  assignmentId: string;
+  code: string;
+  start: string;
+  end: string;
+  hoursMarket: string | null;
+  note: string | null;
+}
+
+/**
+ * The answer to a person-date's blocks (D8): saved, with what was kept, ended and added and whether the week was published
+ * at once (today in a published week); or confirm, when today's change would also publish other changes of the week
+ */
+export type RosterAssignmentsResult =
+  | { status: "saved"; kept: number; ended: number; added: number; published: boolean; version: number; blocks: AssignmentBlock[] }
+  | { status: "confirm"; otherChanges: number };
+
+/** One line of Copy week's, Save as standard week's and Apply standard week's report (D9, D10) */
+export interface RosterReportRow {
+  userId: string;
+  date: DateKey;
+  outcome: "done" | "skipped";
+  /** Why it was skipped, or blocks_dropped for a day done without some of its blocks */
+  reason: "past" | "not_on_roster" | "other_roster" | "not_empty" | "absence_not_carried" | "blocks_dropped" | null;
+  blocks: number;
+  blocksDropped: number;
+}
+
+/** The roster planner's tenant settings and catalogs, read with the week (addition 0009zx) */
+export interface RosterPlannerContext {
+  /** roster.slot_minutes (D6) */
+  slotMinutes: number;
+  /** roster.lunch_after_minutes: the plan check's long shift */
+  lunchAfterMinutes: number;
+  /** roster.lunch_type_code: the type the plan check takes as lunch; empty: any pause */
+  lunchTypeCode: string;
+  /** The planner zone (cma.roster_planner_zone: roster.planner_timezone, else the tenant's zone) */
+  plannerZone: string;
+  types: AssignmentType[];
+  hoursMarkets: HoursMarket[];
+}
+
+/** One slot of cma.roster_slot_coverage (D12), for the API */
+export interface RosterSlotCoverageRow {
+  slotStart: Instant;
+  /** hh:mm in the planner zone */
+  slotTime: string;
+  working: number;
+  code: string;
+  hoursMarket: string | null;
+  people: number;
+}
+
+/** One row of cma.roster_planned_hours (D12), for the API */
+export interface RosterPlannedRow {
+  userId: string;
+  date: DateKey;
+  code: string;
+  kind: "work" | "pause";
+  hoursMarket: string | null;
+  plannedMinutes: number;
+}
+
+/** One weekday of the tenant's Standard week (D9), for the API */
+export interface StandardWeekDay {
+  userId: string;
+  isoWeekday: number;
+  kind: "shift" | "absence";
+  start: string | null;
+  end: string | null;
+  absenceKey: string | null;
+  absenceName: string | null;
+  note: string | null;
+  assignments: { code: string; start: string; end: string; hoursMarket: string | null; note: string | null }[];
+  recordedAt: Instant;
+}
+
+/** A published block as the agent and the Live board see it (cma.my_roster, cma.roster_today) */
+export interface PublishedAssignment {
+  code: string;
+  name: string;
+  kind: "work" | "pause";
+  workArea: WorkArea | null;
+  isExtra: boolean;
+  /** hh:mm in the person's zone */
+  start: string;
+  end: string;
+  /** The block's hours market, the person's Default market when the block has none (own market); null for a pause (0009zz) */
+  hoursMarket: string | null;
+  ownMarket: boolean;
+  /** The hours market's zone, for the time there in brackets */
+  hoursMarketZone: string | null;
 }
 
 export interface RosterWeekHeader {
@@ -749,6 +904,8 @@ export interface RosterPerson {
   teamKeys: string[];
   /** Work-type skill keys held now, for coverage */
   workTypeKeys: string[];
+  /** The person's Default market (addition 0009zo); a block without a market is planned under it (addition 0009zx) */
+  defaultHoursMarket: string | null;
 }
 
 export interface RosterEntry {
@@ -780,7 +937,24 @@ export interface RosterWeek {
   people: RosterPerson[];
   entries: RosterEntry[];
   coverage: RosterCoverageRow[];
+  /** The week's current blocks (addition 0009zx) */
+  assignments: RosterAssignment[];
+  planner: RosterPlannerContext;
 }
+
+/** A cell after a write (cma.roster_cell): the entry, its blocks, and the blocks the write ended with the shift */
+export interface RosterCellAnswer {
+  status: "saved";
+  entry: RosterEntry | null;
+  assignments: AssignmentBlock[];
+  /** Blocks that lay outside the new shift (or every block of a cleared or absent day) and ended with it */
+  endedAssignments: number;
+  /** The write was the person's today in a published week, so the week was published at once (D8) */
+  published: boolean;
+}
+
+/** A cell write (cma.roster_set_cell): saved, or confirm when today's change would also publish other changes (D8) */
+export type RosterCellResult = RosterCellAnswer | { status: "confirm"; otherChanges: number };
 
 /** One week of the range: the state of the roster of a team (or the tenant) for that week; an unwritten week is a draft at version 0 with no entries */
 export interface RosterWeekSummary {
@@ -811,6 +985,8 @@ export interface MyRosterDay {
   note: string | null;
   teamName: string | null;
   publishedAt: Instant | null;
+  /** The date's published blocks (addition 0009zx), in start order */
+  assignments: PublishedAssignment[];
 }
 
 /** Today's published entry per person whose time is kept, for the Live board (cma.roster_today) */
@@ -1426,6 +1602,47 @@ export interface CallsTagUse {
   filter: CallsFilter;
   telephony: boolean;
   rows: TagUseRow[];
+}
+
+/** Calls by direction (Calls per tag, addition 0009zw): outbound, inbound and both */
+export interface CallsByDirection {
+  outbound: number;
+  inbound: number;
+  calls: number;
+}
+
+/** One current tag of Calls per tag (cma.calls_per_tag): every call in scope carrying it, by direction */
+export interface CallsPerTagRow extends CallsByDirection {
+  /** connection id ':' tag ref */
+  tagKey: string;
+  /** The catalog's name (the ref for a tag not in the catalog) */
+  tagName: string;
+  /** What the tag means (configuration); null for none */
+  meaning: TagMeaning | null;
+  /** Whether the tag counts (configuration); a tag that does not count is listed too */
+  isCounted: boolean;
+}
+
+/**
+ * Calls per tag (docs/definitions.md, Calls per tag; addition 0009zw): every call in scope per current tag, by
+ * direction, over the whole period (no grouping). A call with two tags counts under each, so the rows do not add up to
+ * the total; untagged is the calls without a current tag (Untagged), missed inbound calls included
+ */
+export interface CallsPerTag {
+  from: DateKey;
+  to: DateKey;
+  filter: CallsFilter;
+  /** False when the tenant has no telephony connected (no rows); null when the caller asked without the check */
+  telephony: boolean | null;
+  /** By calls, most first, then by name */
+  rows: CallsPerTagRow[];
+  untagged: CallsByDirection;
+  /**
+   * The calls in scope, counted from the same calls as the rows (equal to cma.calls_figures_of's calls, inbound and
+   * outbound, as /api/v1/reports/calls answers them), not the sum of the rows; null when the caller asked without them
+   * (Reports → Calls takes them from its overview)
+   */
+  totals: CallsByDirection | null;
 }
 
 /** One row of cma.calls_per_person: a person, the calls of telephony users without a person, or the total */
@@ -2817,6 +3034,74 @@ export interface SubscriptionsPage {
 }
 /** Customers → Active's Churn rate card (cma.subscriptions_churn_card): the last complete month's parts of a market or of every market */
 export type SubscriptionsChurnCard = (SubscriptionsRateParts & { month: DateKey }) | null;
+
+/**
+ * Customers → Payments (addition 0009zy; docs/definitions.md, Payment state, Amount at risk): the payment state of the
+ * subscription base over months, read from the subscription facts' stored takes (cma.payments_page, cma.payment_rows), with
+ * Customers → Subscriptions' filters. The page's base is every present subscription in one of the five payment states of
+ * PAYMENT_STATES (Paused and Canceled are not on it). Ids, codes, counts, months, amounts and links only
+ */
+export type PaymentState = "paid" | "in_retry" | "charged_back" | "awaiting_payment" | "failed";
+/** The list's state: at_risk (an amount at risk; the default), one payment state, or all (the five) */
+export type PaymentsListState = "at_risk" | PaymentState | "all";
+/** The list's sort keys (cma.payment_rows_of's fixed list) */
+export type PaymentsSort = "amount_at_risk" | "state_since" | "subscription" | "market" | "payment_state";
+export interface PaymentsPageQuery extends SubscriptionsFilter {
+  from: DateKey; to: DateKey;
+  state: PaymentsListState; sort: PaymentsSort; descending: boolean;
+  /** The list's page in the same read (from 1; the first when left out) */
+  page?: number;
+}
+export interface PaymentsRowsQuery extends SubscriptionsFilter {
+  state: PaymentsListState; sort: PaymentsSort; descending: boolean;
+  /** From 1, 50 a page; a file reads every row up to the tenant's flash.file_max_rows */
+  page: number; file?: boolean;
+}
+/** A month's base (the Total subscriptions at the previous month end) and its moved-to-failed subscriptions: the Failed rate's parts */
+export interface PaymentsRateParts { base: number | null; movedToFailed: number }
+export interface PaymentsTiles {
+  /** The page's base: the subscriptions in one of the five payment states */
+  total: number;
+  /** Per payment state its subscriptions, the five always, zeros included, in cma.payment_states()'s order */
+  byState: { key: PaymentState; subscriptions: number }[];
+  /** The Awaiting payment subscriptions that are overdue */
+  overdue: number;
+  /** The Amount at risk: its subscriptions and per currency its amount and subscriptions, never added across currencies; the indicative euros only while every currency has a rate */
+  atRisk: { subscriptions: number; amounts: { currency: string; amount: number; subscriptions: number }[]; eur: { amount: number; asOf: string | null } | null };
+  /** The last complete month's Failed rate parts under the market and store filters; null without a complete month */
+  rates: (PaymentsRateParts & { month: DateKey }) | null;
+}
+export interface PaymentsMonth { month: DateKey; complete: PaymentsRateParts | null }
+export interface PaymentsRateRow extends PaymentsRateParts { market: string; month: DateKey }
+export interface PaymentsCrossCell { state: PaymentState; instrument: string; subscriptions: number }
+/** One subscription of the list: the app's id and number, codes, its payment state since, the amounts and the CRM contact's id with its record link */
+export interface PaymentRow {
+  subscriptionId: string; sourceId: string; number: string | null; store: string | null; market: string; status: string; paymentState: PaymentState;
+  stateSince: Instant | null; overdue: boolean | null; returnCode: string | null; instrument: string | null; currency: string | null;
+  amountAtRisk: number | null; monthlyAmount: number | null; contactId: string | null; contactUrl: string | null;
+}
+export interface PaymentRowsPage {
+  page: number; pageSize: number; total: number; state: PaymentsListState; sort: PaymentsSort; descending: boolean; rows: PaymentRow[];
+}
+/** The list's read: setUp false (and nothing more) while no subscriptions connection is set up; history false while no take is stored */
+export interface PaymentRowsList extends PaymentRowsPage { setUp: boolean; history: boolean; timeZone: string; computedAt: Instant | null }
+export interface PaymentsPage {
+  /** False while the tenant has no subscriptions connection set up: every part below is then empty ("Not set up", never zeros) */
+  setUp: boolean;
+  /** False while no take is stored yet ("being prepared", never zeros) */
+  history: boolean;
+  take: { computedAt: Instant; businessDate: DateKey } | null;
+  timeZone: string; today: DateKey; month: DateKey; from: DateKey; to: DateKey; filter: SubscriptionsFilter;
+  settings: { states: PaymentState[]; fx: Record<string, unknown> | null; propositions: string[]; historyMonths: number };
+  filters: SubscriptionsPage["filters"];
+  tiles: PaymentsTiles | null;
+  months: PaymentsMonth[];
+  rates: PaymentsRateRow[];
+  storeStarts: SubscriptionsStoreStart[];
+  ratesStartMonth: DateKey | null;
+  cross: PaymentsCrossCell[] | null;
+  list: PaymentRowsPage | null;
+}
 
 /** Reports → Maintenance (addition 0008zi): the scope of the tracked devices, field or stock (null: every tracked device) */
 export type MaintenanceScope = "field" | "stock";
@@ -4625,11 +4910,38 @@ export interface CmaData {
    * it. Past dates, a date outside the week, a person not on the grid, bad times are CMA04; another
    * roster's entry on that date CMA03; an unknown absence CMA02. Answers the current entry, null after a clear.
    */
-  setRosterEntry(me: Principal, weekStart: DateKey, teamKey: string | null, userId: string, date: DateKey, cell: RosterCellInput): Promise<RosterEntry | null>;
+  setRosterEntry(me: Principal, weekStart: DateKey, teamKey: string | null, userId: string, date: DateKey, cell: RosterCellInput, publishOthers?: boolean): Promise<RosterCellResult>;
+  /**
+   * Replaces a person-date's blocks (cma.roster_set_assignments, addition 0009zx): overlap, off the grid, outside the
+   * shift, a market that is no hours market, the past CMA04; an unknown type or market CMA02. Today in a published week
+   * publishes at once, or answers confirm with the count of other changes unless publishOthers (D8)
+   */
+  setRosterAssignments(me: Principal, weekStart: DateKey, teamKey: string | null, userId: string, date: DateKey, blocks: AssignmentBlockInput[], publishOthers: boolean): Promise<RosterAssignmentsResult>;
+  /** D12 per slot of the planner zone's day (cma.roster_slot_coverage). Needs roster.manage */
+  getRosterSlotCoverage(me: Principal, date: DateKey, teamKey: string | null): Promise<RosterSlotCoverageRow[]>;
+  /** D12 per person, date, type and market of the week (cma.roster_planned_hours). Needs roster.manage */
+  getRosterPlannedHours(me: Principal, weekStart: DateKey, teamKey: string | null): Promise<RosterPlannedRow[]>;
+  /** The tenant's current Standard week of the people on the roster (D9). Needs roster.manage */
+  getStandardWeek(me: Principal): Promise<StandardWeekDay[]>;
+  /** Save as standard week (D9): the week replaces the Standard week of the people on its grid; answers the report */
+  saveStandardWeek(me: Principal, weekStart: DateKey, teamKey: string | null): Promise<RosterReportRow[]>;
+  /** Apply standard week (D9): fills the week's empty person-dates only; answers the report */
+  applyStandardWeek(me: Principal, weekStart: DateKey, teamKey: string | null): Promise<RosterReportRow[]>;
+  /**
+   * Configuration → Roster's reads in one transaction (addition 0009zx): the assignment types, the active work statuses a
+   * type may book, and the tenant's settings; catalogs any person of the tenant reads (the writes check tenant.configure)
+   */
+  getRosterConfiguration(me: Principal): Promise<{ types: AssignmentType[]; statuses: WorkStatus[]; settings: TenantSetting[] }>;
+  /** The assignment type catalog, active and retired; any person of the tenant */
+  listAssignmentTypes(me: Principal): Promise<AssignmentType[]>;
+  /** Adds or changes an assignment type by its code (tenant.configure) */
+  upsertAssignmentType(me: Principal, input: AssignmentTypeInput): Promise<void>;
+  /** Whether an absence type carries over (D10; tenant.configure) */
+  setAbsenceCarriesOver(me: Principal, key: string, carriesOver: boolean): Promise<void>;
   /** Publishes the week as it stands: version + 1. Answers the header */
   publishRoster(me: Principal, weekStart: DateKey, teamKey: string | null): Promise<RosterWeekHeader>;
-  /** Copies the current cells of one week into another of the same scope; answers how many were written */
-  copyRosterWeek(me: Principal, fromWeekStart: DateKey, toWeekStart: DateKey, teamKey: string | null): Promise<number>;
+  /** Copies the current cells of one week into another of the same scope with their blocks (D10); answers the report */
+  copyRosterWeek(me: Principal, fromWeekStart: DateKey, toWeekStart: DateKey, teamKey: string | null): Promise<RosterReportRow[]>;
   /** The caller's own schedule, published entries only, one row per date; at most 92 days. Needs roster.view */
   getMyRoster(me: Principal, range: HoursRange): Promise<MyRosterDay[]>;
   /** Today's published entry per person whose time is kept, for the Live board. Needs monitoring.live */
@@ -4793,6 +5105,11 @@ export interface CmaData {
   getCallsOverview(me: Principal, range: HoursRange, group: CallsGroup, filter: CallsFilter): Promise<CallsOverview>;
   /** Conversations per group and current tag, and over the whole period. Needs reports.view or performance.team */
   getCallsTagUse(me: Principal, range: HoursRange, group: CallsGroup, filter: CallsFilter): Promise<CallsTagUse>;
+  /**
+   * Calls per tag (addition 0009zw). withTotals false leaves totals null (one read of the calls less) and withConnections
+   * false skips the connection check (telephony null): Reports → Calls has both from its overview. Both default to true
+   */
+  getCallsPerTag(me: Principal, range: HoursRange, filter: CallsFilter, opts?: { withTotals?: boolean; withConnections?: boolean }): Promise<CallsPerTag>;
   /** The same figures per person, the not-linked calls as one row, and the total. Needs performance.team */
   getCallsPerAgent(me: Principal, range: HoursRange, filter: CallsFilter): Promise<CallsPerAgent>;
   /** Per person the conversations per counted tag and the untagged ones. Needs performance.team */
@@ -4850,6 +5167,14 @@ export interface CmaData {
   getSubscriptionRows(me: Principal, query: SubscriptionsRowsQuery): Promise<SubscriptionRowsList>;
   /** A file or an API read of the list in the audit log (cma.subscription_file_record): who, which part, filters, range and measure, how many rows */
   recordSubscriptionFile(me: Principal, part: "records" | "months" | "rows", filter: SubscriptionsFilter, measure: SubscriptionsMeasure, rows: number,
+    range?: { from: DateKey; to: DateKey }): Promise<void>;
+  // ---- Customers → Payments (addition 0009zy): the database checks the permission on every call (CMA06)
+  /** The page in one read from the stored takes (cma.payments_page): tiles, months, rates, stores' starts, the cross table, the list's first page */
+  getPaymentsPage(me: Principal, query: PaymentsPageQuery): Promise<PaymentsPage>;
+  /** A page of the list, or the file's rows (cma.payment_rows) */
+  getPaymentRows(me: Principal, query: PaymentsRowsQuery): Promise<PaymentRowsList>;
+  /** A file or an API read of the list in the audit log (cma.payment_file_record): who, which part, filters, range and state, how many rows */
+  recordPaymentFile(me: Principal, part: "records" | "months" | "rows", filter: SubscriptionsFilter, state: PaymentsListState, rows: number,
     range?: { from: DateKey; to: DateKey }): Promise<void>;
   // ---- Lead cohorts (addition 0008zm): the database checks the permission on every call (CMA06); at most 92 days of creation dates
   /** Reports → Lead cohorts in one read (cma.lead_cohorts_report): reports.view or performance.team, as the funnel */

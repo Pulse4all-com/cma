@@ -1177,9 +1177,9 @@ async function expectCampaigns() {
   // to their Flash overview. The agent sees none of them, the supervisor not Quality monitoring (quality.manage). --provoke
   // writes a zero into the first page's content
   {
-    // Subscriptions left this list with addition 0009zh (21 November 2026): a page of its own (below)
+    // Subscriptions left this list with addition 0009zh (21 November 2026), Payments with addition 0009zy (25 November
+    // 2026): pages of their own (below)
     const PLACEHOLDERS = [
-      ["/reports/payments", "/reports/flash?o=payments"],
       ["/reports/compliance", null], ["/team/quality-monitoring", null], ["/reports/purchase-orders", null],
       ["/reports/fulfillment", null], ["/reports/storage", null],
     ];
@@ -1265,6 +1265,45 @@ async function expectCampaigns() {
         if (d.pending.length !== 2 || d.pending.some((x) => !x.dashed || !x.text || x.tables > 0)) problems.push(`${where}: the two Pending parts are not as placeholders (${JSON.stringify(d.pending)})`);
         if (d.scrollX) problems.push(`${where}: page scrolls horizontally`);
         await p.screenshot({ path: `${outDir}/${subject}-subscriptions-${width}.png`, fullPage: true });
+      }
+      await ctx.close();
+    }
+  }
+  // Customers → Payments (addition 0009zy): the manager sees the seven tiles (the five payment states, the Amount at risk,
+  // the Failed rate), the Failed rate by month, the table by payment instrument, the flows as Pending ("Not connected
+  // yet", dashed, no figure), the list and the link to Flash's Payments overview; nothing scrolls sideways at 1280 or
+  // 1920; the agent gets the reports' refusal. --provoke expects an eighth tile
+  {
+    for (const [subject, width, height] of [["manager", 1280, 800], ["manager", 1920, 1080], ["agent-one", 1280, 800]]) {
+      const ctx = await b.newContext({ viewport: { width, height }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+      const p = await ctx.newPage();
+      await p.goto(BASE + "/reports/payments");
+      await settle(p);
+      await p.waitForLoadState("networkidle");
+      const d = await p.evaluate(() => {
+        const main = document.querySelector("main");
+        const pending = [...document.querySelectorAll('[data-testid="payments-flows"]')];
+        return {
+          tiles: main?.querySelectorAll('[data-testid="payments-tiles"] [data-tile]').length ?? 0,
+          parts: ["payments-rates-chart", "payments-cross", "payments-rows"].filter((id) => document.querySelector(`[data-testid="${id}"]`)).length,
+          pending: pending.map((e) => ({ dashed: getComputedStyle(e).borderTopStyle === "dashed", text: /Not connected yet/.test(e.textContent ?? "") && /Pending/.test(e.textContent ?? ""),
+            tables: e.querySelectorAll("table, [data-tile]").length })),
+          flash: document.querySelector('[data-testid="payments-open-flash"]')?.getAttribute("href") ?? null,
+          refusal: main?.querySelector("section h2")?.textContent?.trim() ?? null,
+          scrollX: document.documentElement.scrollWidth > window.innerWidth,
+        };
+      });
+      const where = `${subject} /reports/payments at ${width}x${height}`;
+      if (subject !== "manager") {
+        if (d.tiles > 0) problems.push(`${where}: the page is shown without its permission`);
+        if (d.refusal !== "Reports are for supervisors, managers and analysts") problems.push(`${where}: the refusal is not shown (${d.refusal})`);
+      } else {
+        if (d.tiles !== (provoke ? 8 : 7)) problems.push(`${where}: ${d.tiles} tiles, expected 7`);
+        if (d.parts !== 3) problems.push(`${where}: ${d.parts} of the rates, payment instrument and list parts shown, expected 3`);
+        if (d.pending.length !== 1 || d.pending.some((x) => !x.dashed || !x.text || x.tables > 0)) problems.push(`${where}: the flows are not a Pending placeholder (${JSON.stringify(d.pending)})`);
+        if (!d.flash || !d.flash.startsWith("/reports/flash?") || !d.flash.includes("o=payments")) problems.push(`${where}: the link to Flash's Payments overview is ${d.flash}`);
+        if (d.scrollX) problems.push(`${where}: page scrolls horizontally`);
+        await p.screenshot({ path: `${outDir}/${subject}-payments-${width}.png`, fullPage: true });
       }
       await ctx.close();
     }
@@ -3251,7 +3290,8 @@ async function expectInstalledBaseModels() {
   if (before.statusKey !== "s") problems.push(`installed base: the Operational status select answers to ${before.statusKey}, expected S`);
   if (before.searchKey !== "f") problems.push(`installed base: the serial field answers to ${before.searchKey}, expected F`);
   if (before.options[0]?.[0] !== "" || before.options.length < 2) problems.push(`installed base: the Model select's choices ${JSON.stringify(before.options)}, expected All models first`);
-  if (before.panels !== 5) problems.push(`installed base: ${before.panels} panel links, expected 5`);
+  // six panels since addition 0009zm (#312): breakdown, subscription, debt status, records, past due, unlinked
+  if (before.panels !== 6) problems.push(`installed base: ${before.panels} panel links, expected 6`);
   if (before.rows || before.breakdown) problems.push("installed base: records or a breakdown rendered before a panel was opened");
   if (before.links > 60) problems.push(`installed base: ${before.links} links in the default view, expected a light page (no breakdown filter links)`);
   const [value, name] = before.options[1] ?? ["", ""];
@@ -3675,7 +3715,9 @@ async function expectFiltersPending() {
         }
         if (f.busy !== null && f.end === null && !busy) f.end = performance.now();
       });
-      window.__busyWatch.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["aria-busy"] });
+      // childList too: a page keyed by the choice (the roster planner's grid by week and team, #295) replaces the busy row
+      // with a new one that is not busy, which no attribute change reports
+      window.__busyWatch.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-busy"] });
     }, [row, pick.at, provoke]);
     const held = path.replace(/\?.*$/, "");
     await p.route(`**${held}?**`, async (route) => { await new Promise((r) => setTimeout(r, HOLD_MS)); await route.continue().catch(() => undefined); });

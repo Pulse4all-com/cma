@@ -115,7 +115,10 @@ export function IntakeRow({
             );
           }}
         </Part>
-        <Part head={speed} k={`speed|${k}`} fallback={waiting("intake-speed", t.speed, <>{t.speedHint}<br />{blank(t.speedDetail)}</>, h.median, "dashboard.intake.speed_to_lead", "/reports/speed-to-lead")}>
+        {/* the within-target share and the deals not called yet stand on lines of their own, each short enough never
+            to wrap, so the outline (a number's width blank, lib/head-start) and the figures take the same lines whatever
+            the counts: one more digit no longer wraps the hint and shifts the page when the figures land */}
+        <Part head={speed} k={`speed|${k}`} fallback={waiting("intake-speed", t.speed, <>{t.speedHint}<br />{blank(t.speedWithin)}<br />{blank(t.speedOpen)}</>, h.median, "dashboard.intake.speed_to_lead", "/reports/speed-to-lead")}>
           {(s) => {
             return (
               <IntakeTile
@@ -124,7 +127,7 @@ export function IntakeRow({
                 label={t.speed}
                 info={info(t.speed, h.median, "dashboard.intake.speed_to_lead")}
                 value={fmtBusinessMinutes(s.medianBusinessMinutes, locale)}
-                hint={<>{t.speedHint}<br />{t.speedDetail.replace("{pct}", fmtPct(s.withinTargetPct, locale)).replace("{open}", n(s.openNotCalled))}</>}
+                hint={<>{t.speedHint}<br />{t.speedWithin.replace("{pct}", fmtPct(s.withinTargetPct, locale))}<br />{t.speedOpen.replace("{open}", n(s.openNotCalled))}</>}
               />
             );
           }}

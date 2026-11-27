@@ -99,7 +99,13 @@
     "path": "/roster/planner",
     "subject": "manager",
     "tx": 5,
-    "rt": 24
+    "rt": 26
+  },
+  {
+    "path": "/roster/planner?view=day",
+    "subject": "manager",
+    "tx": 5,
+    "rt": 26
   },
   {
     "path": "/reports/dashboard",
@@ -130,8 +136,10 @@
   {
     "path": "/reports/calls",
     "subject": "manager",
-    "tx": 3,
-    "rt": 19
+    "tx": 4,
+    "rt": 23,
+    "firstTx": 3,
+    "firstRt": 19
   },
   {
     "path": "/reports/calls-per-agent",
@@ -339,6 +347,42 @@
   },
   {
     "path": "/api/v1/reports/subscriptions/rows?page=2",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 13
+  },
+  {
+    "path": "/reports/payments",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9,
+    "firstTx": 2,
+    "firstRt": 9
+  },
+  {
+    "path": "/reports/payments?market=GB&interval=monthly&state=all",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9,
+    "firstTx": 2,
+    "firstRt": 9
+  },
+  {
+    "path": "/reports/payments?page=2&state=all",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9,
+    "firstTx": 2,
+    "firstRt": 9
+  },
+  {
+    "path": "/api/v1/reports/payments",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 13
+  },
+  {
+    "path": "/api/v1/reports/payments/rows?page=2&state=all",
     "subject": "manager",
     "tx": 3,
     "rt": 13
@@ -568,8 +612,8 @@
   {
     "path": "/configuration/absences",
     "subject": "admin",
-    "tx": 6,
-    "rt": 25
+    "tx": 7,
+    "rt": 31
   },
   {
     "path": "/configuration/app-links",

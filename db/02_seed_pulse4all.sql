@@ -7,8 +7,9 @@
 -- (after 0008v) its journeys of Campaign monitoring, (after 0008ze) its negative-review alert rule, (after
 -- 0008zi) its asset register catalogs, (after 0008zn) its Flash settings, (after 0008zp) whether its people may clock in
 -- again on the same day, (after 0008zt) its customer segments and the contact property they come from, the statuses
--- whose subscriptions hold devices and what each status means, (after 0008zv) which organisation is a contact center and
--- (after 0009zv) whether its forgotten days close at the office hours of the person's Default market.
+-- whose subscriptions hold devices and what each status means, (after 0008zv) which organisation is a contact center,
+-- (after 0009zv) whether its forgotten days close at the office hours of the person's Default market and (after 0009zx)
+-- its assignment types, the absences that carry over and the roster planner's settings.
 -- Another customer gets its own seed file with its own values; the migration stays untouched.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -718,6 +719,75 @@ begin
   end if;
   insert into cma.tenant_setting (tenant_id, key, value) values
     (v_subs, 'workday.auto_close_office_hours', 'true')
+  on conflict (tenant_id, key) do nothing;
+end
+$$;
+
+-- Assignments in the roster (after addition 0009zx; Martin, 25 November 2026, brief A, D3, D6, D10): Pulse4all
+-- Subscriptions' assignment types by the status each books (by status key, never an id): SL Sales books
+-- available_sales; MC, CC, GO, PR, RET, OPC and MEX book available_operations; SB Short break books break and LB Lunch
+-- break books lunch (pauses); X Extra hours books no status (it counts under the status the agent is on, D4). The hours
+-- market is part of the block, not of the code (D5), so Arno's twelve Excel codes are these nine work codes and the
+-- block's Hours market. The absences that carry over (D10): Day off, and the new Paternity leave (paid); the new Holiday
+-- (paid) does not, nor do Leave, Sick, Public holiday and Other. The planner's grid is 15 minutes and its plan check
+-- expects a lunch block (LB) from 360 minutes of shift (the grid and the minutes are the catalog defaults, set here so the
+-- tenant's values are its own), in Europe/Madrid as Arno's sheet. A rerun adds what is missing and keeps what was changed since on the
+-- configuration screen (on conflict do nothing); a type whose status the tenant lacks is left out with a notice. A
+-- database without the addition says so; rerun this seed after 248_roster_assignments.sql.
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+  v_missing text;
+begin
+  if to_regclass('cma.assignment_type') is null then
+    raise notice 'Assignments in the roster do not exist yet (addition 0009zx): rerun this seed after 248_roster_assignments.sql';
+    return;
+  end if;
+  select string_agg(distinct v.status_key, ', ') into v_missing
+  from (values ('available_sales'), ('available_operations'), ('break'), ('lunch')) as v(status_key)
+  where not exists (select 1 from cma.work_status s where s.tenant_id = v_subs and s.key = v.status_key);
+  if v_missing is not null then
+    raise notice 'Pulse4all Subscriptions lacks the work statuses % : the assignment types that book them are left out', v_missing;
+  end if;
+
+  insert into cma.assignment_type (tenant_id, code, name, kind, work_status_id, is_extra, sort_order)
+  select v_subs, v.code, v.name, v.kind, s.id, false, v.sort_order
+  from (values
+    ('SL',  'Sales',                           'work',  'available_sales',      10),
+    ('MC',  'Missed calls – call back',        'work',  'available_operations', 20),
+    ('CC',  'Courtesy calls',                  'work',  'available_operations', 30),
+    ('GO',  'General Ops',                     'work',  'available_operations', 40),
+    ('PR',  'Pending returns – follow-up',     'work',  'available_operations', 50),
+    ('RET', 'Returns – processing',            'work',  'available_operations', 60),
+    ('OPC', 'Outstanding Payment Campaign',    'work',  'available_operations', 70),
+    ('MEX', 'Maintenance Exchanges',           'work',  'available_operations', 80),
+    ('SB',  'Short break',                     'pause', 'break',                90),
+    ('LB',  'Lunch break',                     'pause', 'lunch',                95)
+  ) as v(code, name, kind, status_key, sort_order)
+  join cma.work_status s on s.tenant_id = v_subs and s.key = v.status_key
+  on conflict (tenant_id, code) do nothing;
+
+  insert into cma.assignment_type (tenant_id, code, name, kind, work_status_id, is_extra, sort_order)
+  values (v_subs, 'X', 'Extra hours', 'work', null, true, 99)
+  on conflict (tenant_id, code) do nothing;
+
+  -- The absences (D10): the two new types, then Day off carries over, unless someone already changed its carries_over (the
+  -- audit trail holds that change), so a later choice on the configuration screen survives a rerun
+  insert into cma.absence_type (tenant_id, key, name, is_paid, sort_order, carries_over) values
+    (v_subs, 'paternity_leave', 'Paternity leave', true,  25, true),
+    (v_subs, 'holiday',         'Holiday',         true,  27, false)
+  on conflict (tenant_id, key) do nothing;
+  update cma.absence_type set carries_over = true
+   where tenant_id = v_subs and key = 'off' and not carries_over
+     and not exists (select 1 from cma.audit_log l where l.tenant_id = v_subs and l.table_name = 'absence_type'
+                     and l.row_id = absence_type.id::text and l.action = 'update'
+                     and (l.old_row ->> 'carries_over') is distinct from (l.new_row ->> 'carries_over'));
+
+  insert into cma.tenant_setting (tenant_id, key, value) values
+    (v_subs, 'roster.slot_minutes', '15'),
+    (v_subs, 'roster.lunch_after_minutes', '360'),
+    (v_subs, 'roster.lunch_type_code', 'LB'),
+    (v_subs, 'roster.planner_timezone', 'Europe/Madrid')
   on conflict (tenant_id, key) do nothing;
 end
 $$;
