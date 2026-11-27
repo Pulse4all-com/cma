@@ -2,6 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map). Newest first, one dated line per change.
 
+- 27 November 2026 (this PR, Martin's brief): the Planned hours card on the Roster planner no longer draws the bars under "This week" and "This day"; the label, the hours figure and the "of … on shift" text stay, "Per assignment" keeps its per-row bars (`web/src/components/PlannedMeter.tsx`; docs/product/features.md, Assignments; docs/definitions.md, Planned (roster); docs/decisions.md)
 - 27 November 2026 (records of 0010c, this PR): 0010c ran in dev with `tools/runners/migration.sh`, `RESULT … OK` in 13 s (`records/0010c-dev-2026-11-27`, written down from Martin's report); prod runs after the merge
 - 27 November 2026 (records of 0010d, #341): 0010d ran in dev and prod with `tools/runners/migration.sh`, each after the printed Studio step as postgres, both `RESULT … OK` in 11 s (`records/0010d-dev-2026-11-27`, `records/0010d-prod-2026-11-27`, written down from Martin's report)
 - 27 November 2026 (addition 0010d, N07i, Martin's decision): TEMPORARY on database `cma` only for `cma_owner` and `cma_app`, CREATE on schema public revoked from PUBLIC, every reader login read-only by default in that database (`db/260_temp_and_readonly_logins.sql`, `db/261_verify_temp_and_readonly_logins.sql`; docs/architecture/infrastructure.md, TEMPORARY and reader logins; docs/architecture/data-model/0008.md; docs/architecture/data-model/0001-0005b.md)

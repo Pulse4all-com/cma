@@ -2,11 +2,11 @@
 
 /**
  * The Planned hours meter at the top of the planner, in Week and Day view (Martin, 26 November 2026, point 9): the week's
- * planned hours of the roster on screen and, in Day view, the day's, each as a number and a bar against the hours on
- * shift. Planned counts the blocks of kind work (an extra type included) and a shift without any block whole; a pause
- * never (lib/assignments, plannedSummary, D12). "Per assignment" opens the split: one row per assignment type and hours
- * market with its hours and a bar in the type's colour (D13), the shifts without assignments, and the pauses on their own
- * lines, which do not add to the total.
+ * planned hours of the roster on screen and, in Day view, the day's, each as a number "of" the hours on shift, with no
+ * bar (Martin, 27 November 2026). Planned counts the blocks of kind work (an extra type included) and a shift without
+ * any block whole; a pause never (lib/assignments, plannedSummary, D12). "Per assignment" opens the split: one row per
+ * assignment type and hours market with its hours and a bar in the type's colour (D13), the shifts without assignments,
+ * and the pauses on their own lines, which do not add to the total.
  *
  * Computed in the browser from the week the planner already holds (the blocks of cma.roster_assignments, the same rule
  * as cma.roster_planned_hours): no read of its own. The colour never carries meaning alone: each row names its code.
@@ -47,16 +47,10 @@ export const PlannedMeter = memo(function PlannedMeter({ week, day, types, words
   const scale = Math.max(1, week.planned);
   const label = (k: string) => { const [c, m] = k.split("/"); return `${c} ${m || words.noMarket}`; };
   const meter = (name: string, s: PlannedSummary, testId: string) => (
-    <div className="flex min-w-64 flex-col gap-2" data-testid={testId}>
-      <div className="flex items-baseline gap-3">
-        <span className="text-small font-semibold text-p4a-body">{name}</span>
-        <span className="tabular text-panel font-semibold text-p4a-heading">{fmtMinutes(s.planned)}</span>
-        <span className="tabular text-small text-p4a-grey">{words.of.replace("{n}", fmtMinutes(s.onShift))}</span>
-      </div>
-      <div className="relative h-2 w-full overflow-hidden rounded-button bg-p4a-neutral-surface" role="meter" aria-label={name}
-        aria-valuemin={0} aria-valuemax={s.onShift} aria-valuenow={s.planned} aria-valuetext={`${fmtMinutes(s.planned)} ${words.of.replace("{n}", fmtMinutes(s.onShift))}`}>
-        <span className="absolute inset-y-0 left-0 bg-p4a-deepblue" style={{ width: `${s.onShift > 0 ? Math.min(100, pct(s.planned, s.onShift)) : 0}%` }} />
-      </div>
+    <div className="flex items-baseline gap-3" data-testid={testId}>
+      <span className="text-small font-semibold text-p4a-body">{name}</span>
+      <span className="tabular text-panel font-semibold text-p4a-heading">{fmtMinutes(s.planned)}</span>
+      <span className="tabular text-small text-p4a-grey">{words.of.replace("{n}", fmtMinutes(s.onShift))}</span>
     </div>
   );
   const row = (key: string, name: string, title: string | undefined, tone: string, w: number, d: number | undefined, counts: boolean) => (
@@ -80,7 +74,7 @@ export const PlannedMeter = memo(function PlannedMeter({ week, day, types, words
   );
   return (
     <section className="rounded-card border border-p4a-border bg-white p-6" data-testid="planned-meter">
-      <div className="flex flex-wrap items-end gap-8">
+      <div className="flex flex-wrap items-baseline gap-8">
         <h2 className="text-panel font-semibold text-p4a-heading" title={words.hint}>{words.title}</h2>
         {meter(words.week, week, "planned-meter-week")}
         {day ? meter(words.day, day, "planned-meter-day") : null}
