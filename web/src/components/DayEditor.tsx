@@ -30,6 +30,7 @@ import {
 import { fmtDate } from "@/lib/time";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Badge, Button, Notice } from "./primitives";
+import { clientFetch } from "@/lib/client-fetch";
 
 export type EditorTarget =
   | { mode: "correct"; userId: string; displayName: string; date: DateKey; timeZone: string }
@@ -115,7 +116,7 @@ export function DayEditor({
 
   /** Reads the day; every state change happens in the answer's callbacks */
   function fetchDay(w: Who, d: DateKey) {
-    fetch(`/api/v1/team/days/${w.userId}/${d}`, { cache: "no-store" })
+    clientFetch(`/api/v1/team/days/${w.userId}/${d}`, { cache: "no-store" })
       .then(async (res) => {
         if (!res.ok) throw new Error(String(res.status));
         const detail = ((await res.json()) as { data: TeamDayDetail }).data;
@@ -191,7 +192,7 @@ export function DayEditor({
     if (!canSave || !who || !checked) return;
     setSaveError(null);
     startTransition(async () => {
-      const res = await fetch(`/api/v1/team/days/${who.userId}/${date}/corrections`, {
+      const res = await clientFetch(`/api/v1/team/days/${who.userId}/${date}/corrections`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-cma-request": "1" },
         body: JSON.stringify({ reason: reason.trim(), changes: checked.changes }),
@@ -210,7 +211,7 @@ export function DayEditor({
     if (!who || removeState !== "enabled" || !removeReasonOk || pending) return;
     setRemoveError(null);
     startTransition(async () => {
-      const res = await fetch(`/api/v1/team/days/${who.userId}/${date}/remove`, {
+      const res = await clientFetch(`/api/v1/team/days/${who.userId}/${date}/remove`, {
         method: "POST",
         headers: { "content-type": "application/json", "x-cma-request": "1" },
         body: JSON.stringify({ reason: removeReason.trim() }),

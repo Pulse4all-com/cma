@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
+import { clientFetch } from "@/lib/client-fetch";
 import {
   BEACON_PATH, CONTENT_PENDING_SELECTOR, MAX_BEACON_MS, interactionBucketOf, routePatternOf,
   type BeaconKind, type NavigationBeacon as Beacon,
@@ -35,13 +36,13 @@ function contentShown(): Promise<number | null> {
   });
 }
 
+/**
+ * Sent with clientFetch (brief N07, WP8), not the browser's beacon call, which cannot carry X-Requested-With: keepalive lets
+ * the request finish when the page goes away, as a beacon would; a 401 here marks the tab signed out like any request
+ */
 function send(b: Beacon): void {
-  try {
-    const body = new Blob([JSON.stringify(b)], { type: "application/json" });
-    navigator.sendBeacon?.(BEACON_PATH, body);
-  } catch {
-    // telemetry never costs the person anything
-  }
+  void clientFetch(BEACON_PATH, { method: "POST", keepalive: true, headers: { "content-type": "application/json" }, body: JSON.stringify(b) })
+    .catch(() => undefined); // telemetry never costs the person anything
 }
 
 const ms = (x: number) => Math.min(MAX_BEACON_MS, Math.max(0, Math.round(x)));

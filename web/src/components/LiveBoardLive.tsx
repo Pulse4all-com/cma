@@ -31,6 +31,7 @@ import { employersOf, isStale, LIVE_POLL_TIMEOUT_MS, teamsOf, tiles, type LiveBo
 import { boardRowsOf, nextPollMs, type LiveViewer } from "@/lib/live-board";
 import { timeInZone } from "@/lib/reports";
 import { metricsHref } from "@/lib/metrics";
+import { clientFetch } from "@/lib/client-fetch";
 
 /** The Follow-up now strip's entries in the metric catalog, per tile */
 const STRIP_METRIC: Record<FollowUpTileKey, string> = {
@@ -70,7 +71,7 @@ export function LiveBoardLive({ initial, organisation, viewer, copy, canOpenMetr
 
   const poll = useCallback(async (): Promise<boolean> => {
     try {
-      const res = await fetch(`/api/v1/live/board?organisation=${encodeURIComponent(organisationKey)}`,
+      const res = await clientFetch(`/api/v1/live/board?organisation=${encodeURIComponent(organisationKey)}`,
         { cache: "no-store", signal: AbortSignal.timeout(LIVE_POLL_TIMEOUT_MS) });
       if (!res.ok) return false;
       const body = (await res.json()) as { data: LiveBoardData };

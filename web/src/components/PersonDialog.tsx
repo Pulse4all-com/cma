@@ -23,6 +23,7 @@ import {
   type EditState, type LinkedState, type NewPersonForm, type NewPersonProblem, type SkillState,
 } from "@/lib/team";
 import { Button, Notice } from "./primitives";
+import { clientFetch } from "@/lib/client-fetch";
 
 export type PersonDialogTarget = { mode: "edit"; person: DirectoryPerson } | { mode: "add" };
 
@@ -30,7 +31,7 @@ const field = "h-10 rounded-input border border-p4a-border bg-white px-3 text-bo
 const label = "flex flex-col gap-2 text-small font-semibold text-p4a-body";
 
 async function send(method: "PUT" | "POST", path: string, body: unknown): Promise<Response> {
-  return fetch(path, {
+  return clientFetch(path, {
     method,
     headers: { "content-type": "application/json", "x-cma-request": "1" },
     body: JSON.stringify(body),

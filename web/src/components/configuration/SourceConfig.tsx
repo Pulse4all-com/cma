@@ -36,6 +36,7 @@ import { Badge, Button, Card, Keycap, Notice } from "../primitives";
 import { FormRuleDialog } from "./SourceRules";
 import { fmtWhen, kindLabel } from "./SourcesList";
 import { FlagField, FormDialog, SaveNote, field, label, send, td, th, tr, useSave } from "./shared";
+import { clientFetch } from "@/lib/client-fetch";
 
 const EXAMPLE_ID = "123456789";
 
@@ -145,7 +146,7 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
     const read = ++lineCountRead.current;
     setLineOff(l);
     setLineCount({ state: "loading" });
-    fetch(`${base}/lines/stored-calls?lineRef=${encodeURIComponent(l.lineRef)}`, { headers: { accept: "application/json" } })
+    clientFetch(`${base}/lines/stored-calls?lineRef=${encodeURIComponent(l.lineRef)}`, { headers: { accept: "application/json" } })
       .then(async (r) => {
         if (!r.ok) throw new Error(`stored calls: ${r.status}`);
         const j = (await r.json()) as { data: { storedCalls: number; firstStartedAt: string | null } };

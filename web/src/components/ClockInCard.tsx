@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation";
 import type { Copy } from "@/lib/copy";
 import { workdayStartsAt } from "@/lib/live";
 import { Badge, Card, Keycap, Notice } from "./primitives";
+import { clientFetch } from "@/lib/client-fetch";
 
 export function ClockInCard({
   defaultStatusName,
@@ -50,7 +51,7 @@ export function ClockInCard({
     setStartsAt(null);
     startTransition(async () => {
       showClockedIn(true);
-      const res = await fetch("/api/v1/me/day/start", { method: "POST", headers: { "x-cma-request": "1" } }).catch(() => null);
+      const res = await clientFetch("/api/v1/me/day/start", { method: "POST", headers: { "x-cma-request": "1" } }).catch(() => null);
       if (!res?.ok) {
         const body = res ? ((await res.json().catch(() => null)) as { error?: { message?: string } } | null) : null;
         const at = workdayStartsAt(body?.error?.message);

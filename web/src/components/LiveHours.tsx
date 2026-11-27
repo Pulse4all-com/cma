@@ -29,6 +29,7 @@ import { hoursDue, inboundHours, LIVE_HOURS_MS, LIVE_POLL_TIMEOUT_MS, niceCeilin
 import { fmtCount, fmtPct, timeInZone } from "@/lib/reports";
 import { hourInZone } from "@/lib/time";
 import { HeaderHint } from "./HeaderHint";
+import { clientFetch } from "@/lib/client-fetch";
 
 const PLOT_PX = 128;
 const pad = (h: number) => String(h).padStart(2, "0");
@@ -68,7 +69,7 @@ export function LiveHours({ date, copy, locale, timeZone, scope }: {
       if (inFlight) return;
       inFlight = true;
       try {
-        const res = await fetch(`/api/v1/reports/inbound?from=${date}&to=${date}&group=hour`,
+        const res = await clientFetch(`/api/v1/reports/inbound?from=${date}&to=${date}&group=hour`,
           { cache: "no-store", signal: AbortSignal.timeout(LIVE_POLL_TIMEOUT_MS) });
         // not the report's permission after all, or no telephony: the board shows no chart rather than an empty one
         if (res.status === 403) { if (!stopped) setHidden(true); return; }

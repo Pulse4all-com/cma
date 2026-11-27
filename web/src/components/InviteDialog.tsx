@@ -22,6 +22,7 @@ import {
 import { skillsByDimension } from "@/lib/team";
 import { fmtDateTime } from "@/lib/time";
 import { Button, LinkButton, Notice } from "./primitives";
+import { clientFetch } from "@/lib/client-fetch";
 
 export type InviteDialogMode =
   | { kind: "create" }
@@ -100,7 +101,7 @@ export function InviteDialog({ mode, context, copy, onClose, onDone }: {
     setProblems(found);
     if (found.length > 0) return;
     startTransition(async () => {
-      const res = await fetch("/api/v1/team/invitations", {
+      const res = await clientFetch("/api/v1/team/invitations", {
         method: "POST",
         headers: { "content-type": "application/json", "x-cma-request": "1" },
         body: JSON.stringify(invitePayload(form)),

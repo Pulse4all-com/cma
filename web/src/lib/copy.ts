@@ -4133,6 +4133,13 @@ const en = {
     idHint: "Your supervisor needs this id to add you. It identifies your account, nothing else.",
     useAnother: "Use another account",
   },
+  // A sign-in that ended while the tab was open (brief N07, WP8): a request was answered 401, the polls have stopped.
+  // Never "session": that word is a stretch of a workday (docs/definitions.md, Session)
+  sessionExpired: {
+    title: "You are signed out",
+    body: "Your sign-in to the Workspace has ended. Sign in again to go on where you were.",
+    reload: "Sign in again",
+  },
   // The two boundaries of app/ (the IT audit of 17 October 2026): a page that could not be rendered, an address that is no page
   errorPage: {
     title: "This page could not be loaded",
@@ -8942,6 +8949,11 @@ const nl = {
     idLabel: "Je account-id",
     idHint: "Je supervisor heeft dit id nodig om je toe te voegen. Het identificeert je account, meer niet.",
     useAnother: "Ander account gebruiken",
+  },
+  sessionExpired: {
+    title: "Je bent uitgelogd",
+    body: "Je aanmelding bij de Workspace is verlopen. Meld je opnieuw aan om verder te gaan waar je was.",
+    reload: "Opnieuw aanmelden",
   },
   errorPage: {
     title: "Deze pagina kon niet worden geladen",

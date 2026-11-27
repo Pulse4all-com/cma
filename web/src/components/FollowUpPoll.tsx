@@ -8,6 +8,7 @@
  * also emptied the client router cache and made every visible rail link prefetch again; the rail's prefetch exception
  * for this page is gone with it. A failed poll waits twice as long, up to a minute.
  */
+import { clientFetch } from "@/lib/client-fetch";
 import { useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
@@ -29,7 +30,7 @@ export function FollowUpPoll({ computedAt }: { computedAt: string }) {
       timer = null;
       if (document.hidden) return;
       try {
-        const res = await fetch("/api/v1/reports/follow-up/updated", { cache: "no-store" });
+        const res = await clientFetch("/api/v1/reports/follow-up/updated", { cache: "no-store" });
         if (!res.ok) throw new Error(String(res.status));
         failures = 0;
         const at = ((await res.json()) as { data?: { computedAt?: string } }).data?.computedAt;
